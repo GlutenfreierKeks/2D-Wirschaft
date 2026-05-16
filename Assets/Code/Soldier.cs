@@ -68,15 +68,6 @@ public class Soldier : MonoBehaviour
         if (swordSprite == null) swordSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/schwertkämpfer.png");
         if (bowSprite == null) bowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/bogensoldat.png");
 
-        // Wechselt das Bild sofort im Editor, wenn du das Dropdown änderst!
-        SpriteRenderer sr = GetComponent<SpriteRenderer>();
-        if (sr != null)
-        {
-            if (soldierType == SoldierType.Spear && spearSprite != null) sr.sprite = spearSprite;
-            else if (soldierType == SoldierType.Shield && shieldSprite != null) sr.sprite = shieldSprite;
-            else if (soldierType == SoldierType.Sword && swordSprite != null) sr.sprite = swordSprite;
-            else if (soldierType == SoldierType.Bow && bowSprite != null) sr.sprite = bowSprite;
-        }
     }
 #endif
 
