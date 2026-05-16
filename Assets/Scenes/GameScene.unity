@@ -305,11 +305,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
   minZoom: 5
-  maxZoom: 100
-  zoomSpeed: 10
+  maxZoom: 2000
+  zoomSpeed: 40
   zoomSmoothing: 5
   panSpeed: 1
-  gridFadeZoom: 80
+  gridFadeZoom: 50
 --- !u!114 &788347637
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1010,10 +1010,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IslandManager
   islandMaterial: {fileID: 2100000, guid: d3e45ab9618baa44598a9ea35a7eae73, type: 2}
-  islandCount: 12
-  minSize: 50
-  maxSize: 200
-  mapRange: 800
+  islandCount: 10
+  blocksPerIsland: 100000
+  mapMargin: 800
+  minDistanceBetweenIslands: 100
 --- !u!4 &1223887161
 Transform:
   m_ObjectHideFlags: 0
@@ -1058,7 +1058,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd0e7a2ba6d25714e920bb49f9dacf29, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
-  gridSize: 100
+  gridSize: 1000
   gridMaterial: {fileID: 2100000, guid: 0e111f271a738154b915f4ee8ebdad08, type: 2}
   spawnRadius: 800
 --- !u!4 &1515756076

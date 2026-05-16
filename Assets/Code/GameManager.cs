@@ -30,9 +30,9 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     private void SpawnPlayer()
     {
-        if (GridManager.Instance == null)
+        if (IslandManager.Instance == null)
         {
-            Debug.LogError("GridManager instance not found! Cannot calculate spawn position.");
+            Debug.LogError("IslandManager instance not found! Cannot calculate island spawn position.");
             return;
         }
 
@@ -43,12 +43,9 @@ public class GameManager : MonoBehaviourPunCallbacks
             isTestMode = (bool)testModeValue;
         }
 
-        // Get player index and total players for distribution
+        // Get player index
         int playerIndex = 0;
         Player[] players = PhotonNetwork.PlayerList;
-        int realPlayerCount = players.Length;
-        int simulatedTotalPlayers = isTestMode ? Mathf.Max(realPlayerCount, 3) : realPlayerCount;
-
         for (int i = 0; i < players.Length; i++)
         {
             if (players[i].IsLocal)
@@ -58,15 +55,17 @@ public class GameManager : MonoBehaviourPunCallbacks
             }
         }
 
-        Vector3 spawnPos = GridManager.Instance.GetSpawnPosition(playerIndex, simulatedTotalPlayers);
+        // Pick an island based on the player index (so each player gets a different island if possible)
+        Vector2 islandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
+        Vector3 spawnPos = new Vector3(islandPos.x, islandPos.y, -10f);
         
-        Debug.Log($"Positioning camera for player {playerIndex + 1}/{simulatedTotalPlayers} at {spawnPos}");
+        Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {spawnPos}");
         
-        // Move the camera to the spawn position
         Camera mainCam = Camera.main;
         if (mainCam != null)
         {
-            mainCam.transform.position = new Vector3(spawnPos.x, spawnPos.y, -10f);
+            mainCam.transform.position = spawnPos;
+            mainCam.transform.rotation = Quaternion.identity;
         }
     }
 

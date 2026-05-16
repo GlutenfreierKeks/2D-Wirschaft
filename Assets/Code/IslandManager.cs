@@ -1,14 +1,26 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+public enum IslandType { Plains, Desert, Jungle, Stone }
+
 public class IslandManager : MonoBehaviour
 {
+    public static IslandManager Instance;
+
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
-    [SerializeField] private int islandCount = 5;
-    [SerializeField] private int blocksPerIsland = 20;
-    [SerializeField] private float mapRange = 500f;
-    [SerializeField] private float blockSize = 1f;
+    [SerializeField] private int islandCount = 6;
+    [SerializeField] private int blocksPerIsland = 1000;
+    [SerializeField] private float mapMargin = 100f;
+    [SerializeField] private float minDistanceBetweenIslands = 500f;
+
+    private List<Vector2> islandPositions = new List<Vector2>();
+
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
 
     private void Start()
     {
@@ -17,65 +29,114 @@ public class IslandManager : MonoBehaviour
 
     private void GenerateIslands()
     {
-        for (int i = 0; i < islandCount; i++)
-        {
-            // Random start position for the island cluster
-            float startX = Mathf.Round(Random.Range(-mapRange, mapRange));
-            float startY = Mathf.Round(Random.Range(-mapRange, mapRange));
-            
-            CreateIslandCluster(new Vector2(startX, startY));
-        }
-    }
+        float range = (GridManager.Instance != null) ? (GridManager.Instance.GetGridSize() / 2f) - mapMargin : 1000f;
 
-    private void CreateIslandCluster(Vector2 startPos)
-    {
-        HashSet<Vector2> occupiedCells = new HashSet<Vector2>();
-        occupiedCells.Add(startPos);
+        // Ensure at least one of each type
+        IslandType[] allTypes = (IslandType[])System.Enum.GetValues(typeof(IslandType));
         
-        List<Vector2> edgeCells = new List<Vector2> { startPos };
-
-        for (int i = 0; i < blocksPerIsland; i++)
+        int typeIndex = 0;
+        int attempts = 0;
+        while (islandPositions.Count < islandCount && attempts < 100)
         {
-            // Pick a random edge cell to grow from
-            Vector2 current = edgeCells[Random.Range(0, edgeCells.Count)];
-            
-            // Random neighbor (Up, Down, Left, Right)
-            Vector2[] neighbors = {
-                current + Vector2.up,
-                current + Vector2.down,
-                current + Vector2.left,
-                current + Vector2.right
-            };
-            
-            Vector2 next = neighbors[Random.Range(0, neighbors.Length)];
-            
-            if (!occupiedCells.Contains(next))
+            attempts++;
+            float x = Mathf.Round(Random.Range(-range, range));
+            float y = Mathf.Round(Random.Range(-range, range));
+            Vector2 newPos = new Vector2(x, y);
+
+            bool tooClose = false;
+            foreach (Vector2 p in islandPositions)
             {
-                occupiedCells.Add(next);
-                edgeCells.Add(next);
-                CreateBlock(next);
+                if (Vector2.Distance(p, newPos) < minDistanceBetweenIslands)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (!tooClose)
+            {
+                // Cycle through types first, then random
+                IslandType type = typeIndex < allTypes.Length ? allTypes[typeIndex] : (IslandType)Random.Range(0, allTypes.Length);
+                typeIndex++;
+
+                islandPositions.Add(newPos);
+                CreateIslandMesh(newPos, type);
             }
         }
     }
 
-    private void CreateBlock(Vector2 position)
+    private void CreateIslandMesh(Vector2 startPos, IslandType type)
     {
-        GameObject block = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        block.name = "IslandBlock_" + position.ToString();
-        block.transform.SetParent(transform);
-        // Z is -0.1 to be in front of the grid (Z=0)
-        block.transform.position = new Vector3(position.x, position.y, -0.1f);
-        block.transform.localScale = new Vector3(blockSize, blockSize, 1);
+        HashSet<Vector2> occupiedCells = new HashSet<Vector2>();
+        occupiedCells.Add(startPos);
+        List<Vector2> edgeGrowthCells = new List<Vector2> { startPos };
 
-        Destroy(block.GetComponent<MeshCollider>());
+        for (int i = 0; i < blocksPerIsland; i++)
+        {
+            Vector2 current = edgeGrowthCells[Random.Range(0, edgeGrowthCells.Count)];
+            Vector2[] neighbors = { current + Vector2.up, current + Vector2.down, current + Vector2.left, current + Vector2.right };
+            Vector2 next = neighbors[Random.Range(0, neighbors.Length)];
+            if (!occupiedCells.Contains(next))
+            {
+                occupiedCells.Add(next);
+                edgeGrowthCells.Add(next);
+            }
+        }
 
-        if (islandMaterial != null)
+        GameObject islandObj = new GameObject($"Island_{type}_{startPos}");
+        islandObj.transform.SetParent(transform);
+        islandObj.transform.position = new Vector3(0, 0, -0.1f);
+
+        MeshFilter meshFilter = islandObj.AddComponent<MeshFilter>();
+        MeshRenderer meshRenderer = islandObj.AddComponent<MeshRenderer>();
+        meshRenderer.material = islandMaterial;
+
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+        List<Color> colors = new List<Color>();
+        int vIndex = 0;
+
+        // Colors for types
+        Color centerColor = Color.green;
+        Color borderColor = Color.yellow;
+
+        switch (type)
         {
-            block.GetComponent<Renderer>().material = islandMaterial;
+            case IslandType.Desert: centerColor = new Color(0.95f, 0.85f, 0.5f); borderColor = new Color(0.8f, 0.7f, 0.4f); break;
+            case IslandType.Jungle: centerColor = new Color(0.1f, 0.4f, 0.1f); borderColor = new Color(0.3f, 0.5f, 0.2f); break;
+            case IslandType.Stone: centerColor = new Color(0.5f, 0.5f, 0.5f); borderColor = new Color(0.3f, 0.3f, 0.3f); break;
         }
-        else
+
+        foreach (Vector2 cell in occupiedCells)
         {
-            block.GetComponent<Renderer>().material.color = Color.green;
+            bool isBorder = false;
+            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+            {
+                if (!occupiedCells.Contains(n)) { isBorder = true; break; }
+            }
+
+            Color cellColor = isBorder ? borderColor : centerColor;
+            vertices.Add(new Vector3(cell.x - 0.5f, cell.y - 0.5f, 0));
+            vertices.Add(new Vector3(cell.x - 0.5f, cell.y + 0.5f, 0));
+            vertices.Add(new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0));
+            vertices.Add(new Vector3(cell.x + 0.5f, cell.y - 0.5f, 0));
+            for (int j = 0; j < 4; j++) colors.Add(cellColor);
+            triangles.Add(vIndex); triangles.Add(vIndex + 1); triangles.Add(vIndex + 2);
+            triangles.Add(vIndex); triangles.Add(vIndex + 2); triangles.Add(vIndex + 3);
+            vIndex += 4;
         }
+
+        Mesh mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.colors = colors.ToArray();
+        mesh.RecalculateNormals();
+        meshFilter.mesh = mesh;
+    }
+
+    public Vector2 GetIslandPosition(int index)
+    {
+        if (islandPositions.Count == 0) return Vector2.zero;
+        return islandPositions[index % islandPositions.Count];
     }
 }
