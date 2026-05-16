@@ -71,16 +71,60 @@ public class IslandManager : MonoBehaviour
         occupiedCells.Add(startPos);
         List<Vector2> edgeGrowthCells = new List<Vector2> { startPos };
 
+        // Directional bias for elongated shapes (like Italy)
+        Vector2 biasDir = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)).normalized;
+        float biasStrength = 0.7f;
+
         for (int i = 0; i < blocksPerIsland; i++)
         {
-            Vector2 current = edgeGrowthCells[Random.Range(0, edgeGrowthCells.Count)];
-            Vector2[] neighbors = { current + Vector2.up, current + Vector2.down, current + Vector2.left, current + Vector2.right };
-            Vector2 next = neighbors[Random.Range(0, neighbors.Length)];
-            if (!occupiedCells.Contains(next))
+            // Occasionally change bias to create "turns"
+            if (i % (blocksPerIsland / 4) == 0)
             {
-                occupiedCells.Add(next);
-                edgeGrowthCells.Add(next);
+                biasDir = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)).normalized;
             }
+
+            int index = (Random.value > 0.6f) ? edgeGrowthCells.Count - 1 : Random.Range(0, edgeGrowthCells.Count);
+            Vector2 current = edgeGrowthCells[index];
+
+            // Prioritize neighbors that align with biasDir
+            Vector2[] neighbors = { current + Vector2.up, current + Vector2.down, current + Vector2.left, current + Vector2.right };
+            
+            // Shuffle neighbors but weight them by bias
+            System.Array.Sort(neighbors, (a, b) => {
+                float scoreA = Vector2.Dot((a - current), biasDir) + Random.Range(-0.5f, 0.5f);
+                float scoreB = Vector2.Dot((b - current), biasDir) + Random.Range(-0.5f, 0.5f);
+                return scoreB.CompareTo(scoreA); // High score first
+            });
+
+            foreach (Vector2 next in neighbors)
+            {
+                if (!occupiedCells.Contains(next))
+                {
+                    occupiedCells.Add(next);
+                    edgeGrowthCells.Add(next);
+                    if (Random.value > 0.3f) break; // High chance to move to next block
+                }
+            }
+        }
+
+        // Fill holes (post-generation pass)
+        for (int iteration = 0; iteration < 2; iteration++)
+        {
+            List<Vector2> holesToFill = new List<Vector2>();
+            foreach (Vector2 cell in occupiedCells)
+            {
+                foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+                {
+                    if (!occupiedCells.Contains(n))
+                    {
+                        int landCount = 0;
+                        foreach (Vector2 n2 in new Vector2[] { n + Vector2.up, n + Vector2.down, n + Vector2.left, n + Vector2.right })
+                            if (occupiedCells.Contains(n2)) landCount++;
+                        if (landCount >= 3) holesToFill.Add(n); 
+                    }
+                }
+            }
+            foreach (Vector2 hole in holesToFill) occupiedCells.Add(hole);
         }
 
         GameObject islandObj = new GameObject($"Island_{type}_{startPos}");

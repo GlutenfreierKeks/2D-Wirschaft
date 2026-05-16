@@ -61,11 +61,23 @@ public class GameManager : MonoBehaviourPunCallbacks
         
         Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {spawnPos}");
         
+        // Move camera for the local player
         Camera mainCam = Camera.main;
         if (mainCam != null)
         {
-            mainCam.transform.position = spawnPos;
+            Vector2 localIslandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
+            mainCam.transform.position = new Vector3(localIslandPos.x, localIslandPos.y, -10f);
             mainCam.transform.rotation = Quaternion.identity;
+        }
+
+        // Spawn warehouses for ALL players so everyone can see everyone's base
+        if (BuildingManager.Instance != null)
+        {
+            for (int i = 0; i < players.Length; i++)
+            {
+                Vector2 pos = IslandManager.Instance.GetIslandPosition(i);
+                BuildingManager.Instance.SpawnMainWarehouse(pos);
+            }
         }
     }
 
