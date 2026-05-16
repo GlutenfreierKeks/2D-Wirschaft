@@ -259,6 +259,7 @@ GameObject:
   - component: {fileID: 788347637}
   - component: {fileID: 788347636}
   - component: {fileID: 788347638}
+  - component: {fileID: 820119593}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -403,6 +404,17 @@ MonoBehaviour:
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
 --- !u!114 &788347638
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 788347632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &820119592
 GameObject:
   m_ObjectHideFlags: 0
@@ -412,8 +424,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 820119594}
-  - component: {fileID: 820119593}
   - component: {fileID: 820119595}
+  - component: {fileID: 820119596}
   m_Layer: 0
   m_Name: BuildingManager
   m_TagString: Untagged
@@ -459,30 +471,21 @@ MonoBehaviour:
     icon: {fileID: 21300000, guid: 111c442dcb6e0c141a987a365d804996, type: 3}
     startValue: 100
     maxValue: 0
-  - id: wüstenfrucht
-    displayName: "W\u00FCstenfrucht"
+  - id: "w\xFCstenfrucht"
+    displayName: "W\xFCstenfrucht"
     icon: {fileID: 21300000, guid: 2ef513d7392f75c488195e0c5f7282b0, type: 3}
     startValue: 0
     maxValue: 0
   - id: bevolkerung
-    displayName: "Bev\u00F6lkerung"
+    displayName: "Bev\xF6lkerung"
     icon: {fileID: 21300000, guid: 6f5b0622d3579264982e57835b52adb7, type: 3}
     startValue: 10
     maxValue: 20
-  barColor: {r: 0.18, g: 0.10, b: 0.03, a: 0.96}
-  slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
-  borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
-  labelColor: {r: 0.90, g: 0.78, b: 0.52, a: 0.85}
-  valueColor: {r: 1.0, g: 0.95, b: 0.75, a: 1}
-  barHeight: 80
-  slotPadding: 18
-  iconSize: 44
-  borderWidth: 2
   menuCategories:
   - id: ressourcen
     displayName: Ressourcen
   - id: hauser
-    displayName: "H\u00E4user"
+    displayName: "H\xE4user"
   - id: andere
     displayName: Andere
   menuItems:
@@ -491,7 +494,7 @@ MonoBehaviour:
     icon: {fileID: 21300000, guid: e7fc2a92b49e9e442ad7a3eb5ed77a41, type: 3}
     categoryId: hauser
   - id: grosses_haus
-    displayName: "Gro\u00DFes Haus"
+    displayName: "Gro\xDFes Haus"
     icon: {fileID: 21300000, guid: f3b61810eb48b264d8b5578dd9900cba, type: 3}
     categoryId: hauser
   - id: eisenmine
@@ -503,7 +506,7 @@ MonoBehaviour:
     icon: {fileID: 21300000, guid: 415c5494d256f434ab4417830cece084, type: 3}
     categoryId: ressourcen
   - id: holzhutte
-    displayName: "Holzh\u00FCtte"
+    displayName: "Holzh\xFCtte"
     icon: {fileID: 21300000, guid: 9d3ed0243b8ff0a46b700ca4b5e2798d, type: 3}
     categoryId: ressourcen
   - id: steinwerk
@@ -515,7 +518,7 @@ MonoBehaviour:
     icon: {fileID: 21300000, guid: 0e0edacb743ac5a4fabb72d8b52b2d04, type: 3}
     categoryId: ressourcen
   - id: wustenfruchtfarm
-    displayName: "W\u00FCstenfruchtfarm"
+    displayName: "W\xFCstenfruchtfarm"
     icon: {fileID: 21300000, guid: 9fb9a95d8eb264244916890a4a84b9aa, type: 3}
     categoryId: ressourcen
   - id: kaserne
@@ -526,13 +529,15 @@ MonoBehaviour:
     displayName: Viehhof
     icon: {fileID: 21300000, guid: 675e0c2c7979526428efe84cc66b9ab1, type: 3}
     categoryId: andere
-  m_GameObject: {fileID: 820119592}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62ffaa0f216fcc3419d8118a501f0488, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BuildingManager
-  warehouseMaterial: {fileID: 2100000, guid: f73a762e4619cc44d9fbbf416ef43b27, type: 2}
+  barColor: {r: 0.18, g: 0.1, b: 0.03, a: 0.96}
+  slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
+  borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
+  labelColor: {r: 0.9, g: 0.78, b: 0.52, a: 0.85}
+  valueColor: {r: 1, g: 0.95, b: 0.75, a: 1}
+  barHeight: 80
+  slotPadding: 18
+  iconSize: 44
+  borderWidth: 2
 --- !u!4 &820119594
 Transform:
   m_ObjectHideFlags: 0
@@ -561,6 +566,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FogRevealer
   radius: 50
+--- !u!114 &820119596
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 820119592}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62ffaa0f216fcc3419d8118a501f0488, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingManager
+  warehouseMaterial: {fileID: 2100000, guid: f73a762e4619cc44d9fbbf416ef43b27, type: 2}
 --- !u!1 &983598780
 GameObject:
   m_ObjectHideFlags: 0
