@@ -57,16 +57,22 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         // Pick an island based on the player index (so each player gets a different island if possible)
         Vector2 islandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
-        Vector3 spawnPos = new Vector3(islandPos.x, islandPos.y, -10f);
         
-        Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {spawnPos}");
+        // Kamera auf die Insel bewegen (Z = -10 für die Kamera in 2D)
+        Vector3 cameraPos = new Vector3(islandPos.x, islandPos.y, -10f);
+        
+        Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {cameraPos}");
         
         Camera mainCam = Camera.main;
         if (mainCam != null)
         {
-            mainCam.transform.position = spawnPos;
+            mainCam.transform.position = cameraPos;
             mainCam.transform.rotation = Quaternion.identity;
         }
+
+        // WARNUNG BEHOBEN: Hier wird der Spieler nun auch wirklich im Netzwerk gespawnt!
+        Vector3 playerPos = new Vector3(islandPos.x, islandPos.y, 0f);
+        PhotonNetwork.Instantiate(playerPrefabName, playerPos, Quaternion.identity);
     }
 
     private void UpdateStatusText()

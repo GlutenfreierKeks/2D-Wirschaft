@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class Enemy_Place : MonoBehaviour
 {
@@ -19,14 +20,17 @@ public class Enemy_Place : MonoBehaviour
 
     private void Update()
     {
-        // Auswahl über die Tasten 1 bis 4
-        if (Input.GetKeyDown(KeyCode.Alpha1)) SelectSoldier(spearSoldierPrefab, "Speersoldat");
-        if (Input.GetKeyDown(KeyCode.Alpha2)) SelectSoldier(shieldSoldierPrefab, "Schildsoldat");
-        if (Input.GetKeyDown(KeyCode.Alpha3)) SelectSoldier(swordSoldierPrefab, "Schwertsoldat");
-        if (Input.GetKeyDown(KeyCode.Alpha4)) SelectSoldier(bowSoldierPrefab, "Bogensoldat");
+        // Auswahl über die Tasten 1 bis 4 mit neuem Input System
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current.digit1Key.wasPressedThisFrame) SelectSoldier(spearSoldierPrefab, "Speersoldat");
+            if (Keyboard.current.digit2Key.wasPressedThisFrame) SelectSoldier(shieldSoldierPrefab, "Schildsoldat");
+            if (Keyboard.current.digit3Key.wasPressedThisFrame) SelectSoldier(swordSoldierPrefab, "Schwertsoldat");
+            if (Keyboard.current.digit4Key.wasPressedThisFrame) SelectSoldier(bowSoldierPrefab, "Bogensoldat");
+        }
 
         // Platzieren mit Linksklick
-        if (Input.GetMouseButtonDown(0))
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             PlaceSoldier();
         }
@@ -47,8 +51,8 @@ public class Enemy_Place : MonoBehaviour
             return;
         }
 
-        // Mausposition in die Weltposition umwandeln
-        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        // Mausposition in die Weltposition umwandeln (Neues Input System)
+        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         
         // Den Soldaten an der Mausposition platzieren
         Instantiate(selectedPrefab, mousePos, Quaternion.identity);
