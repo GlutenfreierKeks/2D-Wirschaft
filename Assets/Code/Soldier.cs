@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public enum Team
 {
@@ -15,6 +16,7 @@ public enum SoldierType
 }
 
 [RequireComponent(typeof(SpriteRenderer))]
+[RequireComponent(typeof(BoxCollider2D))] // Nötig um Klicks zu registrieren
 public class Soldier : MonoBehaviour
 {
     [Header("Welcher Soldat ist das?")]
@@ -53,6 +55,10 @@ public class Soldier : MonoBehaviour
     private TextMesh healthText;
     private LineRenderer circleRenderer;
 
+    // Befehls-Menü Variablen
+    public bool holdPosition = false;
+    private bool showMenu = false;
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
@@ -61,6 +67,16 @@ public class Soldier : MonoBehaviour
         if (shieldSprite == null) shieldSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/schildsoldat.png");
         if (swordSprite == null) swordSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/schwertkämpfer.png");
         if (bowSprite == null) bowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/bogensoldat.png");
+
+        // Wechselt das Bild sofort im Editor, wenn du das Dropdown änderst!
+        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            if (soldierType == SoldierType.Spear && spearSprite != null) sr.sprite = spearSprite;
+            else if (soldierType == SoldierType.Shield && shieldSprite != null) sr.sprite = shieldSprite;
+            else if (soldierType == SoldierType.Sword && swordSprite != null) sr.sprite = swordSprite;
+            else if (soldierType == SoldierType.Bow && bowSprite != null) sr.sprite = bowSprite;
+        }
     }
 #endif
 
@@ -201,6 +217,19 @@ public class Soldier : MonoBehaviour
 
     private void Update()
     {
+        // Prüfen ob der Spieler mit Rechtsklick auf diesen Soldaten klickt (Neues Input System)
+        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+            Collider2D hit = Physics2D.OverlapPoint(mousePos);
+            
+            // Menü öffnet sich NUR, wenn man den Soldaten trifft UND er zum eigenen Team gehört!
+            if (hit != null && hit.gameObject == this.gameObject && team == Team.Player)
+            {
+                showMenu = !showMenu;
+            }
+        }
+
         FindNearestEnemy();
 
         if (currentTarget != null)
@@ -216,13 +245,13 @@ public class Soldier : MonoBehaviour
                     lastAttackTime = Time.time;
                 }
             }
-            else
+            else if (!holdPosition)
             {
-                // Gegner ist nicht im Radius -> Zum Gegner bewegen
+                // Gegner ist nicht im Radius und er soll nicht stehenbleiben -> Zum Gegner bewegen
                 MoveTowards(currentTarget.position);
             }
         }
-        else
+        else if (!holdPosition)
         {
             // Kein Gegner auf der Karte -> Zufällig bewegen (passiv)
             WanderRandomly();
@@ -317,6 +346,44 @@ public class Soldier : MonoBehaviour
     {
         Debug.Log(gameObject.name + " ist gestorben!");
         Destroy(gameObject);
+    }
+
+    private void OnGUI()
+    {
+        if (showMenu)
+        {
+            // Position vom Soldaten auf den Bildschirm umrechnen
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position);
+            float guiY = Screen.height - screenPos.y; 
+            
+            // Ein kleines Menü über dem Soldaten zeichnen
+            GUILayout.BeginArea(new Rect(screenPos.x - 60, guiY - 100, 120, 100), GUI.skin.box);
+            GUILayout.Label("Befehle", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
+            
+            if (holdPosition)
+            {
+                if (GUILayout.Button("Weitergehen"))
+                {
+                    holdPosition = false;
+                    showMenu = false;
+                }
+            }
+            else
+            {
+                if (GUILayout.Button("Stehenbleiben"))
+                {
+                    holdPosition = true;
+                    showMenu = false;
+                }
+            }
+
+            if (GUILayout.Button("Schließen"))
+            {
+                showMenu = false;
+            }
+            
+            GUILayout.EndArea();
+        }
     }
 
     private void OnDrawGizmosSelected()
