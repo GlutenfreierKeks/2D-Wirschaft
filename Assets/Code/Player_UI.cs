@@ -48,6 +48,23 @@ public class Player_UI : MonoBehaviour
         new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
     };
 
+    // ── Menü-Definition ──────────────────────────────────────────────────────
+
+    [System.Serializable]
+    public class MenuCategory
+    {
+        public string id          = "category";
+        public string displayName = "Kategorie";
+    }
+
+    [Header("Menü Kategorien (unten)")]
+    [SerializeField] private List<MenuCategory> menuCategories = new List<MenuCategory>
+    {
+        new MenuCategory { id = "ressourcen", displayName = "Ressourcen" },
+        new MenuCategory { id = "hauser",     displayName = "Häuser" },
+        new MenuCategory { id = "andere",     displayName = "Andere" }
+    };
+
     // ── Style  (Parchment / Karten-Look) ─────────────────────────────────────
 
     [Header("Style")]
@@ -66,6 +83,10 @@ public class Player_UI : MonoBehaviour
     private readonly Dictionary<string, int>                values = new();
     private readonly Dictionary<string, int>                maxValues = new();
     private readonly Dictionary<string, TextMeshProUGUI>    labels = new();
+
+    private GameObject mainMenuContainer;
+    private GameObject subMenuContainer;
+    private TextMeshProUGUI subMenuTitle;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -176,6 +197,169 @@ public class Player_UI : MonoBehaviour
             maxValues[def.id] = def.maxValue;
             labels[def.id] = CreateSlot(barGO.transform, def);
         }
+
+        BuildBottomMenu(canvasGO.transform);
+    }
+
+    // ── Unteres Menü ─────────────────────────────────────────────────────────
+
+    private void BuildBottomMenu(Transform canvasTransform)
+    {
+        // ── Container unten mittig ──────────────────────────────────────────
+        var bottomGO = new GameObject("BottomMenu", typeof(RectTransform));
+        bottomGO.transform.SetParent(canvasTransform, false);
+
+        var bottomRT = bottomGO.GetComponent<RectTransform>();
+        bottomRT.anchorMin        = new Vector2(0.5f, 0f);
+        bottomRT.anchorMax        = new Vector2(0.5f, 0f);
+        bottomRT.pivot            = new Vector2(0.5f, 0f);
+        bottomRT.anchoredPosition = new Vector2(0f, 20f); // Abstand von unten
+        bottomRT.sizeDelta        = new Vector2(600f, 100f);
+
+        // ── Main Menu Container (Die 3 Buttons) ─────────────────────────────
+        mainMenuContainer = new GameObject("MainMenu", typeof(RectTransform));
+        mainMenuContainer.transform.SetParent(bottomGO.transform, false);
+        
+        var mainRT = mainMenuContainer.GetComponent<RectTransform>();
+        mainRT.anchorMin = Vector2.zero;
+        mainRT.anchorMax = Vector2.one;
+        mainRT.sizeDelta = Vector2.zero;
+
+        var mainHL = mainMenuContainer.AddComponent<HorizontalLayoutGroup>();
+        mainHL.spacing                = 20f;
+        mainHL.childAlignment         = TextAnchor.MiddleCenter;
+        mainHL.childForceExpandHeight = true;
+        mainHL.childForceExpandWidth  = false;
+
+        foreach (var cat in menuCategories)
+        {
+            CreateMenuButton(mainMenuContainer.transform, cat.displayName, () => OpenSubMenu(cat.displayName));
+        }
+
+        // ── Sub Menu Container (Versteckt am Anfang) ────────────────────────
+        subMenuContainer = new GameObject("SubMenu", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        subMenuContainer.transform.SetParent(bottomGO.transform, false);
+        
+        var subImg = subMenuContainer.GetComponent<Image>();
+        subImg.color = new Color(slotColor.r, slotColor.g, slotColor.b, 0.98f); // Hintergrund fürs Submenü
+
+        var subRT = subMenuContainer.GetComponent<RectTransform>();
+        subRT.anchorMin = new Vector2(0.5f, 0f);
+        subRT.anchorMax = new Vector2(0.5f, 0f);
+        subRT.pivot     = new Vector2(0.5f, 0f);
+        subRT.sizeDelta = new Vector2(800f, 250f); // Größeres Fenster für den Inhalt
+
+        // Rahmen fürs Submenü (optional, nutzen Outline)
+        var subOutline = subMenuContainer.AddComponent<Outline>();
+        subOutline.effectColor = borderColor;
+        subOutline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        // Layout fürs Submenü
+        var subVL = subMenuContainer.AddComponent<VerticalLayoutGroup>();
+        subVL.padding = new RectOffset(20, 20, 20, 20);
+        subVL.spacing = 10f;
+        subVL.childAlignment = TextAnchor.UpperCenter;
+
+        // Titel und Zurück-Button Zeile
+        var subHeaderGO = new GameObject("Header", typeof(RectTransform));
+        subHeaderGO.transform.SetParent(subMenuContainer.transform, false);
+        var headerHL = subHeaderGO.AddComponent<HorizontalLayoutGroup>();
+        headerHL.childForceExpandHeight = false;
+        headerHL.childForceExpandWidth  = true;
+        headerHL.childAlignment = TextAnchor.MiddleLeft;
+
+        var headerLE = subHeaderGO.AddComponent<LayoutElement>();
+        headerLE.minHeight = 40f;
+
+        CreateMenuButton(subHeaderGO.transform, "< Zurück", CloseSubMenu, 120f, 40f);
+
+        var titleGO = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        titleGO.transform.SetParent(subHeaderGO.transform, false);
+        subMenuTitle = titleGO.GetComponent<TextMeshProUGUI>();
+        subMenuTitle.text = "Kategorie";
+        subMenuTitle.fontSize = 24f;
+        subMenuTitle.fontStyle = FontStyles.Bold;
+        subMenuTitle.color = valueColor;
+        subMenuTitle.alignment = TextAlignmentOptions.Center;
+        
+        var titleLE = titleGO.AddComponent<LayoutElement>();
+        titleLE.flexibleWidth = 1f;
+
+        // Platzhalter für den Inhalt
+        var contentGO = new GameObject("ContentPlaceholder", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        contentGO.transform.SetParent(subMenuContainer.transform, false);
+        var contentTMP = contentGO.GetComponent<TextMeshProUGUI>();
+        contentTMP.text = "(Hier kommen später die auswählbaren Elemente hin)";
+        contentTMP.fontSize = 18f;
+        contentTMP.color = labelColor;
+        contentTMP.alignment = TextAlignmentOptions.Center;
+        contentTMP.enableWordWrapping = true;
+        var contentLE = contentGO.AddComponent<LayoutElement>();
+        contentLE.flexibleHeight = 1f;
+
+        // Startzustand
+        subMenuContainer.SetActive(false);
+    }
+
+    private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f)
+    {
+        var btnGO = new GameObject($"Btn_{text}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        btnGO.transform.SetParent(parent, false);
+
+        var le = btnGO.AddComponent<LayoutElement>();
+        le.minWidth = width;
+        le.minHeight = height;
+
+        // Button Grafik
+        var img = btnGO.GetComponent<Image>();
+        img.color = slotColor;
+
+        var outline = btnGO.AddComponent<Outline>();
+        outline.effectColor = borderColor;
+        outline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        // Button Logik
+        var btn = btnGO.GetComponent<Button>();
+        btn.targetGraphic = img;
+        
+        // Farben für Hover etc (Pergament-Style)
+        var colors = btn.colors;
+        colors.normalColor      = Color.white;
+        colors.highlightedColor = new Color(1.2f, 1.2f, 1.2f); // Heller bei Hover
+        colors.pressedColor     = new Color(0.8f, 0.8f, 0.8f); // Dunkler beim Klicken
+        colors.selectedColor    = Color.white;
+        btn.colors = colors;
+
+        btn.onClick.AddListener(onClick);
+
+        // Button Text
+        var txtGO = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        txtGO.transform.SetParent(btnGO.transform, false);
+
+        var txtRT = txtGO.GetComponent<RectTransform>();
+        txtRT.anchorMin = Vector2.zero;
+        txtRT.anchorMax = Vector2.one;
+        txtRT.sizeDelta = Vector2.zero;
+
+        var tmp = txtGO.GetComponent<TextMeshProUGUI>();
+        tmp.text = text;
+        tmp.fontSize = 20f;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.color = valueColor;
+        tmp.alignment = TextAlignmentOptions.Center;
+    }
+
+    private void OpenSubMenu(string categoryName)
+    {
+        mainMenuContainer.SetActive(false);
+        subMenuTitle.text = categoryName.ToUpper();
+        subMenuContainer.SetActive(true);
+    }
+
+    private void CloseSubMenu()
+    {
+        subMenuContainer.SetActive(false);
+        mainMenuContainer.SetActive(true);
     }
 
     private TextMeshProUGUI CreateSlot(Transform parent, ResourceDefinition def)
