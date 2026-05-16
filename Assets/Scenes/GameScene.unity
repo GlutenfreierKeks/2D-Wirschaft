@@ -493,42 +493,52 @@ MonoBehaviour:
     displayName: Kleines Haus
     icon: {fileID: 21300000, guid: e7fc2a92b49e9e442ad7a3eb5ed77a41, type: 3}
     categoryId: hauser
+    buildingData: {fileID: 11400000, guid: c0c0c99f9910f5f4eba67254dee721d2, type: 2}
   - id: grosses_haus
     displayName: "Gro\xDFes Haus"
     icon: {fileID: 21300000, guid: f3b61810eb48b264d8b5578dd9900cba, type: 3}
     categoryId: hauser
+    buildingData: {fileID: 0}
   - id: eisenmine
     displayName: Eisenmine
     icon: {fileID: 21300000, guid: 862abfb9c37eab0449caca698286e772, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: goldmine
     displayName: Goldmine
     icon: {fileID: 21300000, guid: 415c5494d256f434ab4417830cece084, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: holzhutte
     displayName: "Holzh\xFCtte"
     icon: {fileID: 21300000, guid: 9d3ed0243b8ff0a46b700ca4b5e2798d, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: steinwerk
     displayName: Steinwerk
     icon: {fileID: 21300000, guid: c22edc42248f59c4ab2a661ab959819b, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: farm
     displayName: Farm
     icon: {fileID: 21300000, guid: 0e0edacb743ac5a4fabb72d8b52b2d04, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: wustenfruchtfarm
     displayName: "W\xFCstenfruchtfarm"
     icon: {fileID: 21300000, guid: 9fb9a95d8eb264244916890a4a84b9aa, type: 3}
     categoryId: ressourcen
+    buildingData: {fileID: 0}
   - id: kaserne
     displayName: Kaserne
     icon: {fileID: 21300000, guid: 1ad83adc535613044af03d7fecfb5a5f, type: 3}
     categoryId: andere
+    buildingData: {fileID: 0}
   - id: viehhof
     displayName: Viehhof
     icon: {fileID: 21300000, guid: 675e0c2c7979526428efe84cc66b9ab1, type: 3}
     categoryId: andere
+    buildingData: {fileID: 0}
   barColor: {r: 0.18, g: 0.1, b: 0.03, a: 0.96}
   slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
   borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
@@ -566,6 +576,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FogRevealer
   radius: 50
+  isLocalPlayer: 1
 --- !u!114 &820119596
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -845,7 +856,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1095614885
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1285,6 +1296,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FogRevealer
   radius: 10
+  isLocalPlayer: 1
 --- !u!212 &1447129131
 SpriteRenderer:
   serializedVersion: 2
@@ -1453,6 +1465,50 @@ Transform:
   - {fileID: 1095614885}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2124503589
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2124503591}
+  - component: {fileID: 2124503590}
+  m_Layer: 0
+  m_Name: SceneSetup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2124503590
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2124503589}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac59399eac5c3b54b956cedcfadd68a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SceneSetup
+--- !u!4 &2124503591
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2124503589}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 441.6, y: 493.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1466,3 +1522,4 @@ SceneRoots:
   - {fileID: 820119594}
   - {fileID: 281465909}
   - {fileID: 1447129132}
+  - {fileID: 2124503591}

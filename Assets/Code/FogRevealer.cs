@@ -3,9 +3,19 @@ using UnityEngine;
 public class FogRevealer : MonoBehaviour
 {
     public float radius = 5f;
+    public bool isLocalPlayer = true;
     private GameObject maskObj;
 
-    private void Awake()
+    private void Start()
+    {
+        CreateMask();
+        if (isLocalPlayer)
+        {
+            FogProjector.RegisterExploration(transform.position, radius);
+        }
+    }
+
+    private void CreateMask()
     {
         // Create a visual indicator for the mask camera
         maskObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -15,7 +25,7 @@ public class FogRevealer : MonoBehaviour
         maskObj.transform.localScale = new Vector3(radius * 2.5f, radius * 2.5f, 1);
         
         // Use layer 31 for the Fog Mask (must be set in Camera as well)
-        maskObj.layer = 31; 
+        maskObj.layer = isLocalPlayer ? 31 : 0; 
         
         Renderer rend = maskObj.GetComponent<Renderer>();
         rend.material = new Material(Shader.Find("Custom/MaskCircleShader"));

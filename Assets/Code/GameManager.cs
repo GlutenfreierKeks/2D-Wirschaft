@@ -55,9 +55,16 @@ public class GameManager : MonoBehaviourPunCallbacks
             }
         }
 
-        // Pick an island based on the player index (so each player gets a different island if possible)
+        // Pick an island based on the player index
         Vector2 islandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
+        IslandType islandType = IslandManager.Instance.GetIslandType(playerIndex);
+        
         Vector3 spawnPos = new Vector3(islandPos.x, islandPos.y, -10f);
+        
+        if (ResourceManager.Instance != null)
+        {
+            ResourceManager.Instance.InitializeResources(islandType);
+        }
         
         Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {spawnPos}");
         
@@ -70,13 +77,14 @@ public class GameManager : MonoBehaviourPunCallbacks
             mainCam.transform.rotation = Quaternion.identity;
         }
 
-        // Spawn warehouses for ALL players so everyone can see everyone's base
+        // Spawn warehouses for ALL players
         if (BuildingManager.Instance != null)
         {
             for (int i = 0; i < players.Length; i++)
             {
                 Vector2 pos = IslandManager.Instance.GetIslandPosition(i);
-                BuildingManager.Instance.SpawnMainWarehouse(pos);
+                bool isLocal = players[i].IsLocal;
+                BuildingManager.Instance.SpawnMainWarehouse(pos, isLocal);
             }
         }
     }

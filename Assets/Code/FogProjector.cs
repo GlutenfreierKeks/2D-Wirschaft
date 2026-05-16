@@ -16,6 +16,27 @@ public class FogProjector : MonoBehaviour
     private GameObject fogQuad;
 
     private Material accumulatorMaterial;
+    private static HashSet<Vector2> exploredCells = new HashSet<Vector2>();
+
+    public static bool IsExplored(Vector2 pos)
+    {
+        return exploredCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
+    }
+
+    public static void RegisterExploration(Vector2 center, float radius)
+    {
+        int r = Mathf.CeilToInt(radius);
+        for (int x = -r; x <= r; x++)
+        {
+            for (int y = -r; y <= r; y++)
+            {
+                if (x*x + y*y <= radius*radius)
+                {
+                    exploredCells.Add(new Vector2(Mathf.Round(center.x + x), Mathf.Round(center.y + y)));
+                }
+            }
+        }
+    }
 
     public static void AddRevealer(FogRevealer r) => revealers.Add(r);
     public static void RemoveRevealer(FogRevealer r) => revealers.Remove(r);

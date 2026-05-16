@@ -15,6 +15,13 @@ public class IslandManager : MonoBehaviour
     [SerializeField] private float minDistanceBetweenIslands = 500f;
 
     private List<Vector2> islandPositions = new List<Vector2>();
+    private List<IslandType> islandTypes = new List<IslandType>();
+    private static HashSet<Vector2> allLandCells = new HashSet<Vector2>();
+
+    public static bool IsLand(Vector2 pos)
+    {
+        return allLandCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
+    }
 
     private void Awake()
     {
@@ -60,6 +67,7 @@ public class IslandManager : MonoBehaviour
                 typeIndex++;
 
                 islandPositions.Add(newPos);
+                islandTypes.Add(type);
                 CreateIslandMesh(newPos, type);
             }
         }
@@ -127,6 +135,9 @@ public class IslandManager : MonoBehaviour
             foreach (Vector2 hole in holesToFill) occupiedCells.Add(hole);
         }
 
+        // Register land cells for placement checks
+        foreach (Vector2 cell in occupiedCells) allLandCells.Add(cell);
+
         GameObject islandObj = new GameObject($"Island_{type}_{startPos}");
         islandObj.transform.SetParent(transform);
         islandObj.transform.position = new Vector3(0, 0, -0.1f);
@@ -182,5 +193,11 @@ public class IslandManager : MonoBehaviour
     {
         if (islandPositions.Count == 0) return Vector2.zero;
         return islandPositions[index % islandPositions.Count];
+    }
+
+    public IslandType GetIslandType(int index)
+    {
+        if (islandTypes.Count == 0) return IslandType.Plains;
+        return islandTypes[index % islandTypes.Count];
     }
 }

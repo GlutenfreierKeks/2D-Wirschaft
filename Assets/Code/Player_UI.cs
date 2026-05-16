@@ -72,6 +72,7 @@ public class Player_UI : MonoBehaviour
         public string displayName = "Item";
         public Sprite icon        = null;
         public string categoryId  = "hauser";
+        public BuildingData buildingData = null; 
     }
 
     [Header("Submenü Items")]
@@ -141,6 +142,23 @@ public class Player_UI : MonoBehaviour
     public void AddResource(string id, int delta) => SetResource(id, GetResource(id) + delta);
 
     public int GetResource(string id) => values.TryGetValue(id, out int v) ? v : 0;
+
+    public void SetMaxResource(string id, int max)
+    {
+        if (maxValues.ContainsKey(id))
+        {
+            maxValues[id] = max;
+            SetResource(id, GetResource(id)); // Refresh display
+        }
+    }
+
+    public void AddMaxPopulation(int delta)
+    {
+        if (maxValues.TryGetValue("bevolkerung", out int currentMax))
+        {
+            SetMaxResource("bevolkerung", currentMax + delta);
+        }
+    }
 
     // ── UI-Aufbau ────────────────────────────────────────────────────────────
 
@@ -435,11 +453,16 @@ public class Player_UI : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        // Neue Items spawnen (außer "Zurück", falls vorhanden, da man jetzt daneben klicken kann)
+        // Neue Items spawnen
         foreach(var item in menuItems) {
             if(item.categoryId == catId && item.displayName != "Zurück") {
                 CreateMenuButton(subMenuContent, item.displayName, () => {
                     Debug.Log("Geklickt auf: " + item.displayName);
+                    if (item.buildingData != null && PlacementManager.Instance != null)
+                    {
+                        PlacementManager.Instance.StartPlacement(item.buildingData);
+                        CloseSubMenu(); // Close UI after picking building
+                    }
                 }, 120f, 120f, item.icon);
             }
         }
