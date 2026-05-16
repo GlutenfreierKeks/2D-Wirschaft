@@ -23,6 +23,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
     [Header("UI References - Status")]
     [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private Button testLobbyButton;
 
     private const string PLAYER_NAME_PREF_KEY = "PlayerName";
     private readonly byte[] maxPlayersOptions = { 2, 4, 6, 8 };
@@ -64,6 +65,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
         if (playerNameInput != null) playerNameInput.interactable = isInteractable;
         if (roomNameInput != null) roomNameInput.interactable = isInteractable;
         if (maxPlayersDropdown != null) maxPlayersDropdown.interactable = isInteractable;
+        if (testLobbyButton != null) testLobbyButton.interactable = isInteractable;
     }
 
     /// <summary>
@@ -144,6 +146,29 @@ public class MainMenu : MonoBehaviourPunCallbacks
         statusText.text = "Joining Random Room...";
         SetUIInteractable(false);
         PhotonNetwork.JoinRandomRoom();
+    }
+
+    /// <summary>
+    /// Creates a room in 'Test Mode' with simulated players.
+    /// </summary>
+    public void OnTestLobbyButtonClicked()
+    {
+        if (!SetupPlayerName()) return;
+
+        string roomName = "TestRoom_" + Random.Range(1000, 9999);
+        
+        RoomOptions roomOptions = new RoomOptions
+        {
+            MaxPlayers = 4,
+            IsOpen = true,
+            IsVisible = false, // Keep test rooms hidden from global list
+            CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { { "TestMode", true } },
+            CustomRoomPropertiesForLobby = new string[] { "TestMode" }
+        };
+
+        statusText.text = "Starting Test Lobby...";
+        SetUIInteractable(false);
+        PhotonNetwork.CreateRoom(roomName, roomOptions);
     }
 
     /// <summary>

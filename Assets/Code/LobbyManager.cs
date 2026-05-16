@@ -15,6 +15,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] private TextMeshProUGUI playerListText;
     [SerializeField] private TextMeshProUGUI masterClientNoteText;
     [SerializeField] private Button leaveRoomButton;
+    [SerializeField] private Button startTestButton;
     [SerializeField] private JoinLogUI joinLogUI;
 
     private void Start()
@@ -25,6 +26,12 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         if (leaveRoomButton != null)
         {
             leaveRoomButton.onClick.AddListener(OnLeaveRoomButtonClicked);
+        }
+
+        if (startTestButton != null)
+        {
+            startTestButton.onClick.AddListener(OnStartTestButtonClicked);
+            startTestButton.gameObject.SetActive(false);
         }
 
         UpdateLobbyUI();
@@ -53,11 +60,33 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         }
 
         // Master Client UI Note
+        bool isTestMode = currentRoom.CustomProperties.ContainsKey("TestMode") && (bool)currentRoom.CustomProperties["TestMode"];
+
+        if (isTestMode)
+        {
+            playerListText.text += "- [Bot] Dummy Player 1\n";
+            playerListText.text += "- [Bot] Dummy Player 2\n";
+            
+            if (startTestButton != null && PhotonNetwork.IsMasterClient)
+            {
+                startTestButton.gameObject.SetActive(true);
+            }
+        }
+
         if (masterClientNoteText != null)
         {
             masterClientNoteText.text = PhotonNetwork.IsMasterClient
-                ? "You are the Master Client. Game will start when room is full."
+                ? (isTestMode ? "Test Mode: Press Start to spawn with bots." : "You are the Master Client. Game will start when room is full.")
                 : "Waiting for Master Client to start the game...";
+        }
+    }
+
+    private void OnStartTestButtonClicked()
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
 
