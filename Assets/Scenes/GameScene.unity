@@ -211,6 +211,7 @@ GameObject:
   - component: {fileID: 788347633}
   - component: {fileID: 788347637}
   - component: {fileID: 788347636}
+  - component: {fileID: 788347638}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -354,6 +355,63 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &788347638
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 788347632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04ddcda4cf2cade45916d8e0ba2e8f20, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Player_UI
+  startingResources:
+  - id: eisen
+    displayName: Eisen
+    icon: {fileID: 21300000, guid: b1473a013f6303f4b9e71c7573cdba85, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: gold
+    displayName: Gold
+    icon: {fileID: 21300000, guid: 762d64fedcf0a9f46b45a241e9ca5192, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: weizen
+    displayName: Weizen
+    icon: {fileID: 21300000, guid: 8bd955b9ba5974a4fb27465e856bb91e, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: holz
+    displayName: Holz
+    icon: {fileID: 21300000, guid: e2623e925eb5e6e42b8a98ad716a7c7e, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: stein
+    displayName: Stein
+    icon: {fileID: 21300000, guid: 111c442dcb6e0c141a987a365d804996, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: wüstenfrucht
+    displayName: "W\u00FCstenfrucht"
+    icon: {fileID: 21300000, guid: 2ef513d7392f75c488195e0c5f7282b0, type: 3}
+    startValue: 0
+    maxValue: 0
+  - id: bevolkerung
+    displayName: "Bev\u00F6lkerung"
+    icon: {fileID: 21300000, guid: 6f5b0622d3579264982e57835b52adb7, type: 3}
+    startValue: 10
+    maxValue: 20
+  barColor: {r: 0.18, g: 0.10, b: 0.03, a: 0.96}
+  slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
+  borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
+  labelColor: {r: 0.90, g: 0.78, b: 0.52, a: 0.85}
+  valueColor: {r: 1.0, g: 0.95, b: 0.75, a: 1}
+  barHeight: 80
+  slotPadding: 18
+  iconSize: 44
+  borderWidth: 2
 --- !u!1 &983598780
 GameObject:
   m_ObjectHideFlags: 0

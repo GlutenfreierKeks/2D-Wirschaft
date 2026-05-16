@@ -33,18 +33,19 @@ public class Player_UI : MonoBehaviour
         public string displayName = "Ressource";
         public Sprite icon        = null;
         [Min(0)] public int startValue = 0;
+        [Min(0)] public int maxValue   = 0; // 0 = kein Maximum
     }
 
     [Header("Ressourcen (beliebig erweiterbar)")]
     [SerializeField] private List<ResourceDefinition> startingResources = new List<ResourceDefinition>
     {
-        new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 0   },
+        new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 100 },
         new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 100 },
-        new ResourceDefinition { id = "weizen",      displayName = "Weizen",      startValue = 50  },
-        new ResourceDefinition { id = "holz",        displayName = "Holz",        startValue = 30  },
-        new ResourceDefinition { id = "stein",       displayName = "Stein",       startValue = 0   },
+        new ResourceDefinition { id = "weizen",      displayName = "Weizen",      startValue = 100 },
+        new ResourceDefinition { id = "holz",        displayName = "Holz",        startValue = 100 },
+        new ResourceDefinition { id = "stein",       displayName = "Stein",       startValue = 100 },
         new ResourceDefinition { id = "wüstenfrucht", displayName = "Wüstenfrucht", startValue = 0   },
-        new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 5   },
+        new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
     };
 
     // ── Style  (Parchment / Karten-Look) ─────────────────────────────────────
@@ -62,8 +63,9 @@ public class Player_UI : MonoBehaviour
 
     // ── Laufzeit ─────────────────────────────────────────────────────────────
 
-    private readonly Dictionary<string, int>             values = new();
-    private readonly Dictionary<string, TextMeshProUGUI> labels = new();
+    private readonly Dictionary<string, int>                values = new();
+    private readonly Dictionary<string, int>                maxValues = new();
+    private readonly Dictionary<string, TextMeshProUGUI>    labels = new();
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -80,9 +82,24 @@ public class Player_UI : MonoBehaviour
             Debug.LogWarning($"[Player_UI] Unbekannte Ressource: '{id}'");
             return;
         }
-        values[id] = Mathf.Max(0, value);
+
+        int max = maxValues[id];
+        if (max > 0)
+        {
+            values[id] = Mathf.Clamp(value, 0, max);
+        }
+        else
+        {
+            values[id] = Mathf.Max(0, value);
+        }
+
         if (labels.TryGetValue(id, out var lbl))
-            lbl.text = values[id].ToString();
+        {
+            if (max > 0)
+                lbl.text = $"{values[id]}/{max}";
+            else
+                lbl.text = values[id].ToString();
+        }
     }
 
     public void AddResource(string id, int delta) => SetResource(id, GetResource(id) + delta);
@@ -156,6 +173,7 @@ public class Player_UI : MonoBehaviour
         foreach (var def in startingResources)
         {
             values[def.id] = def.startValue;
+            maxValues[def.id] = def.maxValue;
             labels[def.id] = CreateSlot(barGO.transform, def);
         }
     }
@@ -260,7 +278,12 @@ public class Player_UI : MonoBehaviour
             typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         valGO.transform.SetParent(col.transform, false);
         var valTMP = valGO.GetComponent<TextMeshProUGUI>();
-        valTMP.text          = def.startValue.ToString();
+        
+        if (def.maxValue > 0)
+            valTMP.text = $"{def.startValue}/{def.maxValue}";
+        else
+            valTMP.text = def.startValue.ToString();
+            
         valTMP.fontSize      = 22f;
         valTMP.fontStyle     = FontStyles.Bold;
         valTMP.color         = valueColor;
