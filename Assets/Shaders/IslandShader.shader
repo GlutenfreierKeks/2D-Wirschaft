@@ -21,12 +21,14 @@ Shader "Custom/IslandShader"
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
+                float4 color : COLOR;
             };
 
             struct v2f
             {
                 float2 uv : TEXCOORD0;
                 float4 vertex : SV_POSITION;
+                float4 color : COLOR;
             };
 
             fixed4 _Color;
@@ -36,12 +38,13 @@ Shader "Custom/IslandShader"
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
+                o.color = v.color;
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
-                return _Color;
+                return i.color;
             }
             ENDCG
         }

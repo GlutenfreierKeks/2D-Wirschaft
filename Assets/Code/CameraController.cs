@@ -50,11 +50,17 @@ public class CameraController : MonoBehaviour
 
         cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetZoom, Time.deltaTime * zoomSmoothing);
 
-        // Hide grid if zoomed out too far
+        // Smoothly fade grid lines if zoomed out too far
         if (gridObject == null) gridObject = GameObject.Find("BackgroundGrid");
         if (gridObject != null)
         {
-            gridObject.SetActive(cam.orthographicSize < gridFadeZoom);
+            Renderer gridRenderer = gridObject.GetComponent<Renderer>();
+            if (gridRenderer != null)
+            {
+                // Calculate fade: 1.0 at small zoom, 0.0 at gridFadeZoom
+                float fade = Mathf.Clamp01((gridFadeZoom - cam.orthographicSize) / 20f);
+                gridRenderer.material.SetFloat("_Fade", fade);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ public class GridManager : MonoBehaviour
     public static GridManager Instance;
 
     [Header("Grid Settings")]
-    [SerializeField] private int gridSize = 2000;
+    [SerializeField] private int gridSize = 5000;
     [SerializeField] private Material gridMaterial;
     
     [Header("Spawning")]
@@ -17,6 +17,14 @@ public class GridManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        // Ensure spawn radius is inside the grid (grid covers -gridSize/2 to gridSize/2)
+        float maxSafeRadius = (gridSize / 2f) * 0.8f;
+        if (spawnRadius > maxSafeRadius)
+        {
+            spawnRadius = maxSafeRadius;
+            Debug.Log($"[GridManager] Adjusted spawnRadius to {spawnRadius} to stay within grid.");
+        }
 
         CreateGridPlane();
     }
@@ -41,6 +49,11 @@ public class GridManager : MonoBehaviour
         {
             Debug.LogWarning("Grid Material not assigned to GridManager!");
         }
+    }
+
+    public int GetGridSize()
+    {
+        return gridSize;
     }
 
     public Vector3 GetSpawnPosition(int playerIndex, int totalPlayers)
