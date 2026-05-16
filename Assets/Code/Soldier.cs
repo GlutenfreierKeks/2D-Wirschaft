@@ -1,5 +1,11 @@
 using UnityEngine;
 
+public enum Team
+{
+    Player,
+    Enemy
+}
+
 public enum SoldierType
 {
     Spear,
@@ -8,10 +14,14 @@ public enum SoldierType
     Bow
 }
 
+[RequireComponent(typeof(SpriteRenderer))]
 public class Soldier : MonoBehaviour
 {
     [Header("Welcher Soldat ist das?")]
     public SoldierType soldierType;
+
+    [Header("Team Einstellungen")]
+    public Team team = Team.Player;
 
     [Header("Bilder / Icons")]
     public Sprite spearSprite;
@@ -19,8 +29,8 @@ public class Soldier : MonoBehaviour
     public Sprite swordSprite;
     public Sprite bowSprite;
 
-    [Header("Zieleinstellungen")]
-    public string enemyTag = "Enemy";
+    // Das Ziel wird jetzt automatisch anhand des Teams ermittelt
+    private string enemyTag;
 
     // Diese Werte werden nun automatisch durch den Code gesetzt
     [Header("Aktuelle Stats (Werden automatisch gesetzt)")]
@@ -38,6 +48,11 @@ public class Soldier : MonoBehaviour
     private Vector2 randomWanderTarget;
     private float nextWanderTime;
 
+    // UI Elemente für Anzeige
+    private TextMesh nameText;
+    private TextMesh healthText;
+    private LineRenderer circleRenderer;
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
@@ -52,6 +67,10 @@ public class Soldier : MonoBehaviour
     private void Awake()
     {
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
+
+        // Tag und Ziel automatisch setzen
+        gameObject.tag = (team == Team.Player) ? "Player" : "Enemy";
+        enemyTag = (team == Team.Player) ? "Enemy" : "Player";
 
         // Stats basierend auf dem ausgewählten Typen setzen
         switch (soldierType)
@@ -98,6 +117,86 @@ public class Soldier : MonoBehaviour
     {
         currentHealth = maxHealth;
         SetNewWanderTarget();
+
+        // Erstelle direkt beim Starten die Text-Anzeigen und den Kreis!
+        SetupVisuals();
+    }
+
+    private void SetupVisuals()
+    {
+        // 1. Name Tag (Art des Soldaten) Text über dem Soldaten
+        GameObject nameObj = new GameObject("NameTag");
+        nameObj.transform.SetParent(this.transform);
+        nameObj.transform.localPosition = new Vector3(0, 1.2f, 0); // Leicht über dem Kopf
+        nameText = nameObj.AddComponent<TextMesh>();
+        nameText.text = soldierType.ToString();
+        nameText.characterSize = 0.1f;
+        nameText.fontSize = 40;
+        nameText.anchor = TextAnchor.MiddleCenter;
+        nameText.alignment = TextAlignment.Center;
+        nameText.color = Color.white;
+        nameText.GetComponent<MeshRenderer>().sortingOrder = 10; // Damit es im 2D Raum sichtbar ist
+
+        // 2. Lebensanzeige unter dem Namen
+        GameObject hpObj = new GameObject("HealthTag");
+        hpObj.transform.SetParent(this.transform);
+        hpObj.transform.localPosition = new Vector3(0, 0.8f, 0);
+        healthText = hpObj.AddComponent<TextMesh>();
+        healthText.characterSize = 0.1f;
+        healthText.fontSize = 35;
+        healthText.anchor = TextAnchor.MiddleCenter;
+        healthText.alignment = TextAlignment.Center;
+        healthText.GetComponent<MeshRenderer>().sortingOrder = 10;
+        UpdateHealthText();
+
+        // 3. Angriffsradius Kreis zeichnen (LineRenderer)
+        circleRenderer = gameObject.AddComponent<LineRenderer>();
+        circleRenderer.startWidth = 0.15f; // Etwas dicker gemacht, damit man ihn besser sieht
+        circleRenderer.endWidth = 0.15f;
+        circleRenderer.useWorldSpace = false; // Der Kreis bewegt sich mit dem Soldaten mit
+        circleRenderer.loop = true; // Schließt den Kreis am Ende
+        
+        // Material für den Kreis (Standard 2D Material)
+        Material lineMat = new Material(Shader.Find("Sprites/Default"));
+        circleRenderer.material = lineMat;
+        
+        // Blau für Spieler, Rot für Feinde
+        Color circleColor = (team == Team.Player) ? new Color(0, 0.5f, 1f, 0.4f) : new Color(1, 0, 0, 0.4f);
+        circleRenderer.startColor = circleColor;
+        circleRenderer.endColor = circleColor;
+        circleRenderer.sortingOrder = 5; // Auf +5 gesetzt, damit es nicht vom Hintergrundbild verdeckt wird! (Der Name hat 10)
+
+        int segments = 50; // Anzahl der Ecken des Kreises (50 sieht sehr rund aus)
+        circleRenderer.positionCount = segments;
+        float angle = 0f;
+
+        for (int i = 0; i < segments; i++)
+        {
+            float x = Mathf.Sin(Mathf.Deg2Rad * angle) * attackRange;
+            float y = Mathf.Cos(Mathf.Deg2Rad * angle) * attackRange;
+
+            circleRenderer.SetPosition(i, new Vector3(x, y, 0));
+            angle += (360f / segments);
+        }
+    }
+
+    private void UpdateHealthText()
+    {
+        if (healthText != null)
+        {
+            if (shield > 0)
+            {
+                healthText.text = $"HP: {currentHealth} | Schild: {shield}";
+                healthText.color = Color.cyan; // Blau wenn Schild aktiv ist
+            }
+            else
+            {
+                healthText.text = $"HP: {currentHealth}";
+                if (currentHealth > maxHealth * 0.5f) healthText.color = Color.green;
+                else if (currentHealth > maxHealth * 0.25f) healthText.color = Color.yellow;
+                else healthText.color = Color.red;
+            }
+        }
     }
 
     private void Update()
@@ -205,6 +304,8 @@ public class Soldier : MonoBehaviour
         {
             currentHealth -= amount;
         }
+
+        UpdateHealthText(); // Aktualisiert den Text, sobald Schaden genommen wurde!
 
         if (currentHealth <= 0)
         {
