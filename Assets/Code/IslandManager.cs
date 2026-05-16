@@ -2,10 +2,18 @@ using UnityEngine;
 using System.Collections.Generic;
 
 public enum IslandType { Plains, Desert, Jungle, Stone }
+public enum ResourceType { Wood, Stone, Iron, Gold, Animal, Fruit, Wheat, None }
 
 public class IslandManager : MonoBehaviour
 {
     public static IslandManager Instance;
+    private static Dictionary<Vector2, ResourceType> resourceNodes = new Dictionary<Vector2, ResourceType>();
+
+    public static ResourceType GetResourceType(Vector2 pos)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
+        return resourceNodes.TryGetValue(snapped, out ResourceType type) ? type : ResourceType.None;
+    }
 
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
@@ -17,6 +25,7 @@ public class IslandManager : MonoBehaviour
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
     private static HashSet<Vector2> allLandCells = new HashSet<Vector2>();
+    private static Sprite defaultNodeSprite;
 
     public static bool IsLand(Vector2 pos)
     {
@@ -27,6 +36,18 @@ public class IslandManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        allLandCells.Clear();
+        resourceNodes.Clear();
+
+        if (defaultNodeSprite == null)
+        {
+            Texture2D tex = new Texture2D(1, 1);
+            tex.SetPixel(0, 0, Color.white);
+            tex.Apply();
+            // Use 1.0f pixels per unit so a 1x1 texture = 1x1 world units
+            defaultNodeSprite = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1.0f);
+        }
     }
 
     private void Start()
@@ -138,6 +159,9 @@ public class IslandManager : MonoBehaviour
         // Register land cells for placement checks
         foreach (Vector2 cell in occupiedCells) allLandCells.Add(cell);
 
+        // Biome-specific resource node distribution
+        DistributeResources(occupiedCells, type);
+
         GameObject islandObj = new GameObject($"Island_{type}_{startPos}");
         islandObj.transform.SetParent(transform);
         islandObj.transform.position = new Vector3(0, 0, -0.1f);
@@ -187,6 +211,114 @@ public class IslandManager : MonoBehaviour
         mesh.colors = colors.ToArray();
         mesh.RecalculateNormals();
         meshFilter.mesh = mesh;
+    }
+
+    private void DistributeResources(HashSet<Vector2> cells, IslandType biome)
+    {
+        List<Vector2> cellList = new List<Vector2>(cells);
+        if (cellList.Count == 0) return;
+
+        List<ResourceType> primaryTypes = GetPrimaryResourcesForBiome(biome);
+        
+        // Loop through ALL resource types (except None)
+        foreach (ResourceType type in System.Enum.GetValues(typeof(ResourceType)))
+        {
+            if (type == ResourceType.None) continue;
+
+            bool isPrimary = primaryTypes.Contains(type);
+            
+            // Determine cluster size based on whether it's primary or not
+            int clusterCount = isPrimary ? Random.Range(2, 4) : 1;
+            int clusterRadius = isPrimary ? Random.Range(4, 7) : Random.Range(1, 3);
+            float spawnChance = isPrimary ? 0.8f : 0.4f;
+
+            for (int h = 0; h < clusterCount; h++)
+            {
+                Vector2 hubCenter = cellList[Random.Range(0, cellList.Count)];
+                CreateResourceCluster(hubCenter, type, clusterRadius, spawnChance);
+            }
+        }
+    }
+
+    private void CreateResourceCluster(Vector2 center, ResourceType type, int radius, float spawnChance = 0.8f)
+    {
+        for (int x = -radius; x <= radius; x++)
+        {
+            for (int y = -radius; y <= radius; y++)
+            {
+                if (x * x + y * y <= radius * radius)
+                {
+                    Vector2 pos = new Vector2(Mathf.Round(center.x + x), Mathf.Round(center.y + y));
+                    if (IsLand(pos) && !resourceNodes.ContainsKey(pos))
+                    {
+                        if (Random.value < spawnChance) SpawnResourceNode(pos, type);
+                    }
+                }
+            }
+        }
+    }
+
+    private List<ResourceType> GetPrimaryResourcesForBiome(IslandType biome)
+    {
+        switch (biome)
+        {
+            case IslandType.Desert: return new List<ResourceType> { ResourceType.Iron, ResourceType.Gold };
+            case IslandType.Stone: return new List<ResourceType> { ResourceType.Stone, ResourceType.Iron };
+            case IslandType.Jungle: return new List<ResourceType> { ResourceType.Wood };
+            case IslandType.Plains: return new List<ResourceType> { ResourceType.Wheat };
+        }
+        return new List<ResourceType>();
+    }
+
+    private ResourceType PickRandomSecondary(IslandType biome)
+    {
+        float r = Random.value;
+        if (r > 0.3f) return ResourceType.None;
+
+        switch (biome)
+        {
+            case IslandType.Desert: return ResourceType.Fruit;
+            case IslandType.Stone: return ResourceType.Gold;
+            case IslandType.Jungle: return ResourceType.Fruit;
+            case IslandType.Plains: return ResourceType.Animal;
+        }
+        return ResourceType.None;
+    }
+
+    private void SpawnResourceNode(Vector2 pos, ResourceType type)
+    {
+        resourceNodes[pos] = type;
+
+        // Create a visual icon for the node
+        GameObject node = new GameObject($"Node_{type}");
+        node.transform.position = new Vector3(pos.x, pos.y, -0.15f);
+        node.transform.localScale = Vector3.one;
+        
+        SpriteRenderer sr = node.AddComponent<SpriteRenderer>();
+        sr.sprite = Resources.Load<Sprite>($"{type}_Icon"); 
+        if (sr.sprite == null) sr.sprite = Resources.Load<Sprite>($"{type}_Overlay");
+        
+        sr.sortingOrder = 11; 
+        if (sr.sprite == null)
+        {
+            sr.sprite = defaultNodeSprite;
+            sr.color = GetColorForResource(type);
+        }
+    }
+
+    private Color GetColorForResource(ResourceType type)
+    {
+        switch (type)
+        {
+            case ResourceType.Wood: return new Color(0.4f, 0.25f, 0.1f); 
+            case ResourceType.Stone: return Color.gray;
+            case ResourceType.Iron: return new Color(0.7f, 0.7f, 0.8f); // Metallic Blue-Gray
+            case ResourceType.Gold: return new Color(1f, 0.85f, 0f); // Bright Gold
+            case ResourceType.Animal: return Color.white;
+            case ResourceType.Fruit: return Color.magenta;
+            case ResourceType.Wheat: return new Color(0.9f, 0.8f, 0.2f); 
+        }
+        return Color.clear;
     }
 
     public Vector2 GetIslandPosition(int index)

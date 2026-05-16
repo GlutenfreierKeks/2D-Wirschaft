@@ -34,6 +34,8 @@ public class BuildingManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        occupiedBuildingCells.Clear();
     }
 
     public void SpawnBuilding(BuildingData data, Vector2 position, bool isLocal = true)

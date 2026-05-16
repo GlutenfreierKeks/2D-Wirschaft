@@ -11,43 +11,50 @@ public class GridManager : MonoBehaviour
     [SerializeField] private Material gridMaterial;
     
     [Header("Spawning")]
-    [SerializeField] private float spawnRadius = 800f; // Distance from center
+    [SerializeField] private float spawnRadius = 800f;
+
+    private GameObject gridObj;
+    private Transform mainCamTransform;
 
     private void Awake()
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        // Ensure spawn radius is inside the grid (grid covers -gridSize/2 to gridSize/2)
+        // Ensure spawn radius is inside the grid
         float maxSafeRadius = (gridSize / 2f) * 0.8f;
         if (spawnRadius > maxSafeRadius)
         {
             spawnRadius = maxSafeRadius;
-            Debug.Log($"[GridManager] Adjusted spawnRadius to {spawnRadius} to stay within grid.");
         }
 
         CreateGridPlane();
+        if (Camera.main != null) mainCamTransform = Camera.main.transform;
     }
 
     private void CreateGridPlane()
     {
-        // Create a large quad to host the grid shader
-        GameObject gridObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        gridObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
         gridObj.name = "BackgroundGrid";
         gridObj.transform.SetParent(transform);
         gridObj.transform.position = Vector3.zero;
+        // Large scale for safety, though it moves with camera now
         gridObj.transform.localScale = new Vector3(gridSize, gridSize, 1);
         
-        // Remove collider if you don't need it for clicking the ground
         Destroy(gridObj.GetComponent<MeshCollider>());
 
         if (gridMaterial != null)
         {
             gridObj.GetComponent<Renderer>().material = gridMaterial;
         }
-        else
+    }
+
+    private void Update()
+    {
+        if (mainCamTransform != null && gridObj != null)
         {
-            Debug.LogWarning("Grid Material not assigned to GridManager!");
+            // Move grid with camera to simulate infinity
+            gridObj.transform.position = new Vector3(mainCamTransform.position.x, mainCamTransform.position.y, 10f);
         }
     }
 

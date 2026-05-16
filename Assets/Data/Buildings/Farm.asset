@@ -10,13 +10,26 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
-  m_Name: House
+  m_Name: Farm
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
-  buildingName: haus
-  prefab: {fileID: 4288101121885828786, guid: a338b387d96537445a831d4fc89bdb58, type: 3}
+  buildingName: Farm
+  prefab: {fileID: 2087753607076770418, guid: 81352ae3d35ca3a4ab84b27eebd8c5dc, type: 3}
   placementRule: 0
+  requiredResourceType: 6
   width: 2
   height: 2
-  woodCost: 2
+  woodCost: 4
   stoneCost: 2
-  ghostColor: {r: 0.013105571, g: 1, b: 0, a: 0.5}
+  ironCost: 0
+  goldCost: 0
+  buildTime: 5
+  requiredWorkers: 1
+  isWorkerHub: 0
+  isBarracks: 0
+  productionResourceId: weizen
+  productionAmount: 3
+  consumedResourceId: 
+  consumedAmount: 0
+  productionInterval: 100
+  producesVillagers: 0
+  ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

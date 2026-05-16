@@ -30,23 +30,39 @@ public class ResourceManager : MonoBehaviour
         Player_UI.Instance.SetResource("stein", stone);
     }
 
-    public bool CanAfford(int woodCost, int stoneCost)
+    public bool CanAfford(int wood, int stone, int iron, int gold)
     {
         if (Player_UI.Instance == null) return false;
-        return Player_UI.Instance.GetResource("holz") >= woodCost && 
-               Player_UI.Instance.GetResource("stein") >= stoneCost;
+        return Player_UI.Instance.GetResource("holz") >= wood && 
+               Player_UI.Instance.GetResource("stein") >= stone &&
+               Player_UI.Instance.GetResource("eisen") >= iron &&
+               Player_UI.Instance.GetResource("gold") >= gold;
     }
 
-    public void SpendResources(int woodCost, int stoneCost)
+    public void SpendResources(int wood, int stone, int iron, int gold)
     {
         if (Player_UI.Instance == null) return;
-        Player_UI.Instance.AddResource("holz", -woodCost);
-        Player_UI.Instance.AddResource("stein", -stoneCost);
+        Player_UI.Instance.AddResource("holz", -wood);
+        Player_UI.Instance.AddResource("stein", -stone);
+        Player_UI.Instance.AddResource("eisen", -iron);
+        Player_UI.Instance.AddResource("gold", -gold);
     }
 
     public void AddResource(string id, int amount)
     {
         if (Player_UI.Instance == null) return;
         Player_UI.Instance.AddResource(id, amount);
+    }
+
+    public bool HasResource(string id, int amount)
+    {
+        if (Player_UI.Instance == null || string.IsNullOrEmpty(id)) return true;
+        return Player_UI.Instance.GetResource(id) >= amount;
+    }
+
+    public void SpendResource(string id, int amount)
+    {
+        if (Player_UI.Instance == null || string.IsNullOrEmpty(id)) return;
+        Player_UI.Instance.AddResource(id, -amount);
     }
 }
