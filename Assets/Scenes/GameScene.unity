@@ -119,53 +119,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &281465907
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 281465909}
-  - component: {fileID: 281465908}
-  m_Layer: 0
-  m_Name: 'FogProjector '
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &281465908
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281465907}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2716b8bf532ee3c41ba08163b52d4596, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FogProjector
-  fogMaterial: {fileID: 2100000, guid: d64b397c3031af54e9a25ce75818e06c, type: 2}
-  maskResolution: 1024
-  mapSize: 5000
---- !u!4 &281465909
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281465907}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.63195, y: -3.52946, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &287116578
 GameObject:
   m_ObjectHideFlags: 0
@@ -258,6 +211,7 @@ GameObject:
   - component: {fileID: 788347633}
   - component: {fileID: 788347637}
   - component: {fileID: 788347636}
+  - component: {fileID: 788347638}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -401,65 +355,63 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!1 &820119592
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 820119594}
-  - component: {fileID: 820119593}
-  - component: {fileID: 820119595}
-  m_Layer: 0
-  m_Name: BuildingManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &820119593
+--- !u!114 &788347638
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 820119592}
+  m_GameObject: {fileID: 788347632}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62ffaa0f216fcc3419d8118a501f0488, type: 3}
+  m_Script: {fileID: 11500000, guid: 04ddcda4cf2cade45916d8e0ba2e8f20, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BuildingManager
-  warehouseMaterial: {fileID: 2100000, guid: f73a762e4619cc44d9fbbf416ef43b27, type: 2}
---- !u!4 &820119594
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 820119592}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.63195, y: -3.52946, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &820119595
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 820119592}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fb1597f9461cbf74eaf86c768760b62a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FogRevealer
-  radius: 50
+  m_EditorClassIdentifier: Assembly-CSharp::Player_UI
+  startingResources:
+  - id: eisen
+    displayName: Eisen
+    icon: {fileID: 21300000, guid: b1473a013f6303f4b9e71c7573cdba85, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: gold
+    displayName: Gold
+    icon: {fileID: 21300000, guid: 762d64fedcf0a9f46b45a241e9ca5192, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: weizen
+    displayName: Weizen
+    icon: {fileID: 21300000, guid: 8bd955b9ba5974a4fb27465e856bb91e, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: holz
+    displayName: Holz
+    icon: {fileID: 21300000, guid: e2623e925eb5e6e42b8a98ad716a7c7e, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: stein
+    displayName: Stein
+    icon: {fileID: 21300000, guid: 111c442dcb6e0c141a987a365d804996, type: 3}
+    startValue: 100
+    maxValue: 0
+  - id: wüstenfrucht
+    displayName: "W\u00FCstenfrucht"
+    icon: {fileID: 21300000, guid: 2ef513d7392f75c488195e0c5f7282b0, type: 3}
+    startValue: 0
+    maxValue: 0
+  - id: bevolkerung
+    displayName: "Bev\u00F6lkerung"
+    icon: {fileID: 21300000, guid: 6f5b0622d3579264982e57835b52adb7, type: 3}
+    startValue: 10
+    maxValue: 20
+  barColor: {r: 0.18, g: 0.10, b: 0.03, a: 0.96}
+  slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
+  borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
+  labelColor: {r: 0.90, g: 0.78, b: 0.52, a: 0.85}
+  valueColor: {r: 1.0, g: 0.95, b: 0.75, a: 1}
+  barHeight: 80
+  slotPadding: 18
+  iconSize: 44
+  borderWidth: 2
 --- !u!1 &983598780
 GameObject:
   m_ObjectHideFlags: 0
@@ -1117,8 +1069,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::IslandManager
   islandMaterial: {fileID: 2100000, guid: d3e45ab9618baa44598a9ea35a7eae73, type: 2}
   islandCount: 10
-  blocksPerIsland: 25000
-  mapMargin: 2000
+  blocksPerIsland: 100000
+  mapMargin: 800
   minDistanceBetweenIslands: 100
 --- !u!4 &1223887161
 Transform:
@@ -1130,111 +1082,6 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -5.63195, y: -3.52946, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1447129129
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1447129132}
-  - component: {fileID: 1447129131}
-  - component: {fileID: 1447129130}
-  m_Layer: 0
-  m_Name: Square
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1447129130
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1447129129}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fb1597f9461cbf74eaf86c768760b62a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FogRevealer
-  radius: 10
---- !u!212 &1447129131
-SpriteRenderer:
-  serializedVersion: 2
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1447129129}
-  m_Enabled: 1
-  m_CastShadows: 0
-  m_ReceiveShadows: 0
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 0
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 9dfc825aed78fcd4ba02077103263b40, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 0
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_FlipX: 0
-  m_FlipY: 0
-  m_DrawMode: 0
-  m_Size: {x: 1, y: 1}
-  m_AdaptiveModeThreshold: 0.5
-  m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 1
-  m_SpriteSortPoint: 0
---- !u!4 &1447129132
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1447129129}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.44, y: 2.52, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1269,9 +1116,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd0e7a2ba6d25714e920bb49f9dacf29, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
-  gridSize: 2000
+  gridSize: 1000
   gridMaterial: {fileID: 2100000, guid: 0e111f271a738154b915f4ee8ebdad08, type: 2}
-  spawnRadius: 1500
+  spawnRadius: 800
 --- !u!4 &1515756076
 Transform:
   m_ObjectHideFlags: 0
@@ -1344,6 +1191,3 @@ SceneRoots:
   - {fileID: 287116581}
   - {fileID: 1515756076}
   - {fileID: 1223887161}
-  - {fileID: 820119594}
-  - {fileID: 281465909}
-  - {fileID: 1447129132}
