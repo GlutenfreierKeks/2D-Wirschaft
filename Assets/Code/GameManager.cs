@@ -85,6 +85,24 @@ public class GameManager : MonoBehaviourPunCallbacks
                 Vector2 pos = IslandManager.Instance.GetIslandPosition(i);
                 bool isLocal = players[i].IsLocal;
                 BuildingManager.Instance.SpawnMainWarehouse(pos, isLocal);
+
+                // If it's the local player, reveal the entire starting island
+                if (isLocal)
+                {
+                    GameObject islandRevealer = new GameObject("StartIslandRevealer");
+                    islandRevealer.transform.position = new Vector3(pos.x, pos.y, 0);
+                    FogRevealer fr = islandRevealer.AddComponent<FogRevealer>();
+                    fr.radius = 80f; // Large enough to cover the spawn island
+                    fr.isLocalPlayer = true;
+                    
+                    // Also register it as fully explored
+                    FogProjector.RegisterExploration(pos, 80f);
+
+                    if (VillagerManager.Instance != null)
+                    {
+                        VillagerManager.Instance.SpawnStartingPopulation(playerIndex);
+                    }
+                }
             }
         }
     }

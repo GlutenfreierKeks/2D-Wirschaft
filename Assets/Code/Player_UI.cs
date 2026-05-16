@@ -39,13 +39,13 @@ public class Player_UI : MonoBehaviour
     [Header("Ressourcen (beliebig erweiterbar)")]
     [SerializeField] private List<ResourceDefinition> startingResources = new List<ResourceDefinition>
     {
-        new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 100 },
-        new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 100 },
-        new ResourceDefinition { id = "weizen",      displayName = "Weizen",      startValue = 100 },
         new ResourceDefinition { id = "holz",        displayName = "Holz",        startValue = 100 },
         new ResourceDefinition { id = "stein",       displayName = "Stein",       startValue = 100 },
-        new ResourceDefinition { id = "wüstenfrucht", displayName = "Wüstenfrucht", startValue = 0   },
+        new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 0   },
+        new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 0   },
         new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
+        new ResourceDefinition { id = "dorfbewohner", displayName = "Dorfbewohner", startValue = 10, maxValue = 999 },
+        new ResourceDefinition { id = "arbeiter",     displayName = "Arbeiter",     startValue = 2,  maxValue = 999 },
     };
 
     // ── Menü-Definition ──────────────────────────────────────────────────────
@@ -104,7 +104,29 @@ public class Player_UI : MonoBehaviour
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
-    private void Awake() => Instance = this;
+    private void Awake()
+    {
+        Instance = this;
+        // Pre-initialize critical resources to avoid "Unknown Resource" errors
+        EnsureResourceExists("dorfbewohner", 10, 999);
+        EnsureResourceExists("arbeiter", 2, 999);
+        EnsureResourceExists("bevolkerung", 10, 20);
+        EnsureResourceExists("holz", 100, 999);
+        EnsureResourceExists("stein", 100, 999);
+        EnsureResourceExists("eisen", 0, 999);
+        EnsureResourceExists("gold", 0, 999);
+        EnsureResourceExists("weizen", 0, 999);
+        EnsureResourceExists("fruechte", 0, 999);
+        EnsureResourceExists("fleisch", 0, 999);
+        EnsureResourceExists("geld", 0, 999);
+        EnsureResourceExists("soldaten", 0, 5); // Start mit Limit 5
+    }
+
+    private void EnsureResourceExists(string id, int start, int max)
+    {
+        if (!values.ContainsKey(id)) values[id] = start;
+        if (!maxValues.ContainsKey(id)) maxValues[id] = max;
+    }
 
     private void Start() => BuildUI();
 
@@ -142,7 +164,10 @@ public class Player_UI : MonoBehaviour
     public void AddResource(string id, int delta) => SetResource(id, GetResource(id) + delta);
 
     public int GetResource(string id) => values.TryGetValue(id, out int v) ? v : 0;
+    public int GetMaxResource(string id) => maxValues.TryGetValue(id, out int v) ? v : 0;
 
+    public int GetMaxPopulation() => maxValues.TryGetValue("bevolkerung", out int v) ? v : 0;
+    
     public void SetMaxResource(string id, int max)
     {
         if (maxValues.ContainsKey(id))
@@ -226,12 +251,36 @@ public class Player_UI : MonoBehaviour
         // ── Slots ──────────────────────────────────────────────────────────
         foreach (var def in startingResources)
         {
+            if (labels.ContainsKey(def.id)) continue;
             values[def.id] = def.startValue;
             maxValues[def.id] = def.maxValue;
             labels[def.id] = CreateSlot(barGO.transform, def);
         }
 
+        // Ensure critical resources have slots even if not in startingResources list
+        EnsureSlot(barGO.transform, "bevolkerung", "Bevölkerung", 10, 20);
+        EnsureSlot(barGO.transform, "dorfbewohner", "Dorfbewohner", 10, 0);
+        EnsureSlot(barGO.transform, "arbeiter", "Arbeiter", 2, 0);
+        EnsureSlot(barGO.transform, "holz", "Holz", 100, 0);
+        EnsureSlot(barGO.transform, "stein", "Stein", 100, 0);
+        EnsureSlot(barGO.transform, "eisen", "Eisen", 0, 0);
+        EnsureSlot(barGO.transform, "gold", "Gold (Erz)", 0, 0);
+        EnsureSlot(barGO.transform, "geld", "Geld (Münzen)", 0, 0);
+        EnsureSlot(barGO.transform, "weizen", "Weizen", 0, 0);
+        EnsureSlot(barGO.transform, "fruechte", "Früchte", 0, 0);
+        EnsureSlot(barGO.transform, "fleisch", "Fleisch", 0, 0);
+
         BuildBottomMenu(canvasGO.transform);
+    }
+
+    private void EnsureSlot(Transform parent, string id, string name, int start, int max)
+    {
+        if (labels.ContainsKey(id)) return;
+        
+        ResourceDefinition def = new ResourceDefinition { id = id, displayName = name, startValue = start, maxValue = max };
+        values[id] = start;
+        maxValues[id] = max;
+        labels[id] = CreateSlot(parent, def);
     }
 
     // ── Unteres Menü ─────────────────────────────────────────────────────────

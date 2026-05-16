@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class BuildingInstance : MonoBehaviour
 {
@@ -11,19 +12,56 @@ public class BuildingInstance : MonoBehaviour
     private Renderer[] renderers;
     private FogRevealer revealer;
 
+    public bool IsConstructed() => isConstructed;
+
+    private int workersArrived = 0;
+    private int workersAssigned = 0;
+    private List<Villager> assignedWorkers = new List<Villager>();
+
     private void Start()
     {
         renderers = GetComponentsInChildren<Renderer>();
         revealer = GetComponent<FogRevealer>();
-        if (revealer != null) revealer.enabled = false; // Don't reveal fog while building
+        if (revealer != null) revealer.enabled = false; 
+
+        // Request workers from manager
+        if (VillagerManager.Instance != null)
+        {
+            VillagerManager.Instance.RequestConstruction(this);
+        }
 
         StartCoroutine(ConstructionRoutine());
     }
 
+    public bool NeedsMoreWorkers() => workersAssigned < data.requiredWorkers;
+    public int GetAssignedWorkerCount() => workersAssigned;
+
+    public void RegisterWorker(Villager v)
+    {
+        workersAssigned++;
+        assignedWorkers.Add(v);
+    }
+
+    public void NotifyWorkerArrived(Villager v)
+    {
+        workersArrived++;
+        Debug.Log($"[BuildingInstance] Worker arrived at {data.buildingName}. Total: {workersArrived}/{data.requiredWorkers}");
+    }
+
     private IEnumerator ConstructionRoutine()
     {
-        // Initial state: Transparent
-        SetAlpha(0.1f);
+        // 1. Blueprint Phase: Blueish and very transparent
+        SetColor(Color.cyan);
+        SetAlpha(0.2f);
+
+        // Wait for all workers to arrive at the site
+        while (workersArrived < data.requiredWorkers)
+        {
+            yield return null;
+        }
+
+        // 2. Building Phase: Normal colors, fading in
+        SetColor(Color.white);
         
         while (constructionProgress < 1f)
         {
@@ -46,17 +84,38 @@ public class BuildingInstance : MonoBehaviour
         }
     }
 
+    private void SetColor(Color color)
+    {
+        foreach (var r in renderers)
+        {
+            if (r.gameObject.name == "FogMask") continue;
+            float currentAlpha = r.material.color.a;
+            Color newCol = color;
+            newCol.a = currentAlpha;
+            r.material.color = newCol;
+        }
+    }
+
     private void CompleteConstruction()
     {
         isConstructed = true;
         if (revealer != null) revealer.enabled = true;
 
-        // If it increases max population
+        // Release workers
+        foreach (var w in assignedWorkers) w.Release();
+        assignedWorkers.Clear();
+
+        // If it's a worker hub, maybe it converts nearby villagers? 
+        // For now just handle production
         if (data.productionResourceId == "bevolkerung")
         {
             Player_UI.Instance.AddMaxPopulation(data.productionAmount);
+            // Soldier limit increases with population capacity (e.g. 1 soldier per 2 people)
+            int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
+            Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
         }
-        else if (!string.IsNullOrEmpty(data.productionResourceId))
+        
+        if (!string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers)
         {
             StartCoroutine(ProductionRoutine());
         }
@@ -67,9 +126,37 @@ public class BuildingInstance : MonoBehaviour
         while (true)
         {
             yield return new WaitForSeconds(data.productionInterval);
+            
             if (ResourceManager.Instance != null)
             {
-                ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
+                // 1. Check consumption
+                if (!string.IsNullOrEmpty(data.consumedResourceId) && data.consumedAmount > 0)
+                {
+                    if (ResourceManager.Instance.HasResource(data.consumedResourceId, data.consumedAmount))
+                    {
+                        ResourceManager.Instance.SpendResource(data.consumedResourceId, data.consumedAmount);
+                    }
+                    else
+                    {
+                        // Cannot afford production this cycle
+                        continue; 
+                    }
+                }
+
+                // 2. Produce
+                if (!string.IsNullOrEmpty(data.productionResourceId))
+                {
+                    ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
+                }
+
+                if (data.producesVillagers && VillagerManager.Instance != null)
+                {
+                    // Only spawn if population capacity allows (optional, but good practice)
+                    if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
+                    {
+                        VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                    }
+                }
             }
         }
     }
