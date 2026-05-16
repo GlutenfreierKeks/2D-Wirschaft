@@ -31,6 +31,10 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
+        // Block all camera input if a sub-menu is open or mouse is over UI
+        if (Player_UI.Instance != null && Player_UI.Instance.IsSubMenuOpen) return;
+        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+
         HandleZoom();
         HandlePan();
     }

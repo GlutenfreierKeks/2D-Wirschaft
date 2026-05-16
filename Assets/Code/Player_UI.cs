@@ -65,6 +65,18 @@ public class Player_UI : MonoBehaviour
         new MenuCategory { id = "andere",     displayName = "Andere" }
     };
 
+    [System.Serializable]
+    public class MenuItem
+    {
+        public string id          = "item";
+        public string displayName = "Item";
+        public Sprite icon        = null;
+        public string categoryId  = "hauser";
+    }
+
+    [Header("Submenü Items")]
+    [SerializeField] private List<MenuItem> menuItems = new List<MenuItem>();
+
     // ── Style  (Parchment / Karten-Look) ─────────────────────────────────────
 
     [Header("Style")]
@@ -85,8 +97,9 @@ public class Player_UI : MonoBehaviour
     private readonly Dictionary<string, TextMeshProUGUI>    labels = new();
 
     private GameObject mainMenuContainer;
+    private GameObject subMenuBlocker;
     private GameObject subMenuContainer;
-    private TextMeshProUGUI subMenuTitle;
+    private Transform subMenuContent;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -95,6 +108,8 @@ public class Player_UI : MonoBehaviour
     private void Start() => BuildUI();
 
     // ── Öffentliche API ──────────────────────────────────────────────────────
+    
+    public bool IsSubMenuOpen => subMenuBlocker != null && subMenuBlocker.activeSelf;
 
     public void SetResource(string id, int value)
     {
@@ -236,18 +251,36 @@ public class Player_UI : MonoBehaviour
             CreateMenuButton(mainMenuContainer.transform, cat.displayName, () => OpenSubMenu(cat.displayName));
         }
 
-        // ── Sub Menu Container (Versteckt am Anfang) ────────────────────────
+        // ── Sub Menu Blocker (Full Screen zum Schließen bei Klick daneben) ──
+        subMenuBlocker = new GameObject("SubMenuBlocker", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        subMenuBlocker.transform.SetParent(canvasTransform, false);
+        
+        var blockerRT = subMenuBlocker.GetComponent<RectTransform>();
+        blockerRT.anchorMin = Vector2.zero;
+        blockerRT.anchorMax = Vector2.one;
+        blockerRT.sizeDelta = Vector2.zero;
+        
+        var blockerImg = subMenuBlocker.GetComponent<Image>();
+        blockerImg.color = new Color(0, 0, 0, 0); // Voll transparent
+        
+        var blockerBtn = subMenuBlocker.GetComponent<Button>();
+        blockerBtn.onClick.AddListener(CloseSubMenu);
+
+        // ── Sub Menu Container (Das eigentliche Panel) ──────────────────────
         subMenuContainer = new GameObject("SubMenu", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        subMenuContainer.transform.SetParent(bottomGO.transform, false);
+        subMenuContainer.transform.SetParent(subMenuBlocker.transform, false);
         
         var subImg = subMenuContainer.GetComponent<Image>();
-        subImg.color = new Color(slotColor.r, slotColor.g, slotColor.b, 0.98f); // Hintergrund fürs Submenü
+        // Etwas transparenter und edler
+        subImg.color = new Color(barColor.r, barColor.g, barColor.b, 0.85f); 
 
         var subRT = subMenuContainer.GetComponent<RectTransform>();
         subRT.anchorMin = new Vector2(0.5f, 0f);
         subRT.anchorMax = new Vector2(0.5f, 0f);
         subRT.pivot     = new Vector2(0.5f, 0f);
-        subRT.sizeDelta = new Vector2(800f, 250f); // Größeres Fenster für den Inhalt
+        subRT.anchoredPosition = new Vector2(0f, 130f); // Über dem Hauptmenü
+        subRT.sizeDelta = new Vector2(700f, 250f); // Etwas kleiner
+
 
         // Rahmen fürs Submenü (optional, nutzen Outline)
         var subOutline = subMenuContainer.AddComponent<Outline>();
@@ -260,48 +293,58 @@ public class Player_UI : MonoBehaviour
         subVL.spacing = 10f;
         subVL.childAlignment = TextAnchor.UpperCenter;
 
-        // Titel und Zurück-Button Zeile
-        var subHeaderGO = new GameObject("Header", typeof(RectTransform));
-        subHeaderGO.transform.SetParent(subMenuContainer.transform, false);
-        var headerHL = subHeaderGO.AddComponent<HorizontalLayoutGroup>();
-        headerHL.childForceExpandHeight = false;
-        headerHL.childForceExpandWidth  = true;
-        headerHL.childAlignment = TextAnchor.MiddleLeft;
-
-        var headerLE = subHeaderGO.AddComponent<LayoutElement>();
-        headerLE.minHeight = 40f;
-
-        CreateMenuButton(subHeaderGO.transform, "< Zurück", CloseSubMenu, 120f, 40f);
-
-        var titleGO = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        titleGO.transform.SetParent(subHeaderGO.transform, false);
-        subMenuTitle = titleGO.GetComponent<TextMeshProUGUI>();
-        subMenuTitle.text = "Kategorie";
-        subMenuTitle.fontSize = 24f;
-        subMenuTitle.fontStyle = FontStyles.Bold;
-        subMenuTitle.color = valueColor;
-        subMenuTitle.alignment = TextAlignmentOptions.Center;
+        // Scrollable Area / Grid für die Items
+        var scrollGO = new GameObject("ScrollArea", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        scrollGO.transform.SetParent(subMenuContainer.transform, false);
         
-        var titleLE = titleGO.AddComponent<LayoutElement>();
-        titleLE.flexibleWidth = 1f;
+        // Transparentes Bild für Scroll-Events
+        var scrollImg = scrollGO.GetComponent<Image>();
+        scrollImg.color = new Color(0,0,0,0);
 
-        // Platzhalter für den Inhalt
-        var contentGO = new GameObject("ContentPlaceholder", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        contentGO.transform.SetParent(subMenuContainer.transform, false);
-        var contentTMP = contentGO.GetComponent<TextMeshProUGUI>();
-        contentTMP.text = "(Hier kommen später die auswählbaren Elemente hin)";
-        contentTMP.fontSize = 18f;
-        contentTMP.color = labelColor;
-        contentTMP.alignment = TextAlignmentOptions.Center;
-        contentTMP.enableWordWrapping = true;
-        var contentLE = contentGO.AddComponent<LayoutElement>();
-        contentLE.flexibleHeight = 1f;
+        var scrollRect = scrollGO.AddComponent<ScrollRect>();
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Elastic;
+        scrollRect.viewport = scrollGO.GetComponent<RectTransform>();
+
+        // Maske hinzufügen, damit Items nichts verdecken
+        scrollGO.AddComponent<RectMask2D>();
+
+        var scrollLE = scrollGO.AddComponent<LayoutElement>();
+        scrollLE.flexibleHeight = 1f;
+        scrollLE.flexibleWidth = 1f;
+
+        subMenuContent = new GameObject("Content", typeof(RectTransform)).transform;
+        subMenuContent.SetParent(scrollGO.transform, false);
+        
+        var contentRT = subMenuContent.GetComponent<RectTransform>();
+        // Anchors für vertikales Scrolling
+        contentRT.anchorMin = new Vector2(0f, 1f);
+        contentRT.anchorMax = new Vector2(1f, 1f);
+        contentRT.pivot     = new Vector2(0.5f, 1f);
+        contentRT.anchoredPosition = Vector2.zero;
+        contentRT.sizeDelta = new Vector2(0, 0);
+
+        scrollRect.content = contentRT;
+
+        var contentGL = subMenuContent.gameObject.AddComponent<GridLayoutGroup>();
+        contentGL.cellSize = new Vector2(140, 140);
+        contentGL.spacing = new Vector2(15, 15);
+        contentGL.padding = new RectOffset(15, 15, 15, 15);
+        contentGL.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        contentGL.startAxis = GridLayoutGroup.Axis.Horizontal;
+        contentGL.childAlignment = TextAnchor.UpperLeft;
+
+        // Damit der Content mit der Anzahl der Items wächst
+        var contentCSF = subMenuContent.gameObject.AddComponent<ContentSizeFitter>();
+        contentCSF.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        contentCSF.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
         // Startzustand
-        subMenuContainer.SetActive(false);
+        subMenuBlocker.SetActive(false);
     }
 
-    private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f)
+    private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f, Sprite icon = null)
     {
         var btnGO = new GameObject($"Btn_{text}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         btnGO.transform.SetParent(parent, false);
@@ -332,34 +375,86 @@ public class Player_UI : MonoBehaviour
 
         btn.onClick.AddListener(onClick);
 
+        // Container für Inhalt (Vertikal zentriert)
+        var containerGO = new GameObject("Content", typeof(RectTransform));
+        containerGO.transform.SetParent(btnGO.transform, false);
+        var cRT = containerGO.GetComponent<RectTransform>();
+        cRT.anchorMin = Vector2.zero;
+        cRT.anchorMax = Vector2.one;
+        cRT.sizeDelta = Vector2.zero;
+
+        var vl = containerGO.AddComponent<VerticalLayoutGroup>();
+        vl.padding = new RectOffset(5, 5, 12, 2); // Noch mehr Padding oben um Icons extrem zu heben
+        vl.spacing = 0f;
+        vl.childAlignment = TextAnchor.MiddleCenter;
+        vl.childForceExpandHeight = false;
+        vl.childForceExpandWidth = true;
+
+        if (icon != null)
+        {
+            var iconGO = new GameObject("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            iconGO.transform.SetParent(containerGO.transform, false);
+            var iImg = iconGO.GetComponent<Image>();
+            iImg.sprite = icon;
+            iImg.preserveAspect = true;
+            iImg.raycastTarget = false;
+            var iLE = iconGO.AddComponent<LayoutElement>();
+            iLE.preferredHeight = height * 0.7f; // Icon noch ein Stück größer
+            iLE.flexibleHeight = 0;
+        }
+
         // Button Text
         var txtGO = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        txtGO.transform.SetParent(btnGO.transform, false);
-
-        var txtRT = txtGO.GetComponent<RectTransform>();
-        txtRT.anchorMin = Vector2.zero;
-        txtRT.anchorMax = Vector2.one;
-        txtRT.sizeDelta = Vector2.zero;
+        txtGO.transform.SetParent(containerGO.transform, false);
 
         var tmp = txtGO.GetComponent<TextMeshProUGUI>();
         tmp.text = text;
-        tmp.fontSize = 20f;
+        tmp.fontSize = icon != null ? 14f : 20f;
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Center;
+        tmp.enableWordWrapping = true;
     }
 
     private void OpenSubMenu(string categoryName)
     {
-        mainMenuContainer.SetActive(false);
-        subMenuTitle.text = categoryName.ToUpper();
-        subMenuContainer.SetActive(true);
+        // Wir lassen das Main Menu jetzt sichtbar (wie vom User gewünscht)
+        // mainMenuContainer.SetActive(false);
+        
+        // Items für diese Kategorie suchen
+        string catId = "";
+        foreach(var cat in menuCategories) {
+            if(cat.displayName == categoryName) {
+                catId = cat.id;
+                break;
+            }
+        }
+
+        // Alten Inhalt löschen
+        foreach(Transform child in subMenuContent) {
+            Destroy(child.gameObject);
+        }
+
+        // Neue Items spawnen (außer "Zurück", falls vorhanden, da man jetzt daneben klicken kann)
+        foreach(var item in menuItems) {
+            if(item.categoryId == catId && item.displayName != "Zurück") {
+                CreateMenuButton(subMenuContent, item.displayName, () => {
+                    Debug.Log("Geklickt auf: " + item.displayName);
+                }, 120f, 120f, item.icon);
+            }
+        }
+
+        // Scroll-Position zurücksetzen
+        if (subMenuContent is RectTransform rt) rt.anchoredPosition = Vector2.zero;
+
+        subMenuBlocker.SetActive(true);
     }
 
     private void CloseSubMenu()
     {
-        subMenuContainer.SetActive(false);
-        mainMenuContainer.SetActive(true);
+        subMenuBlocker.SetActive(false);
+        // Da wir es nicht mehr deaktivieren, brauchen wir es hier auch nicht aktivieren
+        // mainMenuContainer.SetActive(true);
     }
 
     private TextMeshProUGUI CreateSlot(Transform parent, ResourceDefinition def)

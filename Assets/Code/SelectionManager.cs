@@ -37,6 +37,10 @@ public class SelectionManager : MonoBehaviour
     {
         if (Mouse.current == null) return;
 
+        // Block selection if a sub-menu is open or mouse is over UI
+        if (Player_UI.Instance != null && Player_UI.Instance.IsSubMenuOpen) return;
+        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+
         Vector2 mousePos = Mouse.current.position.ReadValue();
         Vector3 worldPos = cam.ScreenToWorldPoint(new Vector3(mousePos.x, mousePos.y, -cam.transform.position.z));
         
