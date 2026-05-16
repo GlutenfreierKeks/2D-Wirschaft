@@ -11,6 +11,12 @@ public class PlayerController : MonoBehaviourPun
         // Only control our own player and not bots
         if (!photonView.IsMine || gameObject.name.Contains("Dummy")) return;
 
+        // Block movement if a sub-menu is open
+        if (Player_UI.Instance != null && Player_UI.Instance.IsSubMenuOpen) return;
+        
+        // Optional: Block if mouse is over UI (useful for clicking/scrolling)
+        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+
         if (Keyboard.current == null) return;
 
         float moveX = 0;

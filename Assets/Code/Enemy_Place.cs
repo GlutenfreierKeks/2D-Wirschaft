@@ -28,6 +28,10 @@ public class Enemy_Place : MonoBehaviour
         // Platzieren mit Linksklick
         if (Input.GetMouseButtonDown(0))
         {
+            // Block placement if a sub-menu is open or mouse is over UI
+            if (Player_UI.Instance != null && Player_UI.Instance.IsSubMenuOpen) return;
+            if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+
             PlaceSoldier();
         }
     }
