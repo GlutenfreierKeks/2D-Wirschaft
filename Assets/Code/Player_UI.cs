@@ -395,7 +395,7 @@ public class Player_UI : MonoBehaviour
         scrollRect.content = contentRT;
 
         var contentGL = subMenuContent.gameObject.AddComponent<GridLayoutGroup>();
-        contentGL.cellSize = new Vector2(140, 140);
+        contentGL.cellSize = new Vector2(160, 160);
         contentGL.spacing = new Vector2(15, 15);
         contentGL.padding = new RectOffset(15, 15, 15, 15);
         contentGL.startCorner = GridLayoutGroup.Corner.UpperLeft;
@@ -411,7 +411,7 @@ public class Player_UI : MonoBehaviour
         subMenuBlocker.SetActive(false);
     }
 
-    private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f, Sprite icon = null)
+    private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f, Sprite icon = null, BuildingData buildingData = null)
     {
         var btnGO = new GameObject($"Btn_{text}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         btnGO.transform.SetParent(parent, false);
@@ -451,8 +451,8 @@ public class Player_UI : MonoBehaviour
         cRT.sizeDelta = Vector2.zero;
 
         var vl = containerGO.AddComponent<VerticalLayoutGroup>();
-        vl.padding = new RectOffset(5, 5, 12, 2); // Noch mehr Padding oben um Icons extrem zu heben
-        vl.spacing = 0f;
+        vl.padding = new RectOffset(5, 5, 8, 5);
+        vl.spacing = 2f;
         vl.childAlignment = TextAnchor.MiddleCenter;
         vl.childForceExpandHeight = false;
         vl.childForceExpandWidth = true;
@@ -466,7 +466,18 @@ public class Player_UI : MonoBehaviour
             iImg.preserveAspect = true;
             iImg.raycastTarget = false;
             var iLE = iconGO.AddComponent<LayoutElement>();
-            iLE.preferredHeight = height * 0.7f; // Icon noch ein Stück größer
+            
+            // Wenn 4 Kosten da sind, Icon leicht größer machen
+            int costCount = 0;
+            if (buildingData != null)
+            {
+                if (buildingData.woodCost > 0) costCount++;
+                if (buildingData.stoneCost > 0) costCount++;
+                if (buildingData.ironCost > 0) costCount++;
+                if (buildingData.goldCost > 0) costCount++;
+            }
+
+            iLE.preferredHeight = (costCount >= 4) ? height * 0.6f : height * 0.5f; 
             iLE.flexibleHeight = 0;
         }
 
@@ -481,6 +492,91 @@ public class Player_UI : MonoBehaviour
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.enableWordWrapping = true;
+
+        // Baukosten hinzufügen
+        if (buildingData != null)
+        {
+            int costCount = 0;
+            if (buildingData.woodCost > 0) costCount++;
+            if (buildingData.stoneCost > 0) costCount++;
+            if (buildingData.ironCost > 0) costCount++;
+            if (buildingData.goldCost > 0) costCount++;
+
+            var costContainer = new GameObject("Costs", typeof(RectTransform));
+            costContainer.transform.SetParent(containerGO.transform, false);
+            
+            if (costCount >= 4)
+            {
+                // Bei 4 Items 2x2 Grid verwenden, um Platzmangel zu vermeiden
+                var costGL = costContainer.AddComponent<GridLayoutGroup>();
+                costGL.cellSize = new Vector2(70, 25);
+                costGL.spacing = new Vector2(5, 2);
+                costGL.childAlignment = TextAnchor.MiddleCenter;
+                costGL.startCorner = GridLayoutGroup.Corner.UpperLeft;
+                costGL.startAxis = GridLayoutGroup.Axis.Horizontal;
+
+                var csf = costContainer.AddComponent<ContentSizeFitter>();
+                csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            }
+            else
+            {
+                var costHL = costContainer.AddComponent<HorizontalLayoutGroup>();
+                costHL.childAlignment = TextAnchor.MiddleCenter;
+                costHL.spacing = 10f;
+                costHL.childForceExpandWidth = false;
+            }
+
+            if (buildingData.woodCost > 0) AddCostInfo(costContainer.transform, buildingData.woodCost.ToString(), GetIcon("holz"));
+            if (buildingData.stoneCost > 0) AddCostInfo(costContainer.transform, buildingData.stoneCost.ToString(), GetIcon("stein"));
+            if (buildingData.ironCost > 0) AddCostInfo(costContainer.transform, buildingData.ironCost.ToString(), GetIcon("eisen"));
+            if (buildingData.goldCost > 0) AddCostInfo(costContainer.transform, buildingData.goldCost.ToString(), GetIcon("gold"));
+        }
+    }
+
+    private Sprite GetIcon(string id)
+    {
+        if (startingResources == null) return null;
+        foreach (var res in startingResources)
+        {
+            if (res.id == id) return res.icon;
+        }
+        return null;
+    }
+
+    private void AddCostInfo(Transform parent, string amount, Sprite icon)
+    {
+        var costGO = new GameObject("CostItem", typeof(RectTransform));
+        costGO.transform.SetParent(parent, false);
+        var hl = costGO.AddComponent<HorizontalLayoutGroup>();
+        hl.spacing = 4f;
+        hl.childAlignment = TextAnchor.MiddleLeft;
+        hl.childForceExpandWidth = false;
+
+        // Icon
+        if (icon != null)
+        {
+            var iconGO = new GameObject("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            iconGO.transform.SetParent(costGO.transform, false);
+            var img = iconGO.GetComponent<Image>();
+            img.sprite = icon;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            var le = iconGO.AddComponent<LayoutElement>();
+            le.preferredWidth = 22f;
+            le.preferredHeight = 22f;
+        }
+
+        // Amount
+        var txtGO = new GameObject("Amount", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        txtGO.transform.SetParent(costGO.transform, false);
+        var tmp = txtGO.GetComponent<TextMeshProUGUI>();
+        tmp.text = amount;
+        tmp.fontSize = 16f; // Größer
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.color = valueColor;
+        tmp.alignment = TextAlignmentOptions.Left;
+        tmp.enableWordWrapping = false;
     }
 
     private void OpenSubMenu(string categoryName)
@@ -512,7 +608,7 @@ public class Player_UI : MonoBehaviour
                         PlacementManager.Instance.StartPlacement(item.buildingData);
                         CloseSubMenu(); // Close UI after picking building
                     }
-                }, 120f, 120f, item.icon);
+                }, 160f, 160f, item.icon, item.buildingData);
             }
         }
 
