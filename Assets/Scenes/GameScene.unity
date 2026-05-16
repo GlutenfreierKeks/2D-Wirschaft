@@ -513,7 +513,7 @@ MonoBehaviour:
     displayName: "Holzh\xFCtte"
     icon: {fileID: 21300000, guid: 9d3ed0243b8ff0a46b700ca4b5e2798d, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 00c0d19ca0cef4a4a88384ca70b60252, type: 2}
   - id: steinwerk
     displayName: Steinwerk
     icon: {fileID: 21300000, guid: c22edc42248f59c4ab2a661ab959819b, type: 3}
