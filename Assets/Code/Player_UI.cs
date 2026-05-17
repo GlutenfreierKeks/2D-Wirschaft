@@ -44,7 +44,7 @@ public class Player_UI : MonoBehaviour
         new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 0   },
         new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 0   },
         new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
-        new ResourceDefinition { id = "dorfbewohner", displayName = "Dorfbewohner", startValue = 10, maxValue = 999 },
+        new ResourceDefinition { id = "dorfbewohner", displayName = "Freie Arbeiter", startValue = 10, maxValue = 999 },
         new ResourceDefinition { id = "arbeiter",     displayName = "Arbeiter",     startValue = 2,  maxValue = 999 },
     };
 
@@ -259,7 +259,7 @@ public class Player_UI : MonoBehaviour
 
         // Ensure critical resources have slots even if not in startingResources list
         EnsureSlot(barGO.transform, "bevolkerung", "Bevölkerung", 10, 20);
-        EnsureSlot(barGO.transform, "dorfbewohner", "Dorfbewohner", 10, 0);
+        EnsureSlot(barGO.transform, "dorfbewohner", "Freie Arbeiter", 10, 0);
         EnsureSlot(barGO.transform, "arbeiter", "Arbeiter", 2, 0);
         EnsureSlot(barGO.transform, "holz", "Holz", 100, 0);
         EnsureSlot(barGO.transform, "stein", "Stein", 100, 0);

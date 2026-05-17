@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class Villager : MonoBehaviour
 {
@@ -9,6 +10,10 @@ public class Villager : MonoBehaviour
     private Vector2 targetPosition;
     private bool isMoving = false;
     private BuildingInstance assignedBuilding;
+    
+    [HideInInspector]
+    public bool isOperatingWorker = false;
+    private float workActionCooldown = 0f;
 
     private SpriteRenderer sr;
     private Renderer rend;
@@ -35,10 +40,32 @@ public class Villager : MonoBehaviour
                 OnReachedTarget();
             }
         }
-        else if (assignedBuilding == null && !isMoving)
+        else
         {
-            // Just idle wander, much less frequent
-            if (Random.value < 0.002f) Wander();
+            if (isOperatingWorker && assignedBuilding != null)
+            {
+                // Decrease cooldown
+                if (workActionCooldown > 0f)
+                {
+                    workActionCooldown -= Time.deltaTime;
+                }
+                else
+                {
+                    // Choose a new spot to "work" at
+                    PerformWorkAction();
+                }
+
+                // Occasionally hop to simulate working
+                if (Random.value < 0.005f)
+                {
+                    StartCoroutine(HopRoutine());
+                }
+            }
+            else if (assignedBuilding == null)
+            {
+                // Just idle wander, much less frequent
+                if (Random.value < 0.002f) Wander();
+            }
         }
     }
 
@@ -50,7 +77,53 @@ public class Villager : MonoBehaviour
         Debug.Log($"[Villager] Assigned to {building.data.buildingName}. New Target: {targetPosition}");
     }
 
-    public bool IsBusy() => assignedBuilding != null;
+    public bool IsBusy() => assignedBuilding != null || isOperatingWorker;
+
+    public void AssignAsOperatingWorker(BuildingInstance building)
+    {
+        isOperatingWorker = true;
+        assignedBuilding = building;
+        targetPosition = (Vector2)building.transform.position + Random.insideUnitCircle * 1.2f;
+        isMoving = true;
+        workActionCooldown = Random.Range(3f, 7f);
+        
+        if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f); // Light green tint for active workers
+        else if (rend != null) rend.material.color = new Color(0.7f, 1f, 0.7f);
+        
+        Debug.Log($"[Villager] Assigned as operating worker to {building.data.buildingName}. New Target: {targetPosition}");
+    }
+
+    private void PerformWorkAction()
+    {
+        if (assignedBuilding == null) return;
+        
+        // Find a random spot very close to the building's operating stand
+        float radius = 1.0f;
+        targetPosition = (Vector2)assignedBuilding.transform.position + Random.insideUnitCircle * radius;
+        isMoving = true;
+        
+        // Random cooldown before moving/working again
+        workActionCooldown = Random.Range(3f, 7f);
+    }
+
+    private IEnumerator HopRoutine()
+    {
+        float elapsed = 0f;
+        float duration = 0.3f;
+        float height = 0.2f;
+        Vector3 basePos = transform.position;
+        
+        while (elapsed < duration)
+        {
+            if (isMoving) yield break; // Cancel hop if they started moving
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            float yOffset = Mathf.Sin(t * Mathf.PI) * height;
+            transform.position = new Vector3(basePos.x, basePos.y + yOffset, basePos.z);
+            yield return null;
+        }
+        if (!isMoving) transform.position = basePos;
+    }
 
     private void Wander()
     {
@@ -100,6 +173,12 @@ public class Villager : MonoBehaviour
         isMoving = false;
         if (assignedBuilding != null)
         {
+            if (isOperatingWorker)
+            {
+                // Operating workers just stay at the building
+                return;
+            }
+            
             if (assignedBuilding.data.isWorkerHub)
             {
                 PromoteToWorker();
@@ -159,8 +238,8 @@ public class Villager : MonoBehaviour
 
     private void OnMouseDown()
     {
-        // Simple selection: Click to tell them to find work
-        if (role == Role.Villager)
+        // Simple selection: Click to tell them to find work (only free villagers)
+        if (role == Role.Villager && !isOperatingWorker)
         {
             FindWork();
         }
@@ -168,8 +247,22 @@ public class Villager : MonoBehaviour
 
     public void Release()
     {
+        isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
+        
+        // Reset color to normal
+        if (role == Role.Worker)
+        {
+            if (sr != null) sr.color = Color.orange;
+            else if (rend != null) rend.material.color = Color.orange;
+        }
+        else
+        {
+            if (sr != null) sr.color = Color.white;
+            else if (rend != null) rend.material.color = Color.white;
+        }
+        
         Wander();
     }
 }

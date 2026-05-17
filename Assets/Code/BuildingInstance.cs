@@ -17,6 +17,34 @@ public class BuildingInstance : MonoBehaviour
     private int workersArrived = 0;
     private int workersAssigned = 0;
     private List<Villager> assignedWorkers = new List<Villager>();
+    private List<Villager> operatingWorkers = new List<Villager>();
+
+    private void Update()
+    {
+        if (isConstructed && operatingWorkers.Count < data.workersNeeded)
+        {
+            TryHireOperatingWorkers();
+        }
+    }
+
+    public void TryHireOperatingWorkers()
+    {
+        if (VillagerManager.Instance == null) return;
+
+        while (operatingWorkers.Count < data.workersNeeded)
+        {
+            Villager v = VillagerManager.Instance.GetAvailableVillager();
+            if (v != null)
+            {
+                v.AssignAsOperatingWorker(this);
+                operatingWorkers.Add(v);
+            }
+            else
+            {
+                break; 
+            }
+        }
+    }
 
     private void Start()
     {
@@ -105,6 +133,9 @@ public class BuildingInstance : MonoBehaviour
         foreach (var w in assignedWorkers) w.Release();
         assignedWorkers.Clear();
 
+        // Hire operating workers
+        TryHireOperatingWorkers();
+
         // If it's a worker hub, maybe it converts nearby villagers? 
         // For now just handle production
         if (data.productionResourceId == "bevolkerung")
@@ -127,6 +158,13 @@ public class BuildingInstance : MonoBehaviour
         {
             yield return new WaitForSeconds(data.productionInterval);
             
+            // Check if building has enough operating workers to produce
+            if (operatingWorkers.Count < data.workersNeeded)
+            {
+                Debug.Log($"[BuildingInstance] {data.buildingName} skips production cycle due to missing workers ({operatingWorkers.Count}/{data.workersNeeded})");
+                continue;
+            }
+
             if (ResourceManager.Instance != null)
             {
                 // 1. Check consumption
@@ -152,12 +190,33 @@ public class BuildingInstance : MonoBehaviour
                 if (data.producesVillagers && VillagerManager.Instance != null)
                 {
                     // Only spawn if population capacity allows (optional, but good practice)
-                    if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
+                    if (Player_UI.Instance.GetResource("bevolkerung") < Player_UI.Instance.GetMaxPopulation())
                     {
                         VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
                     }
                 }
             }
         }
+    }
+
+    private void OnDestroy()
+    {
+        // Release construction workers if still building
+        foreach (var w in assignedWorkers)
+        {
+            if (w != null) w.Release();
+        }
+        assignedWorkers.Clear();
+
+        // Release operating workers
+        foreach (var w in operatingWorkers)
+        {
+            if (w != null)
+            {
+                w.isOperatingWorker = false;
+                w.Release();
+            }
+        }
+        operatingWorkers.Clear();
     }
 }

@@ -32,6 +32,9 @@ public class BuildingData : ScriptableObject
     public float productionInterval = 10f;
     public bool producesVillagers = false;
 
+    [Header("Operation")]
+    public int workersNeeded = 1;
+
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
 }
