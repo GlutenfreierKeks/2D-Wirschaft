@@ -88,17 +88,48 @@ public class VillagerManager : MonoBehaviour
     {
         if (Player_UI.Instance == null) return;
 
-        int villagers = 0;
+        int freeVillagers = 0;
         int workers = 0;
+        int employedVillagers = 0;
+
         foreach (var v in activeVillagers)
         {
-            if (v.role == Villager.Role.Worker) workers++;
-            else villagers++;
+            if (v == null) continue;
+            
+            if (v.role == Villager.Role.Worker)
+            {
+                workers++;
+            }
+            else
+            {
+                if (v.isOperatingWorker)
+                {
+                    employedVillagers++;
+                }
+                else
+                {
+                    freeVillagers++;
+                }
+            }
         }
 
-        Player_UI.Instance.SetResource("dorfbewohner", villagers);
+        int totalVillagers = freeVillagers + employedVillagers;
+        Player_UI.Instance.SetMaxResource("dorfbewohner", totalVillagers);
+        Player_UI.Instance.SetResource("dorfbewohner", freeVillagers);
         Player_UI.Instance.SetResource("arbeiter", workers);
-        Player_UI.Instance.SetResource("bevolkerung", villagers + workers);
+        Player_UI.Instance.SetResource("bevolkerung", totalVillagers + workers);
+    }
+
+    public Villager GetAvailableVillager()
+    {
+        foreach (var v in activeVillagers)
+        {
+            if (v != null && v.role == Villager.Role.Villager && !v.isOperatingWorker && !v.IsBusy())
+            {
+                return v;
+            }
+        }
+        return null;
     }
 
     private void TryAssignWorkers()
