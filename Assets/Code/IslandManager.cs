@@ -18,6 +18,34 @@ public class IslandManager : MonoBehaviour
         return resourceNodes.TryGetValue(snapped, out ResourceType type) ? type : ResourceType.None;
     }
 
+    /// <summary>
+    /// Entfernt eine Rohstoffquelle am angegebenen Punkt (zerstört das Icon).
+    /// </summary>
+    public static void RemoveResourceNodeAt(Vector2 pos)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
+        if (resourceNodes.ContainsKey(snapped))
+        {
+            resourceNodes.Remove(snapped);
+        }
+
+        if (Instance != null)
+        {
+            for (int i = Instance.resourceNodeRenderers.Count - 1; i >= 0; i--)
+            {
+                var entry = Instance.resourceNodeRenderers[i];
+                if (new Vector2(Mathf.Round(entry.pos.x), Mathf.Round(entry.pos.y)) == snapped)
+                {
+                    if (entry.sr != null && entry.sr.gameObject != null)
+                    {
+                        Destroy(entry.sr.gameObject);
+                    }
+                    Instance.resourceNodeRenderers.RemoveAt(i);
+                }
+            }
+        }
+    }
+
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
     [SerializeField] private int islandCount = 6;

@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Rechtes Seitenfeld das erscheint wenn ein Gebäude angeklickt wird.
 /// Zeigt Stats, Produktion, Verbrauch – mit Pause- und Abriss-Button.
+/// Zeigt einen geschmeidigen, flüssigen Fortschrittsbalken für die Produktion an.
 /// Wird vollständig per Code erstellt (kein Prefab nötig).
 /// Verwendet das neue Input System und bietet eine geschmeidige Slide-In/Out Animation.
 /// </summary>
@@ -39,6 +40,10 @@ public class BuildingInfoPanel : MonoBehaviour
     private TextMeshProUGUI txtSchedule;
     private Button          btnToggleSchedule;
     private TextMeshProUGUI txtScheduleBtnLabel;
+
+    // ── Progress Bar Objekte ─────────────────────────────────────────────────
+    private GameObject    goProgressBG;
+    private RectTransform rtProgressFill;
 
     // ── Animation & Positionierung ───────────────────────────────────────────
     private float targetPosX = 480f;    // Vollständig außerhalb des Bildschirms rechts
@@ -100,6 +105,9 @@ public class BuildingInfoPanel : MonoBehaviour
                 refreshTimer = RefreshInterval;
                 RefreshStats();
             }
+
+            // Progress-Balken kontinuierlich füllen
+            UpdateProgressBar();
         }
 
         // Escape-Taste schließt das Panel über das neue Input System
@@ -211,6 +219,28 @@ public class BuildingInfoPanel : MonoBehaviour
             (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers));
     }
 
+    // ── Progress-Balken Updaten ─────────────────────────────────────────────
+
+    private void UpdateProgressBar()
+    {
+        if (currentBuilding == null || goProgressBG == null || rtProgressFill == null) return;
+
+        BuildingData d = currentBuilding.data;
+        // Zeige den Ladebalken nur bei echten Produktionsgebäuden an
+        bool canProduce = (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers) && d.productionResourceId != "bevolkerung";
+
+        if (currentBuilding.IsConstructed() && canProduce && !currentBuilding.IsProductionPaused)
+        {
+            goProgressBG.SetActive(true);
+            float progress = currentBuilding.ProductionProgress;
+            rtProgressFill.anchorMax = new Vector2(progress, 1f);
+        }
+        else
+        {
+            goProgressBG.SetActive(false);
+        }
+    }
+
     // ── Panel-Aufbau (alles per Code) ────────────────────────────────────────
 
     private void BuildPanel()
@@ -234,7 +264,7 @@ public class BuildingInfoPanel : MonoBehaviour
         rootRT.anchorMin        = new Vector2(1f, 0.5f);
         rootRT.anchorMax        = new Vector2(1f, 0.5f);
         rootRT.pivot            = new Vector2(1f, 0.5f);
-        rootRT.sizeDelta        = new Vector2(400f, 680f); // Vorher 320x520 -> Jetzt groß und übersichtlich
+        rootRT.sizeDelta        = new Vector2(400f, 680f); // Groß und übersichtlich
         
         // Schatten / Gold-Outline hinzufügen
         var panelOutline = panelRoot.AddComponent<Outline>();
@@ -270,6 +300,21 @@ public class BuildingInfoPanel : MonoBehaviour
         // ── Status ───────────────────────────────────────────────────────────
         txtStatus = MakeTMP("StatusLabel", inner.transform, "", 16f, FontStyles.Normal, labelColor);
         AddLE(txtStatus.gameObject, minH: 24f);
+
+        // ── Progress Bar (Fortschrittsbalken) ────────────────────────────────
+        goProgressBG = MakeImage("ProgressBarBG", inner.transform, new Color(0.22f, 0.15f, 0.08f, 1f));
+        AddLE(goProgressBG, minH: 16f);
+        var bgOutline = goProgressBG.AddComponent<Outline>();
+        bgOutline.effectColor = new Color(0f, 0f, 0f, 0.5f);
+        bgOutline.effectDistance = new Vector2(1f, -1f);
+
+        var fillGo = MakeImage("ProgressBarFill", goProgressBG.transform, new Color(0.85f, 0.65f, 0.25f, 1f));
+        rtProgressFill = fillGo.GetComponent<RectTransform>();
+        rtProgressFill.anchorMin = Vector2.zero;
+        rtProgressFill.anchorMax = new Vector2(0f, 1f);
+        rtProgressFill.pivot     = new Vector2(0f, 0.5f);
+        rtProgressFill.offsetMin = Vector2.zero;
+        rtProgressFill.offsetMax = Vector2.zero;
 
         // ── Trennlinie ───────────────────────────────────────────────────────
         MakeDivider(inner.transform);

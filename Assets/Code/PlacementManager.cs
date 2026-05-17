@@ -180,6 +180,19 @@ public class PlacementManager : MonoBehaviour
     {
         ResourceManager.Instance.SpendResources(currentBuilding.woodCost, currentBuilding.stoneCost, currentBuilding.ironCost, currentBuilding.goldCost);
         BuildingManager.Instance.SpawnBuilding(currentBuilding, pos);
+
+        // Remove resource nodes covered by the building footprint
+        float startX = -(currentBuilding.width - 1) / 2f;
+        float startY = -(currentBuilding.height - 1) / 2f;
+        for (int x = 0; x < currentBuilding.width; x++)
+        {
+            for (int y = 0; y < currentBuilding.height; y++)
+            {
+                Vector2 cellPos = pos + new Vector2(startX + x, startY + y);
+                IslandManager.RemoveResourceNodeAt(cellPos);
+            }
+        }
+
         CancelPlacement();
     }
 

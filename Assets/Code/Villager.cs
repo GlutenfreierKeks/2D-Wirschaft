@@ -425,20 +425,13 @@ public class Villager : MonoBehaviour
         isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
+        role = Role.Villager; // Reset role back to Villager so they can find new jobs
         transform.rotation = Quaternion.identity; // Reset rotation!
         SetVisibility(true); // Ensure visible!
         
-        // Reset color to normal
-        if (role == Role.Worker)
-        {
-            if (sr != null) sr.color = Color.orange;
-            else if (rend != null) rend.material.color = Color.orange;
-        }
-        else
-        {
-            if (sr != null) sr.color = Color.white;
-            else if (rend != null) rend.material.color = Color.white;
-        }
+        // Reset color to normal white
+        if (sr != null) sr.color = Color.white;
+        else if (rend != null) rend.material.color = Color.white;
         
         Wander();
     }
