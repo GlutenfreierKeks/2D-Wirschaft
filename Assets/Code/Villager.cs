@@ -16,7 +16,7 @@ public class Villager : MonoBehaviour
     [HideInInspector]
     public float stamina = 100f;
     [HideInInspector]
-    public float mood = 100f; // Villager Mood: starts at 100%
+    public float mood = 80f; // Villager Mood: starts at 80%
     private float workActionCooldown = 0f;
 
     private SpriteRenderer sr;
@@ -98,21 +98,21 @@ public class Villager : MonoBehaviour
                         }
                     }
 
-                    // VERY SLOW Mood changes during active work hours:
+                    // VERY SLOW Mood changes during active work hours (adjusted to be more challenging):
                     if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Leisure)
                     {
                         // Leisure shift slowly increases mood
-                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.1f);
+                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.07f);
                     }
                     else if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.DayOnly)
                     {
-                        // Regular day shift is mildly tiring: decays very slowly to a baseline of 25%
-                        mood = Mathf.Max(25f, mood - Time.deltaTime * 0.025f);
+                        // Regular day shift is mildly tiring: decays slowly to a baseline of 25%
+                        mood = Mathf.Max(25f, mood - Time.deltaTime * 0.04f);
                     }
                     else if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Continuous)
                     {
                         // 24/7 night-shift work decays mood slowly but surely to 0%
-                        mood = Mathf.Max(0f, mood - Time.deltaTime * 0.15f);
+                        mood = Mathf.Max(0f, mood - Time.deltaTime * 0.22f);
                     }
 
                     // Active working actions
@@ -145,7 +145,7 @@ public class Villager : MonoBehaviour
                         if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 1f);
 
                         stamina = Mathf.Min(100f, stamina + Time.deltaTime * 3.0f);
-                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.22f); // Slow leisure recovery
+                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.16f); // Slow leisure recovery (was 0.22f)
 
                         if (workActionCooldown > 0f)
                         {
@@ -169,7 +169,7 @@ public class Villager : MonoBehaviour
                                 // Inside sleeping!
                                 SetVisibility(false);
                                 stamina = Mathf.Min(100f, stamina + Time.deltaTime * 5.0f);
-                                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.18f); // Sleep slowly recovers mood
+                                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.12f); // Sleep slowly recovers mood (was 0.18f)
                             }
                             else
                             {
@@ -195,11 +195,18 @@ public class Villager : MonoBehaviour
                 // Unemployed: ensure visible and recover stamina & mood slowly
                 SetVisibility(true);
                 stamina = Mathf.Min(100f, stamina + Time.deltaTime * 1.5f);
-                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.06f); // happy just wandering slowly
+                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.04f); // happy just wandering slowly (was 0.06f)
 
                 // Just idle wander, much less frequent
                 if (Random.value < 0.002f) Wander();
             }
+        }
+
+        // Soft floor: the lower the mood, the harder it is to sink further.
+        // A slight positive resistance force applies at very low levels (< 35%) to act as a stabilizer.
+        if (mood < 35f)
+        {
+            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.015f * (35f - mood));
         }
     }
 
@@ -418,13 +425,20 @@ public class Villager : MonoBehaviour
         isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
-        role = Role.Villager; // Reset role back to Villager so they can find new jobs
+        
+        // ONLY reset to Villager if they are NOT a Worker!
+        // A construction worker should stay a construction worker so they can build more things.
+        if (role != Role.Worker)
+        {
+            role = Role.Villager;
+        }
+
         transform.rotation = Quaternion.identity; // Reset rotation!
         SetVisibility(true); // Ensure visible!
         
-        // Reset color to normal white
-        if (sr != null) sr.color = Color.white;
-        else if (rend != null) rend.material.color = Color.white;
+        // Keep orange color for workers, white for normal villagers
+        if (sr != null) sr.color = (role == Role.Worker) ? Color.orange : Color.white;
+        else if (rend != null) rend.material.color = (role == Role.Worker) ? Color.orange : Color.white;
         
         Wander();
     }

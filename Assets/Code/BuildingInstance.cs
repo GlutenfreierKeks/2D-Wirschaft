@@ -21,6 +21,9 @@ public class BuildingInstance : MonoBehaviour
     // ── Schedule ─────────────────────────────────────────────────────────
     public enum ScheduleMode { Continuous, DayOnly, Leisure }
     public ScheduleMode currentSchedule = ScheduleMode.DayOnly;
+    
+    [HideInInspector]
+    public bool isBuilderHut = false;
 
     public bool IsConstructed() => isConstructed;
 
@@ -57,8 +60,8 @@ public class BuildingInstance : MonoBehaviour
                 }
                 else
                 {
-                    productionTimer = 0f;
-                    ProductionProgress = 0f;
+                    // Freeze progress! Do not wipe the production timer or progress to 0.
+                    // This allows workers to resume exactly where they left off when returning from breaks or sleep.
                 }
             }
             else
@@ -277,7 +280,8 @@ public class BuildingInstance : MonoBehaviour
             {
                 if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
                 {
-                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                    Villager.Role spawnRole = isBuilderHut ? Villager.Role.Worker : Villager.Role.Villager;
+                    VillagerManager.Instance.SpawnVillagerAt(transform.position, spawnRole);
                     TotalProduced++;
                     producedSomething = true;
                 }
@@ -406,6 +410,54 @@ public class BuildingInstance : MonoBehaviour
         }
         Debug.Log($"[BuildingInstance] {data.buildingName} abgerissen.");
         Destroy(gameObject);
+    }
+
+    public void ToggleHutType()
+    {
+        isBuilderHut = !isBuilderHut;
+        
+        if (isBuilderHut)
+        {
+            // Convert one available general Villager (Dorfbewohner) to a Worker (Bauarbeiter)!
+            if (VillagerManager.Instance != null)
+            {
+                Villager v = VillagerManager.Instance.GetAvailableVillager();
+                if (v != null)
+                {
+                    v.role = Villager.Role.Worker;
+                    // Visually update the villager
+                    SpriteRenderer sr = v.GetComponent<SpriteRenderer>();
+                    if (sr != null)
+                    {
+                        sr.color = Color.orange;
+                        Sprite custom = Resources.Load<Sprite>("Worker");
+                        if (custom != null) sr.sprite = custom;
+                    }
+                    Debug.Log("[HutType] Converted 1 Villager to Worker (Builder)");
+                }
+            }
+        }
+        else
+        {
+            // Convert one available Worker (Bauarbeiter) to a Villager (Dorfbewohner)!
+            if (VillagerManager.Instance != null)
+            {
+                Villager w = VillagerManager.Instance.GetAvailableWorker();
+                if (w != null)
+                {
+                    w.role = Villager.Role.Villager;
+                    // Visually update the villager
+                    SpriteRenderer sr = w.GetComponent<SpriteRenderer>();
+                    if (sr != null)
+                    {
+                        sr.color = Color.white;
+                        Sprite custom = Resources.Load<Sprite>("Villager");
+                        if (custom != null) sr.sprite = custom;
+                    }
+                    Debug.Log("[HutType] Converted 1 Worker to Villager");
+                }
+            }
+        }
     }
 
     private void OnDestroy()
