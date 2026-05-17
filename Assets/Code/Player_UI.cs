@@ -102,6 +102,11 @@ public class Player_UI : MonoBehaviour
     private GameObject subMenuBlocker;
     private GameObject subMenuContainer;
     private Transform subMenuContent;
+    private GameObject soldierCommandContainer;
+    private TextMeshProUGUI soldierCommandHintLabel;
+    private Button moveCommandButton;
+    private Button attackCommandButton;
+    private Button observeCommandButton;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -150,6 +155,52 @@ public class Player_UI : MonoBehaviour
     // ── Öffentliche API ──────────────────────────────────────────────────────
     
     public bool IsSubMenuOpen => subMenuBlocker != null && subMenuBlocker.activeSelf;
+
+    public void SetSoldierCommandState(bool hasSelection, ArmyCommandMode activeMode, bool waitingForSecondObservePoint, string overrideHint = null)
+    {
+        if (soldierCommandContainer == null)
+        {
+            return;
+        }
+
+        soldierCommandContainer.SetActive(hasSelection);
+        if (!hasSelection)
+        {
+            return;
+        }
+
+        SetCommandButtonHighlight(moveCommandButton, activeMode == ArmyCommandMode.Move);
+        SetCommandButtonHighlight(attackCommandButton, activeMode == ArmyCommandMode.AttackMove);
+        SetCommandButtonHighlight(observeCommandButton, activeMode == ArmyCommandMode.Observe);
+
+        if (!string.IsNullOrEmpty(overrideHint))
+        {
+            soldierCommandHintLabel.text = overrideHint;
+            return;
+        }
+
+        if (waitingForSecondObservePoint)
+        {
+            soldierCommandHintLabel.text = "Wahle jetzt den zweiten Punkt.";
+            return;
+        }
+
+        switch (activeMode)
+        {
+            case ArmyCommandMode.Move:
+                soldierCommandHintLabel.text = "Marsch aktiv: Klicke ein Ziel auf Land.";
+                break;
+            case ArmyCommandMode.AttackMove:
+                soldierCommandHintLabel.text = "Angriff aktiv: Klicke ein Ziel auf Land.";
+                break;
+            case ArmyCommandMode.Observe:
+                soldierCommandHintLabel.text = "Observieren: Wahle zwei Punkte fur die Route.";
+                break;
+            default:
+                soldierCommandHintLabel.text = "Befehle fur die aktuelle Soldatengruppe.";
+                break;
+        }
+    }
 
     public void SetResource(string id, int value)
     {
@@ -291,6 +342,7 @@ public class Player_UI : MonoBehaviour
         EnsureSlot(barGO.transform, "fleisch", "Fleisch", 0, 0);
 
         BuildBottomMenu(canvasGO.transform);
+        BuildSoldierCommandMenu(canvasGO.transform);
     }
 
     private void EnsureSlot(Transform parent, string id, string name, int start, int max)
@@ -431,6 +483,130 @@ public class Player_UI : MonoBehaviour
         subMenuBlocker.SetActive(false);
     }
 
+    private void BuildSoldierCommandMenu(Transform canvasTransform)
+    {
+        soldierCommandContainer = new GameObject("SoldierCommands", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        soldierCommandContainer.transform.SetParent(canvasTransform, false);
+
+        Image panelImage = soldierCommandContainer.GetComponent<Image>();
+        panelImage.color = new Color(barColor.r, barColor.g, barColor.b, 0.92f);
+
+        Outline panelOutline = soldierCommandContainer.AddComponent<Outline>();
+        panelOutline.effectColor = borderColor;
+        panelOutline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        RectTransform panelRT = soldierCommandContainer.GetComponent<RectTransform>();
+        panelRT.anchorMin = new Vector2(0.5f, 0f);
+        panelRT.anchorMax = new Vector2(0.5f, 0f);
+        panelRT.pivot = new Vector2(0.5f, 0f);
+        panelRT.anchoredPosition = new Vector2(0f, 145f);
+        panelRT.sizeDelta = new Vector2(520f, 150f);
+
+        VerticalLayoutGroup layout = soldierCommandContainer.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(16, 16, 14, 14);
+        layout.spacing = 10f;
+        layout.childAlignment = TextAnchor.MiddleCenter;
+        layout.childForceExpandHeight = false;
+        layout.childForceExpandWidth = true;
+
+        GameObject hintGO = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        hintGO.transform.SetParent(soldierCommandContainer.transform, false);
+        soldierCommandHintLabel = hintGO.GetComponent<TextMeshProUGUI>();
+        soldierCommandHintLabel.text = "Befehle fur die aktuelle Soldatengruppe.";
+        soldierCommandHintLabel.fontSize = 20f;
+        soldierCommandHintLabel.fontStyle = FontStyles.Bold;
+        soldierCommandHintLabel.color = valueColor;
+        soldierCommandHintLabel.alignment = TextAlignmentOptions.Center;
+        soldierCommandHintLabel.enableWordWrapping = true;
+
+        GameObject rowGO = new GameObject("CommandRow", typeof(RectTransform));
+        rowGO.transform.SetParent(soldierCommandContainer.transform, false);
+        HorizontalLayoutGroup rowLayout = rowGO.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 14f;
+        rowLayout.childAlignment = TextAnchor.MiddleCenter;
+        rowLayout.childForceExpandWidth = false;
+        rowLayout.childForceExpandHeight = false;
+
+        moveCommandButton = CreateIconCommandButton(rowGO.transform, "->", "Gehe da hin", () => SelectionManager.Instance?.BeginMoveCommand());
+        attackCommandButton = CreateIconCommandButton(rowGO.transform, "X", "Angreifen", () => SelectionManager.Instance?.BeginAttackCommand());
+        observeCommandButton = CreateIconCommandButton(rowGO.transform, "<>", "Observieren", () => SelectionManager.Instance?.BeginObserveCommand());
+
+        soldierCommandContainer.SetActive(false);
+    }
+
+    private Button CreateIconCommandButton(Transform parent, string iconText, string labelText, UnityEngine.Events.UnityAction onClick)
+    {
+        GameObject btnGO = new GameObject($"Cmd_{labelText}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        btnGO.transform.SetParent(parent, false);
+
+        LayoutElement le = btnGO.AddComponent<LayoutElement>();
+        le.minWidth = 150f;
+        le.minHeight = 84f;
+
+        Image img = btnGO.GetComponent<Image>();
+        img.color = slotColor;
+
+        Outline outline = btnGO.AddComponent<Outline>();
+        outline.effectColor = borderColor;
+        outline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        Button btn = btnGO.GetComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(() =>
+        {
+            AudioManager.Instance?.PlaySelectSound();
+            onClick?.Invoke();
+        });
+
+        GameObject contentGO = new GameObject("Content", typeof(RectTransform));
+        contentGO.transform.SetParent(btnGO.transform, false);
+        RectTransform contentRT = contentGO.GetComponent<RectTransform>();
+        contentRT.anchorMin = Vector2.zero;
+        contentRT.anchorMax = Vector2.one;
+        contentRT.sizeDelta = Vector2.zero;
+
+        VerticalLayoutGroup contentLayout = contentGO.AddComponent<VerticalLayoutGroup>();
+        contentLayout.childAlignment = TextAnchor.MiddleCenter;
+        contentLayout.spacing = 2f;
+        contentLayout.padding = new RectOffset(8, 8, 10, 8);
+
+        GameObject iconGO = new GameObject("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        iconGO.transform.SetParent(contentGO.transform, false);
+        TextMeshProUGUI iconLabel = iconGO.GetComponent<TextMeshProUGUI>();
+        iconLabel.text = iconText;
+        iconLabel.fontSize = 28f;
+        iconLabel.fontStyle = FontStyles.Bold;
+        iconLabel.color = valueColor;
+        iconLabel.alignment = TextAlignmentOptions.Center;
+
+        GameObject textGO = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        textGO.transform.SetParent(contentGO.transform, false);
+        TextMeshProUGUI textLabel = textGO.GetComponent<TextMeshProUGUI>();
+        textLabel.text = labelText;
+        textLabel.fontSize = 18f;
+        textLabel.fontStyle = FontStyles.Bold;
+        textLabel.color = valueColor;
+        textLabel.alignment = TextAlignmentOptions.Center;
+
+        return btn;
+    }
+
+    private void SetCommandButtonHighlight(Button button, bool active)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        Image img = button.GetComponent<Image>();
+        if (img != null)
+        {
+            img.color = active
+                ? Color.Lerp(slotColor, new Color(0.35f, 0.75f, 1f, slotColor.a), 0.6f)
+                : slotColor;
+        }
+    }
+
     private void CreateMenuButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, float width = 160f, float height = 60f, Sprite icon = null, BuildingData buildingData = null)
     {
         var btnGO = new GameObject($"Btn_{text}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
@@ -460,7 +636,11 @@ public class Player_UI : MonoBehaviour
         colors.selectedColor    = Color.white;
         btn.colors = colors;
 
-        btn.onClick.AddListener(onClick);
+        btn.onClick.AddListener(() =>
+        {
+            AudioManager.Instance?.PlaySelectSound();
+            onClick?.Invoke();
+        });
 
         // Container für Inhalt (Vertikal zentriert)
         var containerGO = new GameObject("Content", typeof(RectTransform));

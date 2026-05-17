@@ -12,6 +12,8 @@ public class SceneSetup : MonoBehaviour
         EnsureManager<FogProjector>("FogProjector");
         EnsureManager<SelectionManager>("SelectionManager");
         EnsureManager<VillagerManager>("VillagerManager");
+        EnsureManager<NotificationManager>("NotificationManager");
+        EnsureManager<AudioManager>("AudioManager");
         
         Debug.Log("[SceneSetup] All managers initialized.");
     }

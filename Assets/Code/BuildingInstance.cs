@@ -25,6 +25,23 @@ public class BuildingInstance : MonoBehaviour
     [HideInInspector]
     public bool isBuilderHut = false;
 
+    // ── Barracks Settings & Recruitment ────────────────────────────────────
+    [Header("Barracks settings")]
+    public bool spearSelected = true;
+    public bool shieldSelected = true;
+    public bool swordSelected = true;
+    public bool bowSelected = true;
+
+    public enum BarracksResource { Wood, Stone, Gold, Iron }
+    public BarracksResource selectedResource = BarracksResource.Stone;
+
+    public bool autoRecruit = false;
+    
+    public Queue<SoldierType> recruitQueue = new Queue<SoldierType>();
+    public SoldierType currentRecruitingType;
+    private float recruitmentTimer = 0f;
+    private const float RECRUIT_INTERVAL = 8f;
+
     public bool IsConstructed() => isConstructed;
 
     private int workersArrived = 0;
@@ -39,10 +56,17 @@ public class BuildingInstance : MonoBehaviour
             TryHireOperatingWorkers();
         }
 
+        // Handle Barracks recruitment if this is a constructed barracks
+        if (isConstructed && data.isBarracks)
+        {
+            UpdateBarracksRecruitment();
+        }
+
         // Production timer logic (pauses during night / when understaffed / when paused)
         if (isConstructed && !IsProductionPaused)
         {
-            bool canProduce = !string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers;
+            // Do not run standard production if this is a barracks (barracks only recruits soldiers)
+            bool canProduce = (!string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers) && !data.isBarracks;
             if (canProduce)
             {
                 if (operatingWorkers.Count >= data.workersNeeded && IsCurrentlyWorkTime())
@@ -220,6 +244,7 @@ public class BuildingInstance : MonoBehaviour
     {
         isConstructed = true;
         if (revealer != null) revealer.enabled = true;
+        AudioManager.Instance?.PlayConstructionSound(transform.position);
 
         // Release workers
         foreach (var w in assignedWorkers) w.Release();
@@ -457,6 +482,142 @@ public class BuildingInstance : MonoBehaviour
                     Debug.Log("[HutType] Converted 1 Worker to Villager");
                 }
             }
+        }
+    }
+
+    public void OrderSoldier(SoldierType sType)
+    {
+        recruitQueue.Enqueue(sType);
+    }
+
+    private void UpdateBarracksRecruitment()
+    {
+        if (Player_UI.Instance == null) return;
+
+        // If not currently recruiting, try to start one
+        if (recruitmentTimer <= 0f)
+        {
+            if (recruitQueue.Count > 0)
+            {
+                currentRecruitingType = recruitQueue.Dequeue();
+                recruitmentTimer = RECRUIT_INTERVAL;
+            }
+            else if (autoRecruit)
+            {
+                int currentSoldiers = Player_UI.Instance.GetResource("soldaten");
+                int currentVillagers = Player_UI.Instance.GetResource("dorfbewohner");
+                int totalPop = currentSoldiers + currentVillagers;
+
+                // Auto recruit if soldiers are less than 20% of population, and we have free villagers
+                if (currentSoldiers < 0.20f * totalPop && currentVillagers > 0)
+                {
+                    // Randomly pick an enabled type
+                    List<SoldierType> activeTypes = new List<SoldierType>();
+                    if (spearSelected) activeTypes.Add(SoldierType.Spear);
+                    if (shieldSelected) activeTypes.Add(SoldierType.Shield);
+                    if (swordSelected) activeTypes.Add(SoldierType.Sword);
+                    if (bowSelected) activeTypes.Add(SoldierType.Bow);
+
+                    if (activeTypes.Count > 0)
+                    {
+                        currentRecruitingType = activeTypes[Random.Range(0, activeTypes.Count)];
+                        recruitmentTimer = RECRUIT_INTERVAL;
+                    }
+                }
+            }
+        }
+
+        // If recruiting, advance timer
+        if (recruitmentTimer > 0f)
+        {
+            // Only advance recruitment if we have a free villager to recruit!
+            Villager candidate = VillagerManager.Instance != null ? VillagerManager.Instance.GetAvailableVillager() : null;
+            
+            if (candidate != null)
+            {
+                recruitmentTimer -= Time.deltaTime;
+                ProductionProgress = Mathf.Clamp01(1f - (recruitmentTimer / RECRUIT_INTERVAL));
+
+                if (recruitmentTimer <= 0f)
+                {
+                    CompleteRecruitment(candidate);
+                    ProductionProgress = 0f;
+                }
+            }
+            else
+            {
+                // Pause recruitment if no villager is available
+                NotificationManager.Instance?.Notify("no_free_villagers", "Du hast keine freien Arbeitslosen mehr.", 10f);
+                ProductionProgress = 0f;
+            }
+        }
+        else
+        {
+            ProductionProgress = 0f;
+        }
+    }
+
+    private void CompleteRecruitment(Villager candidate)
+    {
+        if (Player_UI.Instance == null) return;
+
+        int current = Player_UI.Instance.GetResource("soldaten");
+        int max = Player_UI.Instance.GetMaxResource("soldaten");
+
+        if (current < max)
+        {
+            Player_UI.Instance.AddResource("soldaten", 1);
+            Player_UI.Instance.AddResource("dorfbewohner", -1);
+
+            if (VillagerManager.Instance != null)
+            {
+                VillagerManager.Instance.NotifyVillagerConverted(candidate);
+            }
+
+            int formationIndex = Mathf.Max(0, Player_UI.Instance.GetResource("soldaten"));
+            int columns = 3;
+            int row = formationIndex / columns;
+            int column = formationIndex % columns;
+            Vector2 spawnOffset = new Vector2((column - 1) * 0.8f, -0.75f - row * 0.65f);
+            Vector3 spawnPos = transform.position + new Vector3(spawnOffset.x, spawnOffset.y, 0f);
+            
+            // Create Soldier
+            GameObject solObj = new GameObject($"Player_Soldier_{currentRecruitingType}");
+            solObj.transform.position = spawnPos;
+            solObj.transform.rotation = Quaternion.identity;
+
+            SpriteRenderer sr = solObj.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = 21;
+
+            BoxCollider2D bc = solObj.AddComponent<BoxCollider2D>();
+            bc.size = new Vector2(1f, 1f);
+
+            Soldier s = solObj.AddComponent<Soldier>();
+            s.soldierType = currentRecruitingType;
+            s.team = Team.Player;
+            s.moveSpeed = 1.5f;    // Same speed as villagers!
+            if (Photon.Pun.PhotonNetwork.LocalPlayer != null)
+            {
+                s.ownerActorNumber = Photon.Pun.PhotonNetwork.LocalPlayer.ActorNumber;
+            }
+
+            // Map BarracksResource to WeaponMaterial (top-level enum)
+            switch (selectedResource)
+            {
+                case BarracksResource.Wood:  s.weaponMaterial = WeaponMaterial.Wood; break;
+                case BarracksResource.Stone: s.weaponMaterial = WeaponMaterial.Stone; break;
+                case BarracksResource.Gold:  s.weaponMaterial = WeaponMaterial.Gold; break;
+                case BarracksResource.Iron:  s.weaponMaterial = WeaponMaterial.Iron; break;
+            }
+
+            // Play recruitment particles!
+            SpawnProductionParticles();
+
+            Destroy(candidate.gameObject);
+        }
+        else
+        {
+            Debug.Log("Soldaten-Limit erreicht! Rekrutierung pausiert.");
         }
     }
 

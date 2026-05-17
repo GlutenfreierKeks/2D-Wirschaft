@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Photon.Pun;
 
 public class VillagerManager : MonoBehaviour
 {
@@ -16,6 +17,9 @@ public class VillagerManager : MonoBehaviour
     private float currentFoodMoodEffect = 0f;
     private float wheatConsumedAccumulator = 0f;
     private float luxuryConsumedAccumulator = 0f;
+    private bool lowWheatAlertSent;
+    private bool lowWoodAlertSent;
+    private bool lowStoneAlertSent;
 
     private void Awake()
     {
@@ -25,8 +29,24 @@ public class VillagerManager : MonoBehaviour
 
     public void SpawnStartingPopulation(int islandIndex)
     {
-        for (int i = 0; i < 10; i++) SpawnVillager(islandIndex, Villager.Role.Villager);
-        for (int i = 0; i < 2; i++) SpawnVillager(islandIndex, Villager.Role.Worker);
+        int startVillagers = 10;
+        int startWorkers = 2;
+
+        if (PhotonNetwork.InRoom)
+        {
+            if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.StartVillagers, out object villagersObj))
+            {
+                startVillagers = System.Convert.ToInt32(villagersObj);
+            }
+
+            if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.StartWorkers, out object workersObj))
+            {
+                startWorkers = System.Convert.ToInt32(workersObj);
+            }
+        }
+
+        for (int i = 0; i < startVillagers; i++) SpawnVillager(islandIndex, Villager.Role.Villager);
+        for (int i = 0; i < startWorkers; i++) SpawnVillager(islandIndex, Villager.Role.Worker);
     }
 
     private void SpawnVillager(int islandIndex, Villager.Role role)
@@ -83,6 +103,7 @@ public class VillagerManager : MonoBehaviour
     {
         UpdateFoodEffect();
         UpdateHUD();
+        CheckAlerts();
 
         if (pendingBuildings.Count > 0)
         {
@@ -150,6 +171,8 @@ public class VillagerManager : MonoBehaviour
                 return v;
             }
         }
+
+        NotificationManager.Instance?.Notify("no_free_villagers", "Du hast keine freien Arbeitslosen mehr.", 10f);
         return null;
     }
 
@@ -193,6 +216,14 @@ public class VillagerManager : MonoBehaviour
             }
         }
         // Debug.Log($"[VillagerManager] No free workers. Total: {total}, Busy: {busy}");
+        if (total <= 0)
+        {
+            NotificationManager.Instance?.Notify("no_workers_total", "Du hast keine Bauarbeiter.", 10f);
+        }
+        else
+        {
+            NotificationManager.Instance?.Notify("no_workers_free", "Alle Bauarbeiter sind gerade beschaftigt.", 10f);
+        }
         return null;
     }
 
@@ -292,6 +323,63 @@ public class VillagerManager : MonoBehaviour
             
             if (fruitsTaken > 0) Player_UI.Instance.AddResource("fruechte", -fruitsTaken);
             if (meatTaken > 0) Player_UI.Instance.AddResource("fleisch", -meatTaken);
+        }
+    }
+
+    private void CheckAlerts()
+    {
+        if (globalMood < 35f)
+        {
+            NotificationManager.Instance?.Notify("low_mood", "Villager Stimmung ist niedrig.", 18f);
+        }
+
+        if (Player_UI.Instance == null)
+        {
+            return;
+        }
+
+        int wheat = Player_UI.Instance.GetResource("weizen");
+        int wood = Player_UI.Instance.GetResource("holz");
+        int stone = Player_UI.Instance.GetResource("stein");
+
+        int wheatThreshold = Mathf.Max(2, activeVillagers.Count / 2);
+        if (wheat <= wheatThreshold)
+        {
+            if (!lowWheatAlertSent)
+            {
+                NotificationManager.Instance?.Notify("low_weizen", "Ressource Weizen ist low.", 14f);
+                lowWheatAlertSent = true;
+            }
+        }
+        else if (wheat > wheatThreshold + 2)
+        {
+            lowWheatAlertSent = false;
+        }
+
+        if (wood <= 15)
+        {
+            if (!lowWoodAlertSent)
+            {
+                NotificationManager.Instance?.Notify("low_holz", "Ressource Holz ist low.", 14f);
+                lowWoodAlertSent = true;
+            }
+        }
+        else if (wood > 20)
+        {
+            lowWoodAlertSent = false;
+        }
+
+        if (stone <= 15)
+        {
+            if (!lowStoneAlertSent)
+            {
+                NotificationManager.Instance?.Notify("low_stein", "Ressource Stein ist low.", 14f);
+                lowStoneAlertSent = true;
+            }
+        }
+        else if (stone > 20)
+        {
+            lowStoneAlertSent = false;
         }
     }
 }

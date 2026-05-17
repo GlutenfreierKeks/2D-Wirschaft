@@ -21,6 +21,8 @@ public class GridManager : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
+        ApplyLobbySettings();
+
         // Ensure spawn radius is inside the grid
         float maxSafeRadius = (gridSize / 2f) * 0.8f;
         if (spawnRadius > maxSafeRadius)
@@ -30,6 +32,34 @@ public class GridManager : MonoBehaviour
 
         CreateGridPlane();
         if (Camera.main != null) mainCamTransform = Camera.main.transform;
+    }
+
+    private void ApplyLobbySettings()
+    {
+        if (!PhotonNetwork.InRoom)
+        {
+            return;
+        }
+
+        if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.WorldSize, out object worldSizeObj))
+        {
+            string preset = worldSizeObj.ToString();
+            switch (preset)
+            {
+                case "Kompakt":
+                    gridSize = 3200;
+                    spawnRadius = 550f;
+                    break;
+                case "Gross":
+                    gridSize = 7200;
+                    spawnRadius = 1100f;
+                    break;
+                default:
+                    gridSize = 5000;
+                    spawnRadius = 800f;
+                    break;
+            }
+        }
     }
 
     private void CreateGridPlane()

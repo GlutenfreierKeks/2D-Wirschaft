@@ -43,6 +43,23 @@ public class BuildingInfoPanel : MonoBehaviour
     private Button          btnToggleHutType;
     private TextMeshProUGUI txtHutTypeBtnLabel;
 
+    // ── Barracks UI ──────────────────────────────────────────────────────────
+    private GameObject barracksContainer;
+    private Button btnToggleSpear;
+    private Button btnToggleShield;
+    private Button btnToggleSword;
+    private Button btnToggleBow;
+    private Button btnResWood;
+    private Button btnResStone;
+    private Button btnResGold;
+    private Button btnResIron;
+    private Button btnAutoRecruit;
+    private Button btnOrderSpear;
+    private Button btnOrderShield;
+    private Button btnOrderSword;
+    private Button btnOrderBow;
+    private TextMeshProUGUI txtQueueStatus;
+
     // ── Progress Bar Objekte ─────────────────────────────────────────────────
     private GameObject    goProgressBG;
     private RectTransform rtProgressFill;
@@ -164,81 +181,147 @@ public class BuildingInfoPanel : MonoBehaviour
             statusStr = "<color=#88FF88>✔ Aktiv</color>";
         txtStatus.text = statusStr;
 
-        // Produktion
-        if (!string.IsNullOrEmpty(d.productionResourceId) && d.productionResourceId != "bevolkerung")
-            txtProduces.text = $"<b>Produziert:</b>  +{d.productionAmount} {Capitalize(d.productionResourceId)}\n" +
-                               $"<b>Intervall:</b> alle {d.productionInterval:F0}s";
-        else if (d.producesVillagers)
-            txtProduces.text = "<b>Produziert:</b> Dorfbewohner";
-        else if (d.productionResourceId == "bevolkerung")
-            txtProduces.text = $"Erhöht Bevölkerungs-\nkapazität um {d.productionAmount}";
-        else
-            txtProduces.text = "<b>Produziert:</b> –";
-
-        // Verbrauch
-        txtConsumes.text = (!string.IsNullOrEmpty(d.consumedResourceId) && d.consumedAmount > 0)
-            ? $"<b>Verbraucht:</b>  -{d.consumedAmount} {Capitalize(d.consumedResourceId)}/Zyklus"
-            : "<b>Verbraucht:</b> –";
-
-        // Gesamtproduktion
-        txtTotalProduced.text = $"<b>Gesamt produziert:</b> {currentBuilding.TotalProduced}";
-
-        // Arbeiter / Größe
-        txtWorkers.text = $"<b>Arbeiter benötigt:</b> {d.requiredWorkers}";
-        txtSize.text    = $"<b>Größe:</b> {d.width} × {d.height} Grid-Felder";
-
-        // Schedule
-        if (d.workersNeeded > 0)
+        // Check if building is a barracks
+        if (d.isBarracks)
         {
-            txtSchedule.gameObject.SetActive(true);
-            btnToggleSchedule.gameObject.SetActive(currentBuilding.IsConstructed());
+            if (barracksContainer != null) barracksContainer.SetActive(true);
             
-            if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.Continuous)
-            {
-                txtSchedule.text = "<b>Arbeitsplan:</b> Nachtarbeit (24/7)\n<color=#FF5555>⚠️ Starker Stress & Erschöpfungsrisiko!</color>";
-                txtScheduleBtnLabel.text = "📅 Plan: 24/7";
-            }
-            else if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.DayOnly)
-            {
-                txtSchedule.text = "<b>Arbeitsplan:</b> Regulär (Tag)\n<color=#FFAA44>⚠ Milder Arbeitsstress (Normal)</color>";
-                txtScheduleBtnLabel.text = "📅 Plan: Regulär (Tag)";
-            }
-            else
-            {
-                txtSchedule.text = "<b>Arbeitsplan:</b> Freizeit-Plan\n<color=#88FF88>✔ +Zufriedenheit (Mittagspause & Freizeit)</color>";
-                txtScheduleBtnLabel.text = "📅 Plan: Freizeit";
-            }
-        }
-        else
-        {
+            // Hide standard elements not useful for barracks
+            txtProduces.gameObject.SetActive(false);
+            txtConsumes.gameObject.SetActive(false);
+            txtTotalProduced.gameObject.SetActive(false);
+            txtWorkers.gameObject.SetActive(false);
             txtSchedule.gameObject.SetActive(false);
             btnToggleSchedule.gameObject.SetActive(false);
-        }
+            btnToggleHutType.gameObject.SetActive(false);
+            
+            // Update Toggle Button Visuals (Zugelassene Typen)
+            UpdateButtonToggleState(btnToggleSpear, currentBuilding.spearSelected);
+            UpdateButtonToggleState(btnToggleShield, currentBuilding.shieldSelected);
+            UpdateButtonToggleState(btnToggleSword, currentBuilding.swordSelected);
+            UpdateButtonToggleState(btnToggleBow, currentBuilding.bowSelected);
 
-        // Hut Type Button (Only for buildings that produce villagers/citizens, e.g. residential huts/houses)
-        if (d.producesVillagers)
-        {
-            btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
-            if (currentBuilding.isBuilderHut)
+            // Update Resource Choice Visuals (Radio buttons)
+            UpdateButtonResourceState(btnResWood, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Wood, new Color(0.5f, 0.35f, 0.2f));
+            UpdateButtonResourceState(btnResStone, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Stone, Color.gray);
+            UpdateButtonResourceState(btnResGold, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Gold, new Color(0.85f, 0.7f, 0.1f));
+            UpdateButtonResourceState(btnResIron, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Iron, new Color(0.45f, 0.55f, 0.7f));
+
+            // Auto Recruit toggle button state
+            var autoTxt = btnAutoRecruit.GetComponentInChildren<TextMeshProUGUI>();
+            if (currentBuilding.autoRecruit)
             {
-                txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte";
-                btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
+                autoTxt.text = "🤖 Autorekrutierung (20%): AN";
+                btnAutoRecruit.GetComponent<Image>().color = new Color(0.15f, 0.55f, 0.15f);
             }
             else
             {
-                txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus";
-                btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
+                autoTxt.text = "🤖 Autorekrutierung (20%): AUS";
+                btnAutoRecruit.GetComponent<Image>().color = btnWarning;
+            }
+
+            // Order/Queue state text
+            int qCount = currentBuilding.recruitQueue.Count;
+            if (qCount > 0)
+            {
+                txtQueueStatus.text = $"Warteschlange: <b>{qCount}</b> in Ausbildung... (nächstes: {currentBuilding.currentRecruitingType})";
+                txtQueueStatus.color = new Color(1f, 0.85f, 0.4f);
+            }
+            else
+            {
+                txtQueueStatus.text = "Warteschlange: Leer";
+                txtQueueStatus.color = labelColor;
             }
         }
         else
         {
-            btnToggleHutType.gameObject.SetActive(false);
+            if (barracksContainer != null) barracksContainer.SetActive(false);
+            
+            // Restore standard elements
+            txtProduces.gameObject.SetActive(true);
+            txtConsumes.gameObject.SetActive(true);
+            txtTotalProduced.gameObject.SetActive(true);
+            txtWorkers.gameObject.SetActive(true);
+
+            // Produktion
+            if (!string.IsNullOrEmpty(d.productionResourceId) && d.productionResourceId != "bevolkerung")
+                txtProduces.text = $"<b>Produziert:</b>  +{d.productionAmount} {Capitalize(d.productionResourceId)}\n" +
+                                   $"<b>Intervall:</b> alle {d.productionInterval:F0}s";
+            else if (d.producesVillagers)
+                txtProduces.text = "<b>Produziert:</b> Dorfbewohner";
+            else if (d.productionResourceId == "bevolkerung")
+                txtProduces.text = $"Erhöht Bevölkerungs-\nkapazität um {d.productionAmount}";
+            else
+                txtProduces.text = "<b>Produziert:</b> –";
+
+            // Verbrauch
+            txtConsumes.text = (!string.IsNullOrEmpty(d.consumedResourceId) && d.consumedAmount > 0)
+                ? $"<b>Verbraucht:</b>  -{d.consumedAmount} {Capitalize(d.consumedResourceId)}/Zyklus"
+                : "<b>Verbraucht:</b> –";
+
+            // Gesamtproduktion
+            txtTotalProduced.text = $"<b>Gesamt produziert:</b> {currentBuilding.TotalProduced}";
+
+            // Arbeiter / Größe
+            txtWorkers.text = $"<b>Arbeiter benötigt:</b> {d.requiredWorkers}";
+            txtSize.text    = $"<b>Größe:</b> {d.width} × {d.height} Grid-Felder";
+
+            // Schedule
+            if (d.workersNeeded > 0)
+            {
+                txtSchedule.gameObject.SetActive(true);
+                btnToggleSchedule.gameObject.SetActive(currentBuilding.IsConstructed());
+                
+                if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.Continuous)
+                {
+                    txtSchedule.text = "<b>Arbeitsplan:</b> Nachtarbeit (24/7)\n<color=#FF5555>⚠️ Starker Stress & Erschöpfungsrisiko!</color>";
+                    txtScheduleBtnLabel.text = "📅 Plan: 24/7";
+                }
+                else if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.DayOnly)
+                {
+                    txtSchedule.text = "<b>Arbeitsplan:</b> Regulär (Tag)\n<color=#FFAA44>⚠ Milder Arbeitsstress (Normal)</color>";
+                    txtScheduleBtnLabel.text = "📅 Plan: Regulär (Tag)";
+                }
+                else
+                {
+                    txtSchedule.text = "<b>Arbeitsplan:</b> Freizeit-Plan\n<color=#88FF88>✔ +Zufriedenheit (Mittagspause & Freizeit)</color>";
+                    txtScheduleBtnLabel.text = "📅 Plan: Freizeit";
+                }
+            }
+            else
+            {
+                txtSchedule.gameObject.SetActive(false);
+                btnToggleSchedule.gameObject.SetActive(false);
+            }
+
+            // Hut Type Button (Only for buildings that produce villagers/citizens, e.g. residential huts/houses)
+            if (d.producesVillagers)
+            {
+                btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
+                if (currentBuilding.isBuilderHut)
+                {
+                    txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte";
+                    btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
+                }
+                else
+                {
+                    txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus";
+                    btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
+                }
+            }
+            else
+            {
+                btnToggleHutType.gameObject.SetActive(false);
+            }
         }
+
+        // Size
+        txtSize.text    = $"<b>Größe:</b> {d.width} × {d.height} Grid-Felder";
 
         // Pause-Button Text
         txtPauseLabel.text = currentBuilding.IsProductionPaused ? "▶  Fortsetzen" : "⏸  Pausieren";
         btnPause.gameObject.SetActive(currentBuilding.IsConstructed() &&
-            (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers));
+            (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers || d.isBarracks));
     }
 
     // ── Progress-Balken Updaten ─────────────────────────────────────────────
@@ -248,14 +331,19 @@ public class BuildingInfoPanel : MonoBehaviour
         if (currentBuilding == null || goProgressBG == null || rtProgressFill == null) return;
 
         BuildingData d = currentBuilding.data;
-        // Zeige den Ladebalken nur bei echten Produktionsgebäuden an
+        
+        // Show progress bar for standard production OR barracks recruitment!
         bool canProduce = (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers) && d.productionResourceId != "bevolkerung";
+        bool showBar = currentBuilding.IsConstructed() && (canProduce || d.isBarracks) && !currentBuilding.IsProductionPaused;
 
-        if (currentBuilding.IsConstructed() && canProduce && !currentBuilding.IsProductionPaused)
+        if (showBar)
         {
             goProgressBG.SetActive(true);
             float progress = currentBuilding.ProductionProgress;
             rtProgressFill.anchorMax = new Vector2(progress, 1f);
+
+            // Reddish color for military recruitment, gold for economic production
+            rtProgressFill.GetComponent<Image>().color = d.isBarracks ? new Color(0.85f, 0.3f, 0.25f, 1f) : new Color(0.85f, 0.65f, 0.25f, 1f);
         }
         else
         {
@@ -286,7 +374,7 @@ public class BuildingInfoPanel : MonoBehaviour
         rootRT.anchorMin        = new Vector2(1f, 0.5f);
         rootRT.anchorMax        = new Vector2(1f, 0.5f);
         rootRT.pivot            = new Vector2(1f, 0.5f);
-        rootRT.sizeDelta        = new Vector2(400f, 680f); // Groß und übersichtlich
+        rootRT.sizeDelta        = new Vector2(410f, 780f); // Groß und übersichtlich
         
         // Schatten / Gold-Outline hinzufügen
         var panelOutline = panelRoot.AddComponent<Outline>();
@@ -364,6 +452,9 @@ public class BuildingInfoPanel : MonoBehaviour
         txtHutTypeBtnLabel = btnToggleHutType.GetComponentInChildren<TextMeshProUGUI>();
         btnToggleHutType.onClick.AddListener(OnToggleHutTypeClicked);
         AddLE(btnToggleHutType.gameObject, minW: 350f, minH: 40f);
+
+        // ── Barracks UI ──────────────────────────────────────────────────────
+        BuildBarracksUI(inner.transform);
 
         // ── Spacer ───────────────────────────────────────────────────────────
         var spacer = new GameObject("Spacer", typeof(RectTransform));
@@ -506,4 +597,188 @@ public class BuildingInfoPanel : MonoBehaviour
         if (minH > 0) le.minHeight = minH;
     }
     private static void AddLE(Component c, float minW = 0f, float minH = 0f) => AddLE(c.gameObject, minW, minH);
+
+    private void BuildBarracksUI(Transform parent)
+    {
+        barracksContainer = new GameObject("BarracksContainer", typeof(RectTransform));
+        barracksContainer.transform.SetParent(parent, false);
+
+        var vl = barracksContainer.AddComponent<VerticalLayoutGroup>();
+        vl.spacing = 8f;
+        vl.padding = new RectOffset(0, 0, 4, 4);
+        vl.childForceExpandWidth = true;
+        vl.childForceExpandHeight = false;
+        vl.childAlignment = TextAnchor.UpperLeft;
+
+        var barLE = barracksContainer.AddComponent<LayoutElement>();
+        barLE.flexibleWidth = 1f;
+
+        // ── Section 1: Soldatentypen ──────────────────────────────────────
+        MakeDivider(barracksContainer.transform);
+
+        var txtTypesTitle = MakeTMP("TypesTitle", barracksContainer.transform,
+            "<b>⚔ Ausbildungstypen:</b>", 13f, FontStyles.Normal, labelColor);
+        AddLE(txtTypesTitle.gameObject, minH: 20f);
+
+        var typesRow = MakeBarracksRow("TypesRow", barracksContainer.transform);
+        btnToggleSpear  = MakeBarracksBtn("SpearToggle",  typesRow.transform, "🏹 Speer",   btnNeutral);
+        btnToggleShield = MakeBarracksBtn("ShieldToggle", typesRow.transform, "🛡 Schild",  btnNeutral);
+        btnToggleSword  = MakeBarracksBtn("SwordToggle",  typesRow.transform, "⚔ Schwert", btnNeutral);
+        btnToggleBow    = MakeBarracksBtn("BowToggle",    typesRow.transform, "🏹 Bogen",   btnNeutral);
+
+        btnToggleSpear .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.spearSelected  = !currentBuilding.spearSelected;  RefreshStats(); } });
+        btnToggleShield.onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.shieldSelected = !currentBuilding.shieldSelected; RefreshStats(); } });
+        btnToggleSword .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.swordSelected  = !currentBuilding.swordSelected;  RefreshStats(); } });
+        btnToggleBow   .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.bowSelected    = !currentBuilding.bowSelected;    RefreshStats(); } });
+
+        // ── Section 2: Ausrüstungs-Material ──────────────────────────────
+        MakeDivider(barracksContainer.transform);
+
+        var txtMaterialTitle = MakeTMP("MaterialTitle", barracksContainer.transform,
+            "<b>🪨 Ausrüstungs-Qualität:</b>", 13f, FontStyles.Normal, labelColor);
+        AddLE(txtMaterialTitle.gameObject, minH: 20f);
+
+        var resRow  = MakeBarracksRow("ResRow", barracksContainer.transform);
+        btnResWood  = MakeBarracksBtn("ResWood",  resRow.transform, "🪵 Holz",  btnNeutral);
+        btnResStone = MakeBarracksBtn("ResStone", resRow.transform, "🪨 Stein", btnNeutral);
+        btnResGold  = MakeBarracksBtn("ResGold",  resRow.transform, "🥇 Gold",  btnNeutral);
+        btnResIron  = MakeBarracksBtn("ResIron",  resRow.transform, "⛏ Eisen", btnNeutral);
+
+        btnResWood .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.selectedResource = BuildingInstance.BarracksResource.Wood;  RefreshStats(); } });
+        btnResStone.onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.selectedResource = BuildingInstance.BarracksResource.Stone; RefreshStats(); } });
+        btnResGold .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.selectedResource = BuildingInstance.BarracksResource.Gold;  RefreshStats(); } });
+        btnResIron .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.selectedResource = BuildingInstance.BarracksResource.Iron;  RefreshStats(); } });
+
+        // ── Section 3: Autorekrutierung ───────────────────────────────────
+        MakeDivider(barracksContainer.transform);
+
+        var txtAutoTitle = MakeTMP("AutoTitle", barracksContainer.transform,
+            "<b>🤖 Automatisierung:</b>", 13f, FontStyles.Normal, labelColor);
+        AddLE(txtAutoTitle.gameObject, minH: 20f);
+
+        btnAutoRecruit = MakeButton("AutoRecruitBtn", barracksContainer.transform,
+            "Autorekrutierung (20%): AUS", btnWarning, 360f, 36f, 13f);
+        AddLE(btnAutoRecruit.gameObject, minH: 36f);
+        btnAutoRecruit.onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.autoRecruit = !currentBuilding.autoRecruit; RefreshStats(); } });
+
+        // ── Section 4: Soldaten bestellen ─────────────────────────────────
+        MakeDivider(barracksContainer.transform);
+
+        var txtOrderTitle = MakeTMP("OrderTitle", barracksContainer.transform,
+            "<b>📋 Auftrag erteilen:</b>", 13f, FontStyles.Normal, labelColor);
+        AddLE(txtOrderTitle.gameObject, minH: 20f);
+
+        var orderRow  = MakeBarracksRow("OrderRow", barracksContainer.transform);
+        btnOrderSpear  = MakeBarracksBtn("OrdSpear",  orderRow.transform, "+Speer",   btnNeutral);
+        btnOrderShield = MakeBarracksBtn("OrdShield", orderRow.transform, "+Schild",  btnNeutral);
+        btnOrderSword  = MakeBarracksBtn("OrdSword",  orderRow.transform, "+Schwert", btnNeutral);
+        btnOrderBow    = MakeBarracksBtn("OrdBow",    orderRow.transform, "+Bogen",   btnNeutral);
+
+        btnOrderSpear .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.OrderSoldier(SoldierType.Spear);  RefreshStats(); } });
+        btnOrderShield.onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.OrderSoldier(SoldierType.Shield); RefreshStats(); } });
+        btnOrderSword .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.OrderSoldier(SoldierType.Sword);  RefreshStats(); } });
+        btnOrderBow   .onClick.AddListener(() => { if (currentBuilding != null) { currentBuilding.OrderSoldier(SoldierType.Bow);    RefreshStats(); } });
+
+        // ── Queue Status ──────────────────────────────────────────────────
+        txtQueueStatus = MakeTMP("QueueStatus", barracksContainer.transform,
+            "Warteschlange: Leer", 13f, FontStyles.Italic, valueColor);
+        AddLE(txtQueueStatus.gameObject, minH: 22f);
+    }
+
+    /// <summary>Creates a horizontal row suited for barracks button groups.</summary>
+    private static GameObject MakeBarracksRow(string name, Transform parent)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var hl = go.AddComponent<HorizontalLayoutGroup>();
+        hl.spacing = 6f;
+        hl.childAlignment = TextAnchor.MiddleLeft;
+        hl.childForceExpandWidth  = false;
+        hl.childForceExpandHeight = false;
+
+        var le = go.AddComponent<LayoutElement>();
+        le.minHeight = 34f;
+        le.flexibleWidth = 1f;
+
+        var csf = go.AddComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        return go;
+    }
+
+    /// <summary>Creates a small barracks-style button with explicit fixed size.</summary>
+    private Button MakeBarracksBtn(string name, Transform parent, string label, Color bg)
+    {
+        var go = MakeImage(name, parent, bg);
+
+        var le = go.AddComponent<LayoutElement>();
+        le.minWidth  = 85f;
+        le.minHeight = 32f;
+        le.preferredWidth  = 85f;
+        le.preferredHeight = 32f;
+
+        var btn = go.AddComponent<Button>();
+        var cols = btn.colors;
+        cols.highlightedColor = new Color(Mathf.Min(bg.r * 1.35f, 1f), Mathf.Min(bg.g * 1.35f, 1f), Mathf.Min(bg.b * 1.35f, 1f));
+        cols.pressedColor     = new Color(bg.r * 0.7f, bg.g * 0.7f, bg.b * 0.7f);
+        btn.colors = cols;
+        btn.targetGraphic = go.GetComponent<Image>();
+
+        var outline = go.AddComponent<Outline>();
+        outline.effectColor    = borderColor;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        var txt = MakeTMP("Label", go.transform, label, 11f, FontStyles.Bold, valueColor, TextAlignmentOptions.Center);
+        var txtRT = txt.GetComponent<RectTransform>();
+        txtRT.anchorMin = Vector2.zero;
+        txtRT.anchorMax = Vector2.one;
+        txtRT.sizeDelta = Vector2.zero;
+        txt.raycastTarget = false;
+        txt.enableWordWrapping = false;
+
+        return btn;
+    }
+
+    private void UpdateButtonToggleState(Button btn, bool isSelected)
+    {
+        if (btn == null) return;
+        var img = btn.GetComponent<Image>();
+        var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
+        if (isSelected)
+        {
+            img.color = new Color(0.2f, 0.55f, 0.2f, 1f); // bright green
+            if (txt != null) txt.color = Color.white;
+        }
+        else
+        {
+            img.color = new Color(0.25f, 0.25f, 0.25f, 1f); // dark gray
+            if (txt != null) txt.color = new Color(0.7f, 0.7f, 0.7f, 1f);
+        }
+    }
+
+    private void UpdateButtonResourceState(Button btn, bool isActive, Color activeColor)
+    {
+        if (btn == null) return;
+        var img = btn.GetComponent<Image>();
+        var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
+        if (isActive)
+        {
+            img.color = activeColor;
+            if (txt != null) txt.color = Color.white;
+            
+            var o = btn.GetComponent<Outline>();
+            if (o == null) o = btn.gameObject.AddComponent<Outline>();
+            o.effectColor = Color.white;
+            o.effectDistance = new Vector2(2f, -2f);
+        }
+        else
+        {
+            img.color = new Color(0.25f, 0.2f, 0.15f, 1f); // dark brown
+            if (txt != null) txt.color = new Color(0.7f, 0.6f, 0.5f, 1f);
+            
+            var o = btn.GetComponent<Outline>();
+            if (o != null) Destroy(o);
+        }
+    }
 }

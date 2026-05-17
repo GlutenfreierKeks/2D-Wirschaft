@@ -1,5 +1,6 @@
+using System.Collections.Generic;
+using Photon.Pun;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public enum Team
 {
@@ -15,15 +16,33 @@ public enum SoldierType
     Bow
 }
 
+public enum WeaponMaterial
+{
+    Wood,
+    Stone,
+    Gold,
+    Iron
+}
+
 [RequireComponent(typeof(SpriteRenderer))]
-[RequireComponent(typeof(BoxCollider2D))] // Nötig um Klicks zu registrieren
+[RequireComponent(typeof(BoxCollider2D))]
 public class Soldier : MonoBehaviour
 {
+    private const float ArriveDistance = 0.08f;
+    private const float AggroPadding = 4f;
+    private const int MaxPathIterations = 12000;
+
+    public static readonly List<Soldier> ActiveSoldiers = new List<Soldier>();
+
     [Header("Welcher Soldat ist das?")]
     public SoldierType soldierType;
 
+    [Header("Material der Ausrustung")]
+    public WeaponMaterial weaponMaterial = WeaponMaterial.Stone;
+
     [Header("Team Einstellungen")]
     public Team team = Team.Player;
+    public int ownerActorNumber;
 
     [Header("Bilder / Icons")]
     public Sprite spearSprite;
@@ -31,64 +50,212 @@ public class Soldier : MonoBehaviour
     public Sprite swordSprite;
     public Sprite bowSprite;
 
-    // Das Ziel wird jetzt automatisch anhand des Teams ermittelt
-    private string enemyTag;
-
-    // Diese Werte werden nun automatisch durch den Code gesetzt
-    [Header("Aktuelle Stats (Werden automatisch gesetzt)")]
+    [Header("Aktuelle Stats")]
     public float maxHealth = 100f;
-    private float currentHealth;
-    public float shield = 0f;
+    public float shield;
     public float damage;
     public float attackRange;
     public float attackCooldown;
-    public float moveSpeed = 3f;
+    public float moveSpeed = 1.5f;
 
+    private float currentHealth;
     private float lastAttackTime;
-    private Transform currentTarget;
+    private bool isSelected;
+    private Color ownerColor = Color.white;
 
-    private Vector2 randomWanderTarget;
-    private float nextWanderTime;
-
-    // UI Elemente für Anzeige
+    private SpriteRenderer spriteRenderer;
     private TextMesh nameText;
     private TextMesh healthText;
     private LineRenderer circleRenderer;
+    private LineRenderer patrolRenderer;
 
-    // Befehls-Menü Variablen
-    public bool holdPosition = false;
-    private bool showMenu = false;
+    private readonly List<Vector2> currentPath = new List<Vector2>();
+    private int currentPathIndex;
+    private bool hasMoveOrder;
+    private bool attackMoveEnabled;
+    private Soldier attackTarget;
+
+    private bool hasPatrolOrder;
+    private Vector2 patrolPointA;
+    private Vector2 patrolPointB;
+    private bool patrolTowardsB;
+    private bool hasReportedEnemyContact;
 
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        // Lädt die Bilder automatisch im Unity Editor aus dem Ordner "Assets/textures"
-        if (spearSprite == null) spearSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/speersoldat.png");
-        if (shieldSprite == null) shieldSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/schildsoldat.png");
-        if (swordSprite == null) swordSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/schwertkämpfer.png");
-        if (bowSprite == null) bowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/textures/bogensoldat.png");
+        if (spearSprite == null) spearSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Textures/speersoldat.png");
+        if (shieldSprite == null) shieldSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Textures/schildsoldat.png");
+        if (swordSprite == null) swordSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Textures/schwertkämpfer.png");
+        if (bowSprite == null) bowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Textures/bogensoldat.png");
 
-        // Wechselt das Bild sofort im Editor, wenn du das Dropdown änderst!
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
         if (sr != null)
         {
-            if (soldierType == SoldierType.Spear && spearSprite != null) sr.sprite = spearSprite;
-            else if (soldierType == SoldierType.Shield && shieldSprite != null) sr.sprite = shieldSprite;
-            else if (soldierType == SoldierType.Sword && swordSprite != null) sr.sprite = swordSprite;
-            else if (soldierType == SoldierType.Bow && bowSprite != null) sr.sprite = bowSprite;
+            sr.sprite = GetSpriteForType();
         }
     }
 #endif
 
+    public bool IsOwnedByLocalPlayer => team == Team.Player;
+    public bool IsSelected => isSelected;
+    public Vector2 Position2D => transform.position;
+
+    private void OnEnable()
+    {
+        if (!ActiveSoldiers.Contains(this))
+        {
+            ActiveSoldiers.Add(this);
+        }
+    }
+
+    private void OnDisable()
+    {
+        ActiveSoldiers.Remove(this);
+    }
+
     private void Awake()
     {
-        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        spriteRenderer.sortingOrder = 21;
 
-        // Tag und Ziel automatisch setzen
-        gameObject.tag = (team == Team.Player) ? "Player" : "Enemy";
-        enemyTag = (team == Team.Player) ? "Enemy" : "Player";
+        if (spearSprite == null) spearSprite = Resources.Load<Sprite>("Textures/speersoldat");
+        if (shieldSprite == null) shieldSprite = Resources.Load<Sprite>("Textures/schildsoldat");
+        if (swordSprite == null) swordSprite = Resources.Load<Sprite>("Textures/schwertkämpfer");
+        if (bowSprite == null) bowSprite = Resources.Load<Sprite>("Textures/bogensoldat");
 
-        // Stats basierend auf dem ausgewählten Typen setzen
+        if (ownerActorNumber == 0 && team == Team.Player && PhotonNetwork.LocalPlayer != null)
+        {
+            ownerActorNumber = PhotonNetwork.LocalPlayer.ActorNumber;
+        }
+
+        ApplyStatsForType();
+    }
+
+    private void Start()
+    {
+        ApplyWeaponMaterialMultiplier();
+        currentHealth = maxHealth;
+        ownerColor = PlayerColorUtility.GetColorForActor(ownerActorNumber, team == Team.Player);
+
+        SetupVisuals();
+        ApplyOwnerTint();
+        UpdateHealthText();
+        SetSelected(false);
+    }
+
+    private void Update()
+    {
+        CleanupTarget();
+
+        if (attackTarget == null)
+        {
+            attackTarget = FindPreferredEnemy();
+        }
+
+        if (attackTarget != null)
+        {
+            if (!hasReportedEnemyContact && team == Team.Player)
+            {
+                hasReportedEnemyContact = true;
+                NotificationManager.Instance?.Notify("soldier_enemy_found", "Ein Soldat hat einen Feind gefunden.", 6f);
+            }
+
+            float distance = Vector2.Distance(transform.position, attackTarget.transform.position);
+            if (distance <= attackRange)
+            {
+                if (Time.time >= lastAttackTime + attackCooldown)
+                {
+                    Attack(attackTarget);
+                    lastAttackTime = Time.time;
+                }
+
+                return;
+            }
+
+            if (ShouldChaseEnemy(distance))
+            {
+                MoveTowards(attackTarget.transform.position);
+                return;
+            }
+        }
+
+        attackTarget = null;
+        hasReportedEnemyContact = false;
+        FollowOrders();
+    }
+
+    public void SetSelected(bool selected)
+    {
+        isSelected = selected;
+
+        if (circleRenderer != null)
+        {
+            circleRenderer.enabled = selected;
+        }
+
+        if (nameText != null)
+        {
+            nameText.color = selected ? Color.Lerp(ownerColor, Color.white, 0.35f) : Color.white;
+        }
+    }
+
+    public void IssueMoveOrder(Vector2 destination)
+    {
+        hasPatrolOrder = false;
+        if (patrolRenderer != null) patrolRenderer.enabled = false;
+        attackMoveEnabled = false;
+        attackTarget = null;
+        SetPathTo(destination);
+    }
+
+    public void IssueAttackMoveOrder(Vector2 destination)
+    {
+        hasPatrolOrder = false;
+        if (patrolRenderer != null) patrolRenderer.enabled = false;
+        attackMoveEnabled = true;
+        SetPathTo(destination);
+    }
+
+    public void IssueObserveOrder(Vector2 pointA, Vector2 pointB)
+    {
+        attackMoveEnabled = true;
+        hasPatrolOrder = true;
+        patrolPointA = SnapToNearestLand(pointA);
+        patrolPointB = SnapToNearestLand(pointB);
+        patrolTowardsB = true;
+        UpdatePatrolRenderer();
+        SetPathTo(patrolPointB);
+    }
+
+    public void TakeDamage(float amount)
+    {
+        if (shield > 0f)
+        {
+            shield -= amount;
+            if (shield < 0f)
+            {
+                currentHealth += shield;
+                shield = 0f;
+            }
+        }
+        else
+        {
+            currentHealth -= amount;
+        }
+
+        UpdateHealthText();
+
+        if (currentHealth <= 0f)
+        {
+            Die();
+        }
+    }
+
+    private void ApplyStatsForType()
+    {
+        spriteRenderer.sprite = GetSpriteForType();
+
         switch (soldierType)
         {
             case SoldierType.Spear:
@@ -97,292 +264,468 @@ public class Soldier : MonoBehaviour
                 attackRange = 10f;
                 attackCooldown = 2f;
                 shield = 0f;
-                if (sr != null && spearSprite != null) sr.sprite = spearSprite;
                 break;
-
             case SoldierType.Shield:
                 maxHealth = 100f;
                 damage = 35f;
                 attackRange = 1f;
                 attackCooldown = 1.5f;
                 shield = 50f;
-                if (sr != null && shieldSprite != null) sr.sprite = shieldSprite;
                 break;
-
             case SoldierType.Sword:
                 maxHealth = 100f;
                 damage = 30f;
                 attackRange = 2f;
                 attackCooldown = 1f;
                 shield = 0f;
-                if (sr != null && swordSprite != null) sr.sprite = swordSprite;
                 break;
-
             case SoldierType.Bow:
                 maxHealth = 100f;
                 damage = 20f;
                 attackRange = 15f;
                 attackCooldown = 3f;
                 shield = 0f;
-                if (sr != null && bowSprite != null) sr.sprite = bowSprite;
                 break;
         }
     }
 
-    private void Start()
+    private Sprite GetSpriteForType()
     {
-        currentHealth = maxHealth;
-        SetNewWanderTarget();
+        switch (soldierType)
+        {
+            case SoldierType.Spear: return spearSprite;
+            case SoldierType.Shield: return shieldSprite;
+            case SoldierType.Sword: return swordSprite;
+            case SoldierType.Bow: return bowSprite;
+            default: return spearSprite;
+        }
+    }
 
-        // Erstelle direkt beim Starten die Text-Anzeigen und den Kreis!
-        SetupVisuals();
+    private void ApplyWeaponMaterialMultiplier()
+    {
+        float multiplier = 1f;
+        switch (weaponMaterial)
+        {
+            case WeaponMaterial.Wood: multiplier = 0.6f; break;
+            case WeaponMaterial.Stone: multiplier = 1f; break;
+            case WeaponMaterial.Gold: multiplier = 1.3f; break;
+            case WeaponMaterial.Iron: multiplier = 1.7f; break;
+        }
+
+        maxHealth *= multiplier;
+        damage *= multiplier;
+        shield *= multiplier;
     }
 
     private void SetupVisuals()
     {
-        // 1. Name Tag (Art des Soldaten) Text über dem Soldaten
         GameObject nameObj = new GameObject("NameTag");
-        nameObj.transform.SetParent(this.transform);
-        nameObj.transform.localPosition = new Vector3(0, 1.2f, 0); // Leicht über dem Kopf
+        nameObj.transform.SetParent(transform);
+        nameObj.transform.localPosition = new Vector3(0f, 1.2f, 0f);
         nameText = nameObj.AddComponent<TextMesh>();
         nameText.text = soldierType.ToString();
         nameText.characterSize = 0.1f;
         nameText.fontSize = 40;
         nameText.anchor = TextAnchor.MiddleCenter;
         nameText.alignment = TextAlignment.Center;
-        nameText.color = Color.white;
-        nameText.GetComponent<MeshRenderer>().sortingOrder = 10; // Damit es im 2D Raum sichtbar ist
+        nameText.GetComponent<MeshRenderer>().sortingOrder = 10;
 
-        // 2. Lebensanzeige unter dem Namen
         GameObject hpObj = new GameObject("HealthTag");
-        hpObj.transform.SetParent(this.transform);
-        hpObj.transform.localPosition = new Vector3(0, 0.8f, 0);
+        hpObj.transform.SetParent(transform);
+        hpObj.transform.localPosition = new Vector3(0f, 0.8f, 0f);
         healthText = hpObj.AddComponent<TextMesh>();
         healthText.characterSize = 0.1f;
         healthText.fontSize = 35;
         healthText.anchor = TextAnchor.MiddleCenter;
         healthText.alignment = TextAlignment.Center;
         healthText.GetComponent<MeshRenderer>().sortingOrder = 10;
-        UpdateHealthText();
 
-        // 3. Angriffsradius Kreis zeichnen (LineRenderer)
-        circleRenderer = gameObject.AddComponent<LineRenderer>();
-        circleRenderer.startWidth = 0.15f; // Etwas dicker gemacht, damit man ihn besser sieht
-        circleRenderer.endWidth = 0.15f;
-        circleRenderer.useWorldSpace = false; // Der Kreis bewegt sich mit dem Soldaten mit
-        circleRenderer.loop = true; // Schließt den Kreis am Ende
-        
-        // Material für den Kreis (Standard 2D Material)
-        Material lineMat = new Material(Shader.Find("Sprites/Default"));
-        circleRenderer.material = lineMat;
-        
-        // Blau für Spieler, Rot für Feinde
-        Color circleColor = (team == Team.Player) ? new Color(0, 0.5f, 1f, 0.4f) : new Color(1, 0, 0, 0.4f);
-        circleRenderer.startColor = circleColor;
-        circleRenderer.endColor = circleColor;
-        circleRenderer.sortingOrder = 5; // Auf +5 gesetzt, damit es nicht vom Hintergrundbild verdeckt wird! (Der Name hat 10)
-
-        int segments = 50; // Anzahl der Ecken des Kreises (50 sieht sehr rund aus)
-        circleRenderer.positionCount = segments;
-        float angle = 0f;
-
-        for (int i = 0; i < segments; i++)
+        circleRenderer = GetComponent<LineRenderer>();
+        if (circleRenderer == null)
         {
-            float x = Mathf.Sin(Mathf.Deg2Rad * angle) * attackRange;
-            float y = Mathf.Cos(Mathf.Deg2Rad * angle) * attackRange;
+            circleRenderer = gameObject.AddComponent<LineRenderer>();
+        }
 
-            circleRenderer.SetPosition(i, new Vector3(x, y, 0));
-            angle += (360f / segments);
+        circleRenderer.startWidth = 0.1f;
+        circleRenderer.endWidth = 0.1f;
+        circleRenderer.useWorldSpace = false;
+        circleRenderer.loop = true;
+        circleRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        circleRenderer.startColor = new Color(ownerColor.r, ownerColor.g, ownerColor.b, 0.45f);
+        circleRenderer.endColor = circleRenderer.startColor;
+        circleRenderer.sortingOrder = 5;
+        circleRenderer.positionCount = 50;
+        for (int i = 0; i < 50; i++)
+        {
+            float angle = i * Mathf.PI * 2f / 50f;
+            circleRenderer.SetPosition(i, new Vector3(Mathf.Cos(angle) * attackRange, Mathf.Sin(angle) * attackRange, 0f));
+        }
+
+        Transform patrolLineTransform = transform.Find("PatrolRouteLine");
+        if (patrolLineTransform == null)
+        {
+            GameObject patrolLineObject = new GameObject("PatrolRouteLine");
+            patrolLineObject.transform.SetParent(transform, false);
+            patrolLineObject.transform.localPosition = Vector3.zero;
+            patrolRenderer = patrolLineObject.AddComponent<LineRenderer>();
+        }
+        else
+        {
+            patrolRenderer = patrolLineTransform.GetComponent<LineRenderer>();
+            if (patrolRenderer == null)
+            {
+                patrolRenderer = patrolLineTransform.gameObject.AddComponent<LineRenderer>();
+            }
+        }
+
+        patrolRenderer.startWidth = 0.08f;
+        patrolRenderer.endWidth = 0.08f;
+        patrolRenderer.useWorldSpace = true;
+        patrolRenderer.loop = false;
+        patrolRenderer.positionCount = 2;
+        patrolRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        patrolRenderer.startColor = new Color(ownerColor.r, ownerColor.g, ownerColor.b, 0.7f);
+        patrolRenderer.endColor = patrolRenderer.startColor;
+        patrolRenderer.sortingOrder = 4;
+        patrolRenderer.enabled = false;
+    }
+
+    private void ApplyOwnerTint()
+    {
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = Color.Lerp(Color.white, ownerColor, 0.35f);
         }
     }
 
     private void UpdateHealthText()
     {
-        if (healthText != null)
+        if (healthText == null)
         {
-            if (shield > 0)
+            return;
+        }
+
+        if (shield > 0f)
+        {
+            healthText.text = $"HP: {Mathf.CeilToInt(currentHealth)} | Schild: {Mathf.CeilToInt(shield)}";
+            healthText.color = Color.cyan;
+        }
+        else
+        {
+            healthText.text = $"HP: {Mathf.CeilToInt(currentHealth)}";
+            healthText.color = currentHealth > maxHealth * 0.5f
+                ? Color.green
+                : currentHealth > maxHealth * 0.25f ? Color.yellow : Color.red;
+        }
+    }
+
+    private void CleanupTarget()
+    {
+        if (attackTarget == null)
+        {
+            return;
+        }
+
+        if (!attackTarget.gameObject.activeInHierarchy || attackTarget.currentHealth <= 0f)
+        {
+            attackTarget = null;
+        }
+    }
+
+    private Soldier FindPreferredEnemy()
+    {
+        float searchRange = attackMoveEnabled || hasPatrolOrder ? attackRange + AggroPadding : attackRange;
+        float closestDistance = float.MaxValue;
+        Soldier closest = null;
+
+        for (int i = 0; i < ActiveSoldiers.Count; i++)
+        {
+            Soldier other = ActiveSoldiers[i];
+            if (other == null || other == this || !IsHostileTo(other))
             {
-                healthText.text = $"HP: {currentHealth} | Schild: {shield}";
-                healthText.color = Color.cyan; // Blau wenn Schild aktiv ist
+                continue;
+            }
+
+            float distance = Vector2.Distance(transform.position, other.transform.position);
+            if (distance <= searchRange && distance < closestDistance)
+            {
+                closestDistance = distance;
+                closest = other;
+            }
+        }
+
+        return closest;
+    }
+
+    private bool IsHostileTo(Soldier other)
+    {
+        if (other == null)
+        {
+            return false;
+        }
+
+        if (ownerActorNumber > 0 && other.ownerActorNumber > 0)
+        {
+            return ownerActorNumber != other.ownerActorNumber;
+        }
+
+        return team != other.team;
+    }
+
+    private bool ShouldChaseEnemy(float distance)
+    {
+        if (attackTarget == null)
+        {
+            return false;
+        }
+
+        if (hasPatrolOrder || attackMoveEnabled)
+        {
+            return distance <= attackRange + AggroPadding;
+        }
+
+        return false;
+    }
+
+    private void FollowOrders()
+    {
+        if (hasMoveOrder)
+        {
+            if (currentPathIndex < currentPath.Count)
+            {
+                Vector2 waypoint = currentPath[currentPathIndex];
+                MoveTowards(waypoint);
+                if (Vector2.Distance(transform.position, waypoint) <= ArriveDistance)
+                {
+                    currentPathIndex++;
+                }
             }
             else
             {
-                healthText.text = $"HP: {currentHealth}";
-                if (currentHealth > maxHealth * 0.5f) healthText.color = Color.green;
-                else if (currentHealth > maxHealth * 0.25f) healthText.color = Color.yellow;
-                else healthText.color = Color.red;
-            }
-        }
-    }
-
-    private void Update()
-    {
-        // Prüfen ob der Spieler mit Rechtsklick auf diesen Soldaten klickt (Neues Input System)
-        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
-        {
-            Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-            Collider2D hit = Physics2D.OverlapPoint(mousePos);
-            
-            // Menü öffnet sich NUR, wenn man den Soldaten trifft UND er zum eigenen Team gehört!
-            if (hit != null && hit.gameObject == this.gameObject && team == Team.Player)
-            {
-                showMenu = !showMenu;
-            }
-        }
-
-        FindNearestEnemy();
-
-        if (currentTarget != null)
-        {
-            float distance = Vector2.Distance(transform.position, currentTarget.position);
-
-            if (distance <= attackRange)
-            {
-                // Gegner ist im Angriffsradius -> Angreifen
-                if (Time.time >= lastAttackTime + attackCooldown)
+                hasMoveOrder = false;
+                if (hasPatrolOrder)
                 {
-                    Attack();
-                    lastAttackTime = Time.time;
+                    patrolTowardsB = !patrolTowardsB;
+                    Vector2 nextPoint = patrolTowardsB ? patrolPointB : patrolPointA;
+                    SetPathTo(nextPoint);
                 }
             }
-            else if (!holdPosition)
-            {
-                // Gegner ist nicht im Radius und er soll nicht stehenbleiben -> Zum Gegner bewegen
-                MoveTowards(currentTarget.position);
-            }
         }
-        else if (!holdPosition)
-        {
-            // Kein Gegner auf der Karte -> Zufällig bewegen (passiv)
-            WanderRandomly();
-        }
-    }
-
-    private void FindNearestEnemy()
-    {
-        GameObject[] enemies = GameObject.FindGameObjectsWithTag(enemyTag);
-        float closestDistance = Mathf.Infinity;
-        Transform closestEnemy = null;
-
-        foreach (GameObject enemy in enemies)
-        {
-            // Sich selbst nicht als Ziel auswählen
-            if (enemy == this.gameObject) continue;
-
-            float distance = Vector2.Distance(transform.position, enemy.transform.position);
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                closestEnemy = enemy.transform;
-            }
-        }
-        
-        currentTarget = closestEnemy;
     }
 
     private void MoveTowards(Vector2 targetPos)
     {
-        transform.position = Vector2.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
+        Vector2 next = Vector2.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
+        transform.position = new Vector3(next.x, next.y, transform.position.z);
     }
 
-    private void WanderRandomly()
+    private void Attack(Soldier enemySoldier)
     {
-        if (Time.time >= nextWanderTime)
+        if (enemySoldier == null)
         {
-            SetNewWanderTarget();
-            // Nächster Richtungswechsel in 2 bis 5 Sekunden
-            nextWanderTime = Time.time + Random.Range(2f, 5f);
+            return;
         }
 
-        MoveTowards(randomWanderTarget);
-
-        if (Vector2.Distance(transform.position, randomWanderTarget) < 0.1f)
+        if (soldierType == SoldierType.Bow)
         {
-            SetNewWanderTarget();
-        }
-    }
-
-    private void SetNewWanderTarget()
-    {
-        // Ein zufälliger Punkt im Umkreis von 3 Metern
-        randomWanderTarget = (Vector2)transform.position + new Vector2(Random.Range(-3f, 3f), Random.Range(-3f, 3f));
-    }
-
-    private void Attack()
-    {
-        Soldier enemySoldier = currentTarget.GetComponent<Soldier>();
-        if (enemySoldier != null)
-        {
-            enemySoldier.TakeDamage(damage);
-            Debug.Log(gameObject.name + " (" + soldierType + ") greift an für " + damage + " Schaden!");
-        }
-    }
-
-    public void TakeDamage(float amount)
-    {
-        if (shield > 0)
-        {
-            shield -= amount;
-            if (shield < 0)
-            {
-                currentHealth += shield;
-                shield = 0;
-            }
-        }
-        else
-        {
-            currentHealth -= amount;
+            ArrowProjectile.Spawn(transform.position + new Vector3(0f, 0.1f, 0f), enemySoldier.transform.position);
         }
 
-        UpdateHealthText(); // Aktualisiert den Text, sobald Schaden genommen wurde!
-
-        if (currentHealth <= 0)
-        {
-            Die();
-        }
+        enemySoldier.TakeDamage(damage);
     }
 
     private void Die()
     {
-        Debug.Log(gameObject.name + " ist gestorben!");
+        if (SelectionManager.Instance != null)
+        {
+            SelectionManager.Instance.NotifySoldierDestroyed(this);
+        }
+
         Destroy(gameObject);
     }
 
-    private void OnGUI()
+    private void UpdatePatrolRenderer()
     {
-        if (showMenu)
+        if (patrolRenderer == null)
         {
-            // Position vom Soldaten auf den Bildschirm umrechnen
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position);
-            float guiY = Screen.height - screenPos.y; 
-            
-            // Ein kleines Menü über dem Soldaten zeichnen
-            GUILayout.BeginArea(new Rect(screenPos.x - 60, guiY - 100, 120, 100), GUI.skin.box);
-            GUILayout.Label("Befehle", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
-            
-            if (holdPosition)
+            return;
+        }
+
+        patrolRenderer.enabled = false;
+        if (!hasPatrolOrder)
+        {
+            return;
+        }
+
+        patrolRenderer.SetPosition(0, new Vector3(patrolPointA.x, patrolPointA.y, -0.05f));
+        patrolRenderer.SetPosition(1, new Vector3(patrolPointB.x, patrolPointB.y, -0.05f));
+    }
+
+    private void SetPathTo(Vector2 destination)
+    {
+        Vector2 start = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
+        Vector2 snappedDestination = SnapToNearestLand(destination);
+        List<Vector2> newPath = FindPath(start, snappedDestination);
+
+        currentPath.Clear();
+        currentPathIndex = 0;
+
+        if (newPath.Count == 0)
+        {
+            hasMoveOrder = false;
+            return;
+        }
+
+        currentPath.AddRange(newPath);
+        hasMoveOrder = true;
+    }
+
+    private static Vector2 SnapToNearestLand(Vector2 target)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
+        if (IslandManager.IsLand(snapped))
+        {
+            return snapped;
+        }
+
+        Queue<Vector2> queue = new Queue<Vector2>();
+        HashSet<Vector2> visited = new HashSet<Vector2>();
+        queue.Enqueue(snapped);
+        visited.Add(snapped);
+
+        Vector2[] directions = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
+        while (queue.Count > 0 && visited.Count < 2500)
+        {
+            Vector2 current = queue.Dequeue();
+            for (int i = 0; i < directions.Length; i++)
             {
-                if (GUILayout.Button("Weitergehen"))
+                Vector2 next = current + directions[i];
+                if (!visited.Add(next))
                 {
-                    holdPosition = false;
-                    showMenu = false;
+                    continue;
                 }
-            }
-            else
-            {
-                if (GUILayout.Button("Stehenbleiben"))
+
+                if (IslandManager.IsLand(next))
                 {
-                    holdPosition = true;
-                    showMenu = false;
+                    return next;
+                }
+
+                queue.Enqueue(next);
+            }
+        }
+
+        return snapped;
+    }
+
+    private static List<Vector2> FindPath(Vector2 start, Vector2 destination)
+    {
+        List<Vector2> empty = new List<Vector2>();
+        if (!IslandManager.IsLand(start) || !IslandManager.IsLand(destination))
+        {
+            return empty;
+        }
+
+        if (start == destination)
+        {
+            empty.Add(destination);
+            return empty;
+        }
+
+        PriorityQueue frontier = new PriorityQueue();
+        frontier.Enqueue(start, 0f);
+
+        Dictionary<Vector2, Vector2> cameFrom = new Dictionary<Vector2, Vector2>();
+        Dictionary<Vector2, float> costSoFar = new Dictionary<Vector2, float>
+        {
+            [start] = 0f
+        };
+
+        Vector2[] directions = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
+        int iterations = 0;
+
+        while (frontier.Count > 0 && iterations++ < MaxPathIterations)
+        {
+            Vector2 current = frontier.Dequeue();
+            if (current == destination)
+            {
+                return ReconstructPath(cameFrom, destination);
+            }
+
+            for (int i = 0; i < directions.Length; i++)
+            {
+                Vector2 next = current + directions[i];
+                if (!IslandManager.IsLand(next))
+                {
+                    continue;
+                }
+
+                float newCost = costSoFar[current] + 1f;
+                if (costSoFar.TryGetValue(next, out float existingCost) && newCost >= existingCost)
+                {
+                    continue;
+                }
+
+                costSoFar[next] = newCost;
+                cameFrom[next] = current;
+                frontier.Enqueue(next, newCost + Heuristic(next, destination));
+            }
+        }
+
+        return empty;
+    }
+
+    private static List<Vector2> ReconstructPath(Dictionary<Vector2, Vector2> cameFrom, Vector2 destination)
+    {
+        List<Vector2> path = new List<Vector2> { destination };
+        Vector2 current = destination;
+
+        while (cameFrom.TryGetValue(current, out Vector2 previous))
+        {
+            current = previous;
+            path.Add(current);
+        }
+
+        path.Reverse();
+        if (path.Count > 0)
+        {
+            path.RemoveAt(0);
+        }
+
+        return path;
+    }
+
+    private static float Heuristic(Vector2 a, Vector2 b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    }
+
+    private sealed class PriorityQueue
+    {
+        private readonly List<(Vector2 node, float priority)> items = new List<(Vector2, float)>();
+
+        public int Count => items.Count;
+
+        public void Enqueue(Vector2 node, float priority)
+        {
+            items.Add((node, priority));
+        }
+
+        public Vector2 Dequeue()
+        {
+            int bestIndex = 0;
+            float bestPriority = items[0].priority;
+            for (int i = 1; i < items.Count; i++)
+            {
+                if (items[i].priority < bestPriority)
+                {
+                    bestPriority = items[i].priority;
+                    bestIndex = i;
                 }
             }
 
-            if (GUILayout.Button("Schließen"))
-            {
-                showMenu = false;
-            }
-            
-            GUILayout.EndArea();
+            Vector2 result = items[bestIndex].node;
+            items.RemoveAt(bestIndex);
+            return result;
         }
     }
 
