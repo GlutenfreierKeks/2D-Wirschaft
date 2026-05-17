@@ -425,13 +425,20 @@ public class Villager : MonoBehaviour
         isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
-        role = Role.Villager; // Reset role back to Villager so they can find new jobs
+        
+        // ONLY reset to Villager if they are NOT a Worker!
+        // A construction worker should stay a construction worker so they can build more things.
+        if (role != Role.Worker)
+        {
+            role = Role.Villager;
+        }
+
         transform.rotation = Quaternion.identity; // Reset rotation!
         SetVisibility(true); // Ensure visible!
         
-        // Reset color to normal white
-        if (sr != null) sr.color = Color.white;
-        else if (rend != null) rend.material.color = Color.white;
+        // Keep orange color for workers, white for normal villagers
+        if (sr != null) sr.color = (role == Role.Worker) ? Color.orange : Color.white;
+        else if (rend != null) rend.material.color = (role == Role.Worker) ? Color.orange : Color.white;
         
         Wander();
     }

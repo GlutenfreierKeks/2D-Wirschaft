@@ -179,7 +179,7 @@ public class VillagerManager : MonoBehaviour
         }
     }
 
-    private Villager GetAvailableWorker()
+    public Villager GetAvailableWorker()
     {
         int total = 0;
         int busy = 0;

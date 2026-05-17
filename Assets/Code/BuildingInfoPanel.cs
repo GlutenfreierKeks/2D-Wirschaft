@@ -40,6 +40,8 @@ public class BuildingInfoPanel : MonoBehaviour
     private TextMeshProUGUI txtSchedule;
     private Button          btnToggleSchedule;
     private TextMeshProUGUI txtScheduleBtnLabel;
+    private Button          btnToggleHutType;
+    private TextMeshProUGUI txtHutTypeBtnLabel;
 
     // ── Progress Bar Objekte ─────────────────────────────────────────────────
     private GameObject    goProgressBG;
@@ -213,6 +215,26 @@ public class BuildingInfoPanel : MonoBehaviour
             btnToggleSchedule.gameObject.SetActive(false);
         }
 
+        // Hut Type Button (Only for buildings that produce villagers/citizens, e.g. residential huts/houses)
+        if (d.producesVillagers)
+        {
+            btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
+            if (currentBuilding.isBuilderHut)
+            {
+                txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte";
+                btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
+            }
+            else
+            {
+                txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus";
+                btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
+            }
+        }
+        else
+        {
+            btnToggleHutType.gameObject.SetActive(false);
+        }
+
         // Pause-Button Text
         txtPauseLabel.text = currentBuilding.IsProductionPaused ? "▶  Fortsetzen" : "⏸  Pausieren";
         btnPause.gameObject.SetActive(currentBuilding.IsConstructed() &&
@@ -337,6 +359,12 @@ public class BuildingInfoPanel : MonoBehaviour
         btnToggleSchedule.onClick.AddListener(OnToggleScheduleClicked);
         AddLE(btnToggleSchedule.gameObject, minW: 350f, minH: 40f);
 
+        // Hut type toggle button for houses
+        btnToggleHutType = MakeButton("ToggleHutTypeBtn", inner.transform, "🏠 Typ: Wohnhaus", btnNeutral, 350f, 40f, 14f);
+        txtHutTypeBtnLabel = btnToggleHutType.GetComponentInChildren<TextMeshProUGUI>();
+        btnToggleHutType.onClick.AddListener(OnToggleHutTypeClicked);
+        AddLE(btnToggleHutType.gameObject, minW: 350f, minH: 40f);
+
         // ── Spacer ───────────────────────────────────────────────────────────
         var spacer = new GameObject("Spacer", typeof(RectTransform));
         spacer.transform.SetParent(inner.transform, false);
@@ -382,6 +410,14 @@ public class BuildingInfoPanel : MonoBehaviour
         current = (current + 1) % 3;
         currentBuilding.currentSchedule = (BuildingInstance.ScheduleMode)current;
         
+        RefreshStats();
+    }
+
+    private void OnToggleHutTypeClicked()
+    {
+        if (currentBuilding == null) return;
+        
+        currentBuilding.ToggleHutType();
         RefreshStats();
     }
 
