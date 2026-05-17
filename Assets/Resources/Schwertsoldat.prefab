@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 2172262655006233702}
   m_Layer: 0
   m_Name: Schwertsoldat
-  m_TagString: Enemy
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -106,11 +106,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Soldier
   soldierType: 2
-  team: 1
-  spearSprite: {fileID: 0}
-  shieldSprite: {fileID: 0}
-  swordSprite: {fileID: 0}
-  bowSprite: {fileID: 0}
+  team: 0
+  spearSprite: {fileID: 21300000, guid: 40b75d9eaee7624499923229d6425d07, type: 3}
+  shieldSprite: {fileID: 21300000, guid: 177233ac233cda84e8e56dee34b1ca69, type: 3}
+  swordSprite: {fileID: 21300000, guid: 2df4ab401e59d7047bf78ea72ba701b5, type: 3}
+  bowSprite: {fileID: 21300000, guid: 7c74c48178ec1ef4ba61fbc7c85d8b21, type: 3}
   maxHealth: 100
   shield: 0
   damage: 0

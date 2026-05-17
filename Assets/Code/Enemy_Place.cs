@@ -9,6 +9,9 @@ public class Enemy_Place : MonoBehaviour
     public GameObject swordSoldierPrefab;
     public GameObject bowSoldierPrefab;
 
+    [Header("Team Einstellungen")]
+    public Team placementTeam = Team.Player;
+
     // Der aktuell ausgewählte Soldat
     private GameObject selectedPrefab;
 
@@ -59,6 +62,11 @@ public class Enemy_Place : MonoBehaviour
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         
         // Den Soldaten an der Mausposition platzieren
-        Instantiate(selectedPrefab, mousePos, Quaternion.identity);
+        GameObject newSoldierObj = Instantiate(selectedPrefab, mousePos, Quaternion.identity);
+        Soldier soldier = newSoldierObj.GetComponent<Soldier>();
+        if (soldier != null)
+        {
+            soldier.SetTeam(placementTeam);
+        }
     }
 }

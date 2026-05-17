@@ -76,8 +76,7 @@ public class Soldier : MonoBehaviour
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
 
         // Tag und Ziel automatisch setzen
-        gameObject.tag = (team == Team.Player) ? "Player" : "Enemy";
-        enemyTag = (team == Team.Player) ? "Enemy" : "Player";
+        SetTeam(team);
 
         // Stats basierend auf dem ausgewählten Typen setzen
         switch (soldierType)
@@ -337,6 +336,21 @@ public class Soldier : MonoBehaviour
     {
         Debug.Log(gameObject.name + " ist gestorben!");
         Destroy(gameObject);
+    }
+
+    public void SetTeam(Team newTeam)
+    {
+        team = newTeam;
+        gameObject.tag = (team == Team.Player) ? "Player" : "Enemy";
+        enemyTag = (team == Team.Player) ? "Enemy" : "Player";
+        
+        // Falls der Kreis schon existiert, Farbe updaten
+        if (circleRenderer != null)
+        {
+            Color circleColor = (team == Team.Player) ? new Color(0, 0.5f, 1f, 0.4f) : new Color(1, 0, 0, 0.4f);
+            circleRenderer.startColor = circleColor;
+            circleRenderer.endColor = circleColor;
+        }
     }
 
     private void OnGUI()
