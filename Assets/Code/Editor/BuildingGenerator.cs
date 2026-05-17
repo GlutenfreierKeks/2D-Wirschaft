@@ -15,19 +15,19 @@ public class BuildingGenerator : EditorWindow
         CreateBuilding("Großes Haus", 10, 8, 2, 0, "bevolkerung", 12, 60, ResourceType.None, "", 0, false, true); // Spawnt Bewohner
 
         // --- Rohstoffe (Produktion) ---
-        CreateBuilding("Holzhütte", 2, 0, 0, 0, "holz", 10, 100, ResourceType.Wood);
-        CreateBuilding("Steinwerk", 5, 2, 0, 0, "stein", 8, 100, ResourceType.Stone);
-        CreateBuilding("Eisenmine", 8, 10, 0, 0, "eisen", 5, 120, ResourceType.Iron);
-        CreateBuilding("Goldmine", 10, 10, 8, 0, "gold", 3, 150, ResourceType.Gold);
+        CreateBuilding("Holzhütte", 2, 0, 0, 0, "holz", 6, 60, ResourceType.Wood);
+        CreateBuilding("Steinwerk", 5, 2, 0, 0, "stein", 5, 60, ResourceType.Stone);
+        CreateBuilding("Eisenmine", 8, 10, 0, 0, "eisen", 3, 60, ResourceType.Iron);
+        CreateBuilding("Goldmine", 10, 10, 8, 0, "gold", 2, 60, ResourceType.Gold);
 
         // --- Landwirtschaft ---
-        CreateBuilding("Farm", 5, 2, 0, 0, "weizen", 10, 100, ResourceType.Wheat);
-        CreateBuilding("Fruchtfarm", 6, 3, 0, 0, "fruechte", 8, 100, ResourceType.Fruit);
-        CreateBuilding("Wüstenfarm", 8, 5, 0, 0, "weizen", 12, 120, ResourceType.Wheat); 
+        CreateBuilding("Farm", 5, 2, 0, 0, "weizen", 10, 60, ResourceType.Wheat);
+        CreateBuilding("Fruchtfarm", 6, 3, 0, 0, "fruechte", 5, 60, ResourceType.Fruit);
+        CreateBuilding("Wüstenfarm", 8, 5, 0, 0, "weizen", 12, 60, ResourceType.Wheat); 
         
         // --- Veredelung & Spezial ---
-        CreateBuilding("Viehhof", 8, 4, 0, 0, "fleisch", 5, 100, ResourceType.Animal, "weizen", 5); 
-        CreateBuilding("Goldschmiede", 10, 5, 5, 0, "geld", 20, 120, ResourceType.None, "gold", 2); 
+        CreateBuilding("Viehhof", 8, 4, 0, 0, "fleisch", 5, 60, ResourceType.Animal, "weizen", 3); 
+        CreateBuilding("Goldschmiede", 10, 5, 5, 0, "geld", 10, 60, ResourceType.None, "gold", 1); 
         CreateBuilding("Kaserne", 10, 10, 10, 5, "", 0, 0, ResourceType.None, "", 0, true); 
 
         AssetDatabase.SaveAssets();

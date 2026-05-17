@@ -412,8 +412,20 @@ public class BuildingInstance : MonoBehaviour
         Destroy(gameObject);
     }
 
-    public void ToggleHutType()
+    public bool ToggleHutType()
     {
+        if (Player_UI.Instance == null) return false;
+        
+        int wheat = Player_UI.Instance.GetResource("weizen");
+        if (wheat < 1)
+        {
+            Debug.LogWarning("[HutType] Not enough wheat to change house type!");
+            return false;
+        }
+
+        // Deduct 1 wheat!
+        Player_UI.Instance.AddResource("weizen", -1);
+
         isBuilderHut = !isBuilderHut;
         
         if (isBuilderHut)
@@ -458,6 +470,7 @@ public class BuildingInstance : MonoBehaviour
                 }
             }
         }
+        return true;
     }
 
     private void OnDestroy()
