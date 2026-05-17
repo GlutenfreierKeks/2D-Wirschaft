@@ -44,7 +44,41 @@ public class BuildingManager : MonoBehaviour
 
         GameObject building = Instantiate(data.prefab, new Vector3(position.x, position.y, -0.21f), Quaternion.identity);
         building.name = data.buildingName;
-        
+
+        // Scale the visual so the texture covers exactly the building's grid footprint.
+        // We measure the natural rendered size first (independent of any prefab scale),
+        // then compute a factor so the result is exactly data.width × data.height world units.
+        building.transform.localScale = Vector3.one; // reset before measuring
+
+        float naturalW = 1f, naturalH = 1f;
+
+        SpriteRenderer buildingSR = building.GetComponentInChildren<SpriteRenderer>();
+        if (buildingSR != null && buildingSR.sprite != null)
+        {
+            // sprite.bounds is in local space at scale 1 – exactly what we need
+            naturalW = buildingSR.sprite.bounds.size.x;
+            naturalH = buildingSR.sprite.bounds.size.y;
+        }
+        else
+        {
+            Renderer buildingRend = building.GetComponentInChildren<Renderer>();
+            if (buildingRend != null)
+            {
+                // bounds at scale (1,1,1) gives the natural world-unit size
+                naturalW = buildingRend.bounds.size.x;
+                naturalH = buildingRend.bounds.size.y;
+            }
+        }
+
+        if (naturalW <= 0f) naturalW = 1f;
+        if (naturalH <= 0f) naturalH = 1f;
+
+        building.transform.localScale = new Vector3(
+            data.width  / naturalW,
+            data.height / naturalH,
+            1f
+        );
+
         // Add building instance logic
         BuildingInstance instance = building.AddComponent<BuildingInstance>();
         instance.data = data;

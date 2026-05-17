@@ -54,9 +54,22 @@ public class Villager : MonoBehaviour
 
     private void Wander()
     {
-        // Debug.Log("[Villager] Randomly wandering...");
-        targetPosition = (Vector2)transform.position + Random.insideUnitCircle * 5f;
-        isMoving = true;
+        // Try to find a nearby land cell so villagers never walk into the ocean
+        Vector2 currentPos = transform.position;
+        for (int attempt = 0; attempt < 15; attempt++)
+        {
+            Vector2 candidate = currentPos + Random.insideUnitCircle * 5f;
+            // Snap to grid so IsLand() lookup works correctly
+            candidate = new Vector2(Mathf.Round(candidate.x), Mathf.Round(candidate.y));
+            if (IslandManager.IsLand(candidate))
+            {
+                targetPosition = candidate;
+                isMoving = true;
+                return;
+            }
+        }
+        // No valid land cell found nearby – stay in place
+        isMoving = false;
     }
 
     public void FindWork()

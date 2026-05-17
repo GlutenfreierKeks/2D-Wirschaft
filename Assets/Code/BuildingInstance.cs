@@ -12,6 +12,10 @@ public class BuildingInstance : MonoBehaviour
     private Renderer[] renderers;
     private FogRevealer revealer;
 
+    // ── Produktion ────────────────────────────────────────────────────────
+    public bool IsProductionPaused { get; private set; } = false;
+    public int  TotalProduced      { get; private set; } = 0;
+
     public bool IsConstructed() => isConstructed;
 
     private int workersArrived = 0;
@@ -22,13 +26,27 @@ public class BuildingInstance : MonoBehaviour
     {
         renderers = GetComponentsInChildren<Renderer>();
         revealer = GetComponent<FogRevealer>();
-        if (revealer != null) revealer.enabled = false; 
+        if (revealer != null) revealer.enabled = false;
+
+        // Add a collider so the building can be clicked via Physics2D overlap.
+        // Size must be in LOCAL space: worldSize = localScale * localSize
+        // We want worldSize = (data.width, data.height), so:
+        //   localSize = (data.width / localScale.x, data.height / localScale.y)
+        if (GetComponent<Collider2D>() == null)
+        {
+            var col = gameObject.AddComponent<BoxCollider2D>();
+            Vector3 s = transform.localScale;
+            col.size = new Vector2(
+                s.x > 0.001f ? data.width  / s.x : data.width,
+                s.y > 0.001f ? data.height / s.y : data.height
+            );
+            Debug.Log($"[BuildingInstance] Collider size set to {col.size} " +
+                      $"(scale={s}, w={data.width}, h={data.height})");
+        }
 
         // Request workers from manager
         if (VillagerManager.Instance != null)
-        {
             VillagerManager.Instance.RequestConstruction(this);
-        }
 
         StartCoroutine(ConstructionRoutine());
     }
@@ -126,38 +144,61 @@ public class BuildingInstance : MonoBehaviour
         while (true)
         {
             yield return new WaitForSeconds(data.productionInterval);
-            
+
+            // Pausiert – nichts tun, aber Coroutine läuft weiter
+            if (IsProductionPaused) continue;
+
             if (ResourceManager.Instance != null)
             {
-                // 1. Check consumption
+                // 1. Verbrauch prüfen
                 if (!string.IsNullOrEmpty(data.consumedResourceId) && data.consumedAmount > 0)
                 {
                     if (ResourceManager.Instance.HasResource(data.consumedResourceId, data.consumedAmount))
-                    {
                         ResourceManager.Instance.SpendResource(data.consumedResourceId, data.consumedAmount);
-                    }
                     else
-                    {
-                        // Cannot afford production this cycle
-                        continue; 
-                    }
+                        continue; // Ressourcen fehlen, Zyklus überspringen
                 }
 
-                // 2. Produce
+                // 2. Produzieren
                 if (!string.IsNullOrEmpty(data.productionResourceId))
                 {
                     ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
+                    TotalProduced += data.productionAmount;
                 }
 
                 if (data.producesVillagers && VillagerManager.Instance != null)
                 {
-                    // Only spawn if population capacity allows (optional, but good practice)
                     if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
                     {
                         VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                        TotalProduced++;
                     }
                 }
             }
         }
     }
+
+    // ── Öffentliche Steuerung ────────────────────────────────────────────────
+
+    /// <summary>Produktion pausieren / fortsetzen.</summary>
+    public void ToggleProduction()
+    {
+        IsProductionPaused = !IsProductionPaused;
+        Debug.Log($"[BuildingInstance] {data.buildingName} Produktion: {(IsProductionPaused ? "PAUSIERT" : "AKTIV")}");
+    }
+
+    /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>
+    public void Demolish()
+    {
+        if (ResourceManager.Instance != null)
+        {
+            ResourceManager.Instance.AddResource("holz",  data.woodCost  / 2);
+            ResourceManager.Instance.AddResource("stein", data.stoneCost / 2);
+            ResourceManager.Instance.AddResource("eisen", data.ironCost  / 2);
+            ResourceManager.Instance.AddResource("gold",  data.goldCost  / 2);
+        }
+        Debug.Log($"[BuildingInstance] {data.buildingName} abgerissen.");
+        Destroy(gameObject);
+    }
 }
+
