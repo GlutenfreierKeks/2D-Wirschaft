@@ -239,6 +239,8 @@ public class BuildingInstance : MonoBehaviour
         }
         Debug.Log($"[BuildingInstance] {data.buildingName} abgerissen.");
         Destroy(gameObject);
+    }
+
     private void OnDestroy()
     {
         // Release construction workers if still building
