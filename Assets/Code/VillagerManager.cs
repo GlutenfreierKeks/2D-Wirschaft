@@ -9,7 +9,8 @@ public class VillagerManager : MonoBehaviour
     public GameObject villagerPrefab;
     public float wanderRadius = 10f;
 
-    private List<GameObject> activeVillagers = new List<GameObject>();
+    private List<Villager> activeVillagers = new List<Villager>();
+    private List<BuildingInstance> pendingBuildings = new List<BuildingInstance>();
 
     private void Awake()
     {
@@ -17,41 +18,178 @@ public class VillagerManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    private void Update()
+    public void SpawnStartingPopulation(int islandIndex)
     {
-        if (Player_UI.Instance == null) return;
+        for (int i = 0; i < 10; i++) SpawnVillager(islandIndex, Villager.Role.Villager);
+        for (int i = 0; i < 2; i++) SpawnVillager(islandIndex, Villager.Role.Worker);
+    }
 
-        int currentPop = Player_UI.Instance.GetResource("bevolkerung");
+    private void SpawnVillager(int islandIndex, Villager.Role role)
+    {
+        Vector2 islandPos = IslandManager.Instance.GetIslandPosition(islandIndex);
+        Vector2 randomOffset = Random.insideUnitCircle * 8f;
+        SpawnVillagerAt(islandPos + randomOffset, role);
+    }
+
+    public void SpawnVillagerAt(Vector2 position, Villager.Role role)
+    {
+        EnsurePrefab();
+        GameObject vObj = Instantiate(villagerPrefab, new Vector3(position.x, position.y, -0.2f), Quaternion.identity);
+        vObj.SetActive(true);
+        Villager v = vObj.AddComponent<Villager>();
+        v.role = role;
         
-        // Sync number of prefabs with population count
-        if (activeVillagers.Count < currentPop)
+        // Visual distinction
+        SpriteRenderer sr = vObj.GetComponent<SpriteRenderer>();
+        if (sr != null)
         {
-            SpawnVillager();
+            if (role == Villager.Role.Worker) sr.color = Color.orange;
+            else sr.color = Color.white;
+            
+            Sprite custom = Resources.Load<Sprite>(role.ToString());
+            if (custom != null) sr.sprite = custom;
         }
-        else if (activeVillagers.Count > currentPop)
+
+        activeVillagers.Add(v);
+    }
+
+    private void EnsurePrefab()
+    {
+        if (villagerPrefab == null)
         {
-            RemoveVillager();
+            villagerPrefab = Resources.Load<GameObject>("Villager");
+            if (villagerPrefab == null)
+            {
+                villagerPrefab = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                villagerPrefab.name = "Villager_Fallback";
+                Destroy(villagerPrefab.GetComponent<Collider>());
+                villagerPrefab.SetActive(false);
+            }
         }
     }
 
-    private void SpawnVillager()
+    public void RequestConstruction(BuildingInstance building)
     {
-        // For now, spawn near the first island position
-        Vector2 spawnPos = IslandManager.Instance.GetIslandPosition(0);
-        Vector2 randomOffset = Random.insideUnitCircle * wanderRadius;
-        
-        GameObject villager = Instantiate(villagerPrefab, new Vector3(spawnPos.x + randomOffset.x, spawnPos.y + randomOffset.y, -0.2f), Quaternion.identity);
-        villager.name = "Villager_" + activeVillagers.Count;
-        activeVillagers.Add(villager);
+        Debug.Log($"[VillagerManager] Construction requested for: {building.data.buildingName}");
+        pendingBuildings.Add(building);
+    }
+
+    private void Update()
+    {
+        UpdateHUD();
+
+        if (pendingBuildings.Count > 0)
+        {
+            TryAssignWorkers();
+        }
+    }
+
+    private void UpdateHUD()
+    {
+        if (Player_UI.Instance == null) return;
+
+        int freeVillagers = 0;
+        int workers = 0;
+        int employedVillagers = 0;
+
+        foreach (var v in activeVillagers)
+        {
+            if (v == null) continue;
+            
+            if (v.role == Villager.Role.Worker)
+            {
+                workers++;
+            }
+            else
+            {
+                if (v.isOperatingWorker)
+                {
+                    employedVillagers++;
+                }
+                else
+                {
+                    freeVillagers++;
+                }
+            }
+        }
+
+        int totalVillagers = freeVillagers + employedVillagers;
+        Player_UI.Instance.SetMaxResource("dorfbewohner", totalVillagers);
+        Player_UI.Instance.SetResource("dorfbewohner", freeVillagers);
+        Player_UI.Instance.SetResource("arbeiter", workers);
+        Player_UI.Instance.SetResource("bevolkerung", totalVillagers + workers);
+    }
+
+    public Villager GetAvailableVillager()
+    {
+        foreach (var v in activeVillagers)
+        {
+            if (v != null && v.role == Villager.Role.Villager && !v.isOperatingWorker && !v.IsBusy())
+            {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private void TryAssignWorkers()
+    {
+        for (int i = pendingBuildings.Count - 1; i >= 0; i--)
+        {
+            BuildingInstance b = pendingBuildings[i];
+            if (b.NeedsMoreWorkers())
+            {
+                Villager worker = GetAvailableWorker();
+                if (worker != null)
+                {
+                    Debug.Log($"[VillagerManager] Assigning worker to {b.data.buildingName}");
+                    // Spread workers around the building
+                    float angle = b.GetAssignedWorkerCount() * 2f * Mathf.PI / b.data.requiredWorkers;
+                    Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 1.5f;
+                    
+                    worker.AssignToBuild(b, offset);
+                    b.RegisterWorker(worker);
+                }
+            }
+            else
+            {
+                pendingBuildings.RemoveAt(i);
+            }
+        }
+    }
+
+    private Villager GetAvailableWorker()
+    {
+        int total = 0;
+        int busy = 0;
+        foreach (var v in activeVillagers)
+        {
+            if (v.role == Villager.Role.Worker)
+            {
+                total++;
+                if (!v.IsBusy()) return v;
+                busy++;
+            }
+        }
+        // Debug.Log($"[VillagerManager] No free workers. Total: {total}, Busy: {busy}");
+        return null;
+    }
+
+    public void NotifyVillagerConverted(Villager v)
+    {
+        if (activeVillagers.Contains(v))
+        {
+            activeVillagers.Remove(v);
+        }
     }
 
     private void RemoveVillager()
     {
         if (activeVillagers.Count > 0)
         {
-            GameObject v = activeVillagers[activeVillagers.Count - 1];
+            Villager v = activeVillagers[activeVillagers.Count - 1];
             activeVillagers.RemoveAt(activeVillagers.Count - 1);
-            Destroy(v);
+            Destroy(v.gameObject);
         }
     }
 }

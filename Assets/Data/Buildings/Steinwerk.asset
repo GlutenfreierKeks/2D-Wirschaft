@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
+  m_Name: Steinwerk
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingData
+  buildingName: Steinwerk
+  prefab: {fileID: 1063521739859243789, guid: 6a259779a1f72d84c8d800e4878e3b6a, type: 3}
+  placementRule: 0
+  requiredResourceType: 1
+  width: 1
+  height: 1
+  woodCost: 6
+  stoneCost: 2
+  ironCost: 0
+  goldCost: 0
+  buildTime: 5
+  requiredWorkers: 1
+  isWorkerHub: 0
+  isBarracks: 0
+  productionResourceId: stein
+  productionAmount: 4
+  consumedResourceId: 
+  consumedAmount: 0
+  productionInterval: 120
+  producesVillagers: 0
+  ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

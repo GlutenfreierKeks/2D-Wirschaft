@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
+  m_Name: Kaserne
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingData
+  buildingName: Kaserne
+  prefab: {fileID: 4665293633710097953, guid: 7fd8c880bfa9eeb45b10c31cbf6d7945, type: 3}
+  placementRule: 0
+  requiredResourceType: 7
+  width: 2
+  height: 1
+  woodCost: 10
+  stoneCost: 10
+  ironCost: 10
+  goldCost: 5
+  buildTime: 5
+  requiredWorkers: 1
+  isWorkerHub: 0
+  isBarracks: 1
+  productionResourceId: 
+  productionAmount: 0
+  consumedResourceId: 
+  consumedAmount: 0
+  productionInterval: 100
+  producesVillagers: 0
+  ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

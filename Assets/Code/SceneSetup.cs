@@ -11,13 +11,14 @@ public class SceneSetup : MonoBehaviour
         EnsureManager<PlacementManager>("PlacementManager");
         EnsureManager<FogProjector>("FogProjector");
         EnsureManager<SelectionManager>("SelectionManager");
+        EnsureManager<VillagerManager>("VillagerManager");
         
         Debug.Log("[SceneSetup] All managers initialized.");
     }
 
     private T EnsureManager<T>(string name) where T : MonoBehaviour
     {
-        T instance = FindFirstObjectByType<T>();
+        T instance = FindAnyObjectByType<T>();
         if (instance == null)
         {
             GameObject obj = new GameObject(name);

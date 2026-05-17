@@ -27,7 +27,7 @@ public class PlacementManager : MonoBehaviour
 
     public void StartPlacement(BuildingData data)
     {
-        if (!ResourceManager.Instance.CanAfford(data.woodCost, data.stoneCost))
+        if (!ResourceManager.Instance.CanAfford(data.woodCost, data.stoneCost, data.ironCost, data.goldCost))
         {
             Debug.Log($"Cannot afford {data.buildingName}!");
             return;
@@ -97,49 +97,74 @@ public class PlacementManager : MonoBehaviour
 
     private bool CheckPlacementValidity(Vector2 center)
     {
-        // Check if explored
-        if (!FogProjector.IsExplored(center)) return false;
+        // 1. Check Exploration
+        if (!FogProjector.IsExplored(center)) 
+        {
+            Debug.Log("Placement Failed: Area not explored");
+            return false;
+        }
+
+        // 2. Check Resource Requirement
+        if (currentBuilding.requiredResourceType != ResourceType.None)
+        {
+            if (IslandManager.GetResourceType(center) != currentBuilding.requiredResourceType)
+            {
+                Debug.Log($"Placement Failed: Needs {currentBuilding.requiredResourceType}");
+                return false;
+            }
+        }
 
         float startX = -(currentBuilding.width - 1) / 2f;
         float startY = -(currentBuilding.height - 1) / 2f;
 
+        // 3. Check Footprint (Collision & Ground)
+        for (int x = 0; x < currentBuilding.width; x++)
+        {
+            for (int y = 0; y < currentBuilding.height; y++)
+            {
+                Vector2 pos = center + new Vector2(startX + x, startY + y);
+                
+                if (BuildingManager.IsOccupied(pos)) 
+                {
+                    Debug.Log("Placement Failed: Position occupied by another building");
+                    return false;
+                }
+
+                bool isLand = IslandManager.IsLand(pos);
+
+                if (currentBuilding.placementRule == PlacementRule.LandOnly && !isLand)
+                {
+                    Debug.Log("Placement Failed: Needs Land");
+                    return false;
+                }
+                
+                if (currentBuilding.placementRule == PlacementRule.WaterOnly && isLand)
+                {
+                    Debug.Log("Placement Failed: Needs Water");
+                    return false;
+                }
+            }
+        }
+
+        // Special check for Pier
         if (currentBuilding.placementRule == PlacementRule.Pier)
         {
-            // Pier Rule: 1 Land cell, everything else Water
             int landCount = 0;
             for (int x = 0; x < currentBuilding.width; x++)
             {
                 for (int y = 0; y < currentBuilding.height; y++)
                 {
                     Vector2 pos = center + new Vector2(startX + x, startY + y);
-                    if (BuildingManager.IsOccupied(pos)) return false;
                     if (IslandManager.IsLand(pos)) landCount++;
                 }
             }
-            return landCount == 1; // Only 1 land connection allowed
-        }
-        else if (currentBuilding.placementRule == PlacementRule.WaterOnly)
-        {
-            for (int x = 0; x < currentBuilding.width; x++)
+            if (landCount != 1) 
             {
-                for (int y = 0; y < currentBuilding.height; y++)
-                {
-                    Vector2 pos = center + new Vector2(startX + x, startY + y);
-                    if (BuildingManager.IsOccupied(pos) || IslandManager.IsLand(pos)) return false;
-                }
+                Debug.Log("Placement Failed: Pier needs exactly 1 land cell");
+                return false;
             }
         }
-        else // LandOnly
-        {
-            for (int x = 0; x < currentBuilding.width; x++)
-            {
-                for (int y = 0; y < currentBuilding.height; y++)
-                {
-                    Vector2 pos = center + new Vector2(startX + x, startY + y);
-                    if (BuildingManager.IsOccupied(pos) || !IslandManager.IsLand(pos)) return false;
-                }
-            }
-        }
+
         return true;
     }
 
@@ -153,8 +178,21 @@ public class PlacementManager : MonoBehaviour
 
     private void PlaceBuilding(Vector2 pos)
     {
-        ResourceManager.Instance.SpendResources(currentBuilding.woodCost, currentBuilding.stoneCost);
+        ResourceManager.Instance.SpendResources(currentBuilding.woodCost, currentBuilding.stoneCost, currentBuilding.ironCost, currentBuilding.goldCost);
         BuildingManager.Instance.SpawnBuilding(currentBuilding, pos);
+
+        // Remove resource nodes covered by the building footprint
+        float startX = -(currentBuilding.width - 1) / 2f;
+        float startY = -(currentBuilding.height - 1) / 2f;
+        for (int x = 0; x < currentBuilding.width; x++)
+        {
+            for (int y = 0; y < currentBuilding.height; y++)
+            {
+                Vector2 cellPos = pos + new Vector2(startX + x, startY + y);
+                IslandManager.RemoveResourceNodeAt(cellPos);
+            }
+        }
+
         CancelPlacement();
     }
 

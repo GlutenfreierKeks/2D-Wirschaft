@@ -50,11 +50,11 @@ public class FogProjector : MonoBehaviour
     private void SetupFog()
     {
         // Create the current visibility mask (clears every frame)
-        maskTexture = new RenderTexture(maskResolution, maskResolution, 0);
+        maskTexture = new RenderTexture(maskResolution, maskResolution, 24); // Added depth buffer (24 bits)
         maskTexture.filterMode = FilterMode.Bilinear;
 
-        // Create the persistent explored mask (does NOT clear)
-        exploredTexture = new RenderTexture(maskResolution, maskResolution, 0);
+        // Create the persistent explored mask
+        exploredTexture = new RenderTexture(maskResolution, maskResolution, 24);
         exploredTexture.filterMode = FilterMode.Bilinear;
 
         // Create a camera to render the mask

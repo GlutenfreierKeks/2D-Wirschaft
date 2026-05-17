@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
+  m_Name: Eisenmiene
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingData
+  buildingName: Eisenmiene
+  prefab: {fileID: 5812574342180120484, guid: 77827b5f00830534d869a7882096e7cd, type: 3}
+  placementRule: 0
+  requiredResourceType: 2
+  width: 1
+  height: 1
+  woodCost: 8
+  stoneCost: 10
+  ironCost: 0
+  goldCost: 0
+  buildTime: 5
+  requiredWorkers: 1
+  isWorkerHub: 0
+  isBarracks: 0
+  productionResourceId: eisen
+  productionAmount: 2
+  consumedResourceId: 
+  consumedAmount: 0
+  productionInterval: 100
+  producesVillagers: 0
+  ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

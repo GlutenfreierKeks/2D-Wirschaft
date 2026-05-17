@@ -401,7 +401,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.02, y: 0.82}
+    oldSize: {x: 1, y: 1}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -658,52 +658,52 @@ MonoBehaviour:
     displayName: Kleines Haus
     icon: {fileID: 21300000, guid: e7fc2a92b49e9e442ad7a3eb5ed77a41, type: 3}
     categoryId: hauser
-    buildingData: {fileID: 11400000, guid: c0c0c99f9910f5f4eba67254dee721d2, type: 2}
+    buildingData: {fileID: 11400000, guid: dcc9f1425dcc237459e943938c2afb3d, type: 2}
   - id: grosses_haus
     displayName: "Gro\xDFes Haus"
     icon: {fileID: 21300000, guid: f3b61810eb48b264d8b5578dd9900cba, type: 3}
     categoryId: hauser
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 38ae618ee70981a4ca84f857c0451ff4, type: 2}
   - id: eisenmine
     displayName: Eisenmine
     icon: {fileID: 21300000, guid: 862abfb9c37eab0449caca698286e772, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 3e31049d97e81a44a87f995fd5be9b9c, type: 2}
   - id: goldmine
     displayName: Goldmine
     icon: {fileID: 21300000, guid: 415c5494d256f434ab4417830cece084, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: ffeb7478d96020f468bd8065f66240b2, type: 2}
   - id: holzhutte
     displayName: "Holzh\xFCtte"
     icon: {fileID: 21300000, guid: 9d3ed0243b8ff0a46b700ca4b5e2798d, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 56b5abb8e4274af4697d79efe46d1c63, type: 2}
   - id: steinwerk
     displayName: Steinwerk
     icon: {fileID: 21300000, guid: c22edc42248f59c4ab2a661ab959819b, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: b5664a9a149d38540a9a1187129a1c3f, type: 2}
   - id: farm
     displayName: Farm
     icon: {fileID: 21300000, guid: 0e0edacb743ac5a4fabb72d8b52b2d04, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 41395634cf29d2642bf580660d784920, type: 2}
   - id: wustenfruchtfarm
     displayName: "W\xFCstenfruchtfarm"
     icon: {fileID: 21300000, guid: 9fb9a95d8eb264244916890a4a84b9aa, type: 3}
     categoryId: ressourcen
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 526d0d6780ee43d40a9a0b3ca530d70e, type: 2}
   - id: kaserne
     displayName: Kaserne
     icon: {fileID: 21300000, guid: 1ad83adc535613044af03d7fecfb5a5f, type: 3}
     categoryId: andere
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: bb861c4f3fa7e50448203f39111d5496, type: 2}
   - id: viehhof
     displayName: Viehhof
     icon: {fileID: 21300000, guid: 675e0c2c7979526428efe84cc66b9ab1, type: 3}
     categoryId: andere
-    buildingData: {fileID: 0}
+    buildingData: {fileID: 11400000, guid: 30a353ecb34d81845b728455398c5d02, type: 2}
   barColor: {r: 0.18, g: 0.1, b: 0.03, a: 0.96}
   slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
   borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
@@ -894,7 +894,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.03, y: 0.82}
+    oldSize: {x: 1, y: 1}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -2098,7 +2098,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.83, y: 0.8}
+    oldSize: {x: 1, y: 1}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -2151,54 +2151,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1095614885}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1959272992
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1959272994}
-  - component: {fileID: 1959272993}
-  m_Layer: 0
-  m_Name: soldaten_spawner
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1959272993
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1959272992}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ffcb2629f8aee684289d47493318c09c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Enemy_Place
-  spearSoldierPrefab: {fileID: 266473381522443312, guid: eaba5075f127a8a4f997b0d4b4b0e23e, type: 3}
-  shieldSoldierPrefab: {fileID: 4999003976760668732, guid: fd64fa24ef2fbb84397135d1aea6830a, type: 3}
-  swordSoldierPrefab: {fileID: 5646223415270589150, guid: 087df940412c59347af46ce1906c4566, type: 3}
-  bowSoldierPrefab: {fileID: 8922429011428860817, guid: a1488b61f5b8c7748a460f1a6b34d0a9, type: 3}
---- !u!4 &1959272994
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1959272992}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -10.00212, y: 62.60824, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2124503589
@@ -2263,4 +2215,3 @@ SceneRoots:
   - {fileID: 1745619520}
   - {fileID: 547392322}
   - {fileID: 1409188166}
-  - {fileID: 1959272994}
