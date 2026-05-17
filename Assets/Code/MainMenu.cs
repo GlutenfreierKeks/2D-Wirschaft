@@ -181,6 +181,15 @@ public class MainMenu : MonoBehaviourPunCallbacks
             return;
         }
 
+        // Fix: Make sure canvas is always overlay so camera FOV doesn't clip/hide it
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        CanvasScaler scaler = canvas.GetComponent<CanvasScaler>();
+        if (scaler != null)
+        {
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+        }
+
         HideOriginalUi();
         EnsureBackdrop(canvas.transform, "MainMenuBackdrop");
         EnsureTitle(canvas.transform, "MainMenuTitle", "ISLES OF WEALTH", new Vector2(0f, -60f));

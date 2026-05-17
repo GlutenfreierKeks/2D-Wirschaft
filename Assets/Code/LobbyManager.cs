@@ -211,6 +211,15 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null) return;
 
+        // Fix: Make sure canvas is always overlay so camera FOV doesn't clip/hide it
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        CanvasScaler scaler = canvas.GetComponent<CanvasScaler>();
+        if (scaler != null)
+        {
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+        }
+
         RemoveExistingRuntimeLayout(canvas.transform, "LobbyRuntimeLayout", "LobbyBackdrop");
         CreateBackdrop(canvas.transform);
 
