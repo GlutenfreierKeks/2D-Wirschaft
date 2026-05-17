@@ -188,57 +188,231 @@ public class IslandManager : MonoBehaviour
             foreach (Vector2 hole in holesToFill) occupiedCells.Add(hole);
         }
 
+        // 1. Add logical land cells
         foreach (Vector2 cell in occupiedCells) allLandCells.Add(cell);
 
+        // Distribute resources based on logical occupiedCells
         DistributeResources(occupiedCells, type);
 
-        // Build mesh
+        // 2. Visuell vergrößerte Kacheln für weichen Übergang (3 zusätzliche Kachel-Ebenen hinzufügen für tieferen Overlap)
+        HashSet<Vector2> visualCells = new HashSet<Vector2>(occupiedCells);
+        HashSet<Vector2> layer1 = new HashSet<Vector2>();
+        foreach (Vector2 cell in visualCells)
+        {
+            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+            {
+                if (!visualCells.Contains(n)) layer1.Add(n);
+            }
+        }
+        foreach (var c in layer1) visualCells.Add(c);
+
+        HashSet<Vector2> layer2 = new HashSet<Vector2>();
+        foreach (Vector2 cell in layer1)
+        {
+            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+            {
+                if (!visualCells.Contains(n)) layer2.Add(n);
+            }
+        }
+        foreach (var c in layer2) visualCells.Add(c);
+
+        HashSet<Vector2> layer3 = new HashSet<Vector2>();
+        foreach (Vector2 cell in layer2)
+        {
+            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+            {
+                if (!visualCells.Contains(n)) layer3.Add(n);
+            }
+        }
+        foreach (var c in layer3) visualCells.Add(c);
+
+        // 3. Abstand zum Ozean für weiches Alpha-Blending berechnen (BFS)
+        Dictionary<Vector2, int> distToOcean = new Dictionary<Vector2, int>();
+        Queue<Vector2> queue = new Queue<Vector2>();
+
+        foreach (Vector2 cell in visualCells)
+        {
+            bool isOuterBorder = false;
+            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
+            {
+                if (!visualCells.Contains(n))
+                {
+                    isOuterBorder = true;
+                    break;
+                }
+            }
+            if (isOuterBorder)
+            {
+                distToOcean[cell] = 1;
+                queue.Enqueue(cell);
+            }
+        }
+
+        while (queue.Count > 0)
+        {
+            Vector2 curr = queue.Dequeue();
+            int curDist = distToOcean[curr];
+            foreach (Vector2 n in new Vector2[] { curr + Vector2.up, curr + Vector2.down, curr + Vector2.left, curr + Vector2.right })
+            {
+                if (visualCells.Contains(n) && !distToOcean.ContainsKey(n))
+                {
+                    distToOcean[n] = curDist + 1;
+                    queue.Enqueue(n);
+                }
+            }
+        }
+
+        // 4. Bounding Box für UV-Koordinaten berechnen
+        float minX = float.MaxValue, maxX = float.MinValue;
+        float minY = float.MaxValue, maxY = float.MinValue;
+        foreach (Vector2 cell in visualCells)
+        {
+            if (cell.x < minX) minX = cell.x;
+            if (cell.x > maxX) maxX = cell.x;
+            if (cell.y < minY) minY = cell.y;
+            if (cell.y > maxY) maxY = cell.y;
+        }
+
+        float boundingWidth = (maxX - minX) + 1f;
+        float boundingHeight = (maxY - minY) + 1f;
+
+        // Build visual mesh
         GameObject islandObj = new GameObject($"Island_{type}_{startPos}");
         islandObj.transform.SetParent(transform);
-        islandObj.transform.position = new Vector3(0, 0, -0.1f);
+        // Weisen jedem Insel-Mesh eine geringfügig unterschiedliche Z-Ebene zu (transform.childCount),
+        // damit sich überlappende Inseln ohne Z-Fighting perfekt rendern und mischen lassen!
+        float zOffset = -0.1f - (transform.childCount * 0.005f);
+        islandObj.transform.position = new Vector3(0, 0, zOffset);
 
         MeshFilter meshFilter = islandObj.AddComponent<MeshFilter>();
         MeshRenderer meshRenderer = islandObj.AddComponent<MeshRenderer>();
-        meshRenderer.material = islandMaterial;
+
+        // Material-Liste mit allen Textur-Variationen für dieses Biom laden
+        List<string> texNames = GetTextureNamesForBiome(type);
+        List<Material> materials = new List<Material>();
+        foreach (string tName in texNames)
+        {
+            Texture2D texture = Resources.Load<Texture2D>($"Textures/{tName}");
+            Material mat = new Material(Shader.Find("Sprites/Default"));
+            if (texture != null)
+            {
+                mat.mainTexture = texture;
+            }
+            else
+            {
+                Debug.LogError($"[IslandManager] Hintergrund-Textur nicht gefunden: Textures/{tName}");
+            }
+            materials.Add(mat);
+        }
+        meshRenderer.materials = materials.ToArray();
 
         List<Vector3> vertices = new List<Vector3>();
-        List<int> triangles = new List<int>();
         List<Color> colors = new List<Color>();
+        List<Vector2> uvs = new List<Vector2>();
+        
+        // Liste von Dreiecken für jedes Submesh (jede Textur-Variation)
+        List<List<int>> submeshTriangles = new List<List<int>>();
+        for (int i = 0; i < texNames.Count; i++) submeshTriangles.Add(new List<int>());
+        
         int vIndex = 0;
 
-        Color centerColor = Color.green;
-        Color borderColor = Color.yellow;
-
-        switch (type)
+        foreach (Vector2 cell in visualCells)
         {
-            case IslandType.Desert: centerColor = new Color(0.95f, 0.85f, 0.5f); borderColor = new Color(0.8f, 0.7f, 0.4f); break;
-            case IslandType.Jungle: centerColor = new Color(0.1f, 0.4f, 0.1f); borderColor = new Color(0.3f, 0.5f, 0.2f); break;
-            case IslandType.Stone:  centerColor = new Color(0.5f, 0.5f, 0.5f); borderColor = new Color(0.3f, 0.3f, 0.3f); break;
-        }
+            // Alpha-Wert basierend auf Abstand zum Ozean
+            float alpha = 1.0f;
+            if (distToOcean.TryGetValue(cell, out int d))
+            {
+                // Über 4 Kacheln extrem weich ausblenden
+                alpha = Mathf.Clamp01((d - 1) / 4.0f);
+            }
 
-        foreach (Vector2 cell in occupiedCells)
-        {
-            bool isBorder = false;
-            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
-                if (!occupiedCells.Contains(n)) { isBorder = true; break; }
+            Color cellColor = new Color(1f, 1f, 1f, alpha);
 
-            Color cellColor = isBorder ? borderColor : centerColor;
-            vertices.Add(new Vector3(cell.x - 0.5f, cell.y - 0.5f, 0));
-            vertices.Add(new Vector3(cell.x - 0.5f, cell.y + 0.5f, 0));
-            vertices.Add(new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0));
-            vertices.Add(new Vector3(cell.x + 0.5f, cell.y - 0.5f, 0));
+            // 4 Eckpunkte des Quads
+            Vector3 v0 = new Vector3(cell.x - 0.5f, cell.y - 0.5f, 0f);
+            Vector3 v1 = new Vector3(cell.x - 0.5f, cell.y + 0.5f, 0f);
+            Vector3 v2 = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
+            Vector3 v3 = new Vector3(cell.x + 0.5f, cell.y - 0.5f, 0f);
+
+            vertices.Add(v0);
+            vertices.Add(v1);
+            vertices.Add(v2);
+            vertices.Add(v3);
+
+            // UV-Koordinaten basierend auf absoluter Position für perfektes Kachel-Tiling (1 Texturbild alle 2x2 Plots)
+            float tileSize = 2f;
+            uvs.Add(new Vector2(v0.x / tileSize, v0.y / tileSize));
+            uvs.Add(new Vector2(v1.x / tileSize, v1.y / tileSize));
+            uvs.Add(new Vector2(v2.x / tileSize, v2.y / tileSize));
+            uvs.Add(new Vector2(v3.x / tileSize, v3.y / tileSize));
+
             for (int j = 0; j < 4; j++) colors.Add(cellColor);
-            triangles.Add(vIndex); triangles.Add(vIndex + 1); triangles.Add(vIndex + 2);
-            triangles.Add(vIndex); triangles.Add(vIndex + 2); triangles.Add(vIndex + 3);
+
+            // Kachel zufällig einer der Textur-Variationen (Submeshes) zuweisen
+            // Wir verwenden einen deterministischen Hash der Kachel-Position, damit das Muster stabil bleibt und nicht flimmert!
+            int hash = Mathf.Abs((int)(cell.x * 73856093) ^ (int)(cell.y * 19349663));
+            int submeshIndex = hash % texNames.Count;
+
+            submeshTriangles[submeshIndex].Add(vIndex);
+            submeshTriangles[submeshIndex].Add(vIndex + 1);
+            submeshTriangles[submeshIndex].Add(vIndex + 2);
+            submeshTriangles[submeshIndex].Add(vIndex);
+            submeshTriangles[submeshIndex].Add(vIndex + 2);
+            submeshTriangles[submeshIndex].Add(vIndex + 3);
             vIndex += 4;
         }
 
         Mesh mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
         mesh.vertices = vertices.ToArray();
-        mesh.triangles = triangles.ToArray();
+        mesh.uv = uvs.ToArray();
         mesh.colors = colors.ToArray();
+        mesh.subMeshCount = texNames.Count;
+        
+        for (int i = 0; i < texNames.Count; i++)
+        {
+            mesh.SetTriangles(submeshTriangles[i].ToArray(), i);
+        }
+        
         mesh.RecalculateNormals();
         meshFilter.mesh = mesh;
+    }
+
+    private List<string> GetTextureNamesForBiome(IslandType type)
+    {
+        List<string> texNames = new List<string>();
+        switch (type)
+        {
+            case IslandType.Plains:
+                texNames.Add("Plains_Background");
+                texNames.Add("Plains_Background2");
+                texNames.Add("Plains_Background3");
+                texNames.Add("Plains_Background4");
+                texNames.Add("Plains_Background5");
+                break;
+            case IslandType.Desert:
+                texNames.Add("Wueste_Background");
+                texNames.Add("Wueste_Background1");
+                texNames.Add("Wueste_Background2");
+                texNames.Add("Wueste_Background3");
+                texNames.Add("Wueste_Background5");
+                break;
+            case IslandType.Jungle:
+                texNames.Add("Jungle_Background");
+                texNames.Add("Jungle_Background1");
+                texNames.Add("Jungle_Background2");
+                texNames.Add("Jungle_Background3");
+                texNames.Add("Jungle_Background4");
+                texNames.Add("Jungle_Background5");
+                break;
+            case IslandType.Stone:
+                texNames.Add("Stone_Background");
+                texNames.Add("Stone_Background2");
+                texNames.Add("Stone_Background3");
+                texNames.Add("Stone_Background4");
+                texNames.Add("Stone_Background5");
+                break;
+        }
+        return texNames;
     }
 
     // -------------------------------------------------------------------------

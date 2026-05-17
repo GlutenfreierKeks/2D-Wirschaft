@@ -80,9 +80,30 @@ public class FogProjector : MonoBehaviour
 
         if (fogMaterial != null)
         {
-            fogQuad.GetComponent<Renderer>().material = fogMaterial;
-            fogQuad.GetComponent<Renderer>().material.SetTexture("_MaskTex", maskTexture);
-            fogQuad.GetComponent<Renderer>().material.SetTexture("_ExploredTex", exploredTexture);
+            Material instancedMat = fogQuad.GetComponent<Renderer>().material = fogMaterial;
+            instancedMat.SetTexture("_MaskTex", maskTexture);
+            instancedMat.SetTexture("_ExploredTex", exploredTexture);
+
+            // Dynamically load and assign Fog1 and Fog2 textures from Resources
+            Texture2D fog1 = Resources.Load<Texture2D>("Textures/Fog1");
+            Texture2D fog2 = Resources.Load<Texture2D>("Textures/Fog2");
+            if (fog1 != null)
+            {
+                instancedMat.SetTexture("_MainTex", fog1);
+            }
+            else
+            {
+                Debug.LogWarning("[FogProjector] Fog1 texture not found in Resources/Textures/");
+            }
+
+            if (fog2 != null)
+            {
+                instancedMat.SetTexture("_DetailTex", fog2);
+            }
+            else
+            {
+                Debug.LogWarning("[FogProjector] Fog2 texture not found in Resources/Textures/");
+            }
         }
     }
 
