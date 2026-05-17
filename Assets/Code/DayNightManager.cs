@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Photon.Pun;
 
 public class DayNightManager : MonoBehaviour
 {
@@ -27,8 +28,17 @@ public class DayNightManager : MonoBehaviour
 
     private void Start()
     {
+        ApplyLobbySettings();
         CreateNightOverlay();
         CreateClockUI();
+    }
+
+    private void ApplyLobbySettings()
+    {
+        if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.DayLength, out object durationObj))
+        {
+            cycleDuration = System.Convert.ToSingle(durationObj);
+        }
     }
 
     private void Update()

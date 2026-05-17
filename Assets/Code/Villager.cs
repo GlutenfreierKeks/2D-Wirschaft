@@ -365,7 +365,14 @@ public class Villager : MonoBehaviour
             }
             else if (assignedBuilding.data.isBarracks)
             {
-                PromoteToSoldier();
+                if (assignedBuilding.IsConstructed())
+                {
+                    PromoteToSoldier();
+                }
+                else
+                {
+                    assignedBuilding.NotifyWorkerArrived(this);
+                }
             }
             else
             {
@@ -407,6 +414,10 @@ public class Villager : MonoBehaviour
             Soldier s = gameObject.AddComponent<Soldier>();
             s.soldierType = (SoldierType)Random.Range(0, 4);
             s.team = Team.Player;
+            if (Photon.Pun.PhotonNetwork.LocalPlayer != null)
+            {
+                s.ownerActorNumber = Photon.Pun.PhotonNetwork.LocalPlayer.ActorNumber;
+            }
             
             Destroy(this); // Remove Villager script
         }
@@ -423,6 +434,7 @@ public class Villager : MonoBehaviour
         // Simple selection: Click to tell them to find work (only free villagers)
         if (role == Role.Villager && !isOperatingWorker)
         {
+            AudioManager.Instance?.PlaySelectSound();
             FindWork();
         }
     }
@@ -495,6 +507,7 @@ public class Villager : MonoBehaviour
         // Add a simple translation over time
         textGO.AddComponent<SelfMovingText>();
         
+        NotificationManager.Instance?.Notify("villager_death", "Ein Villager ist gestorben.", 4f);
         Destroy(textGO, 2f);
         
         if (assignedBuilding != null)
@@ -528,6 +541,7 @@ public class Villager : MonoBehaviour
         // Float upwards
         textGO.AddComponent<SelfMovingText>();
         
+        NotificationManager.Instance?.Notify("villager_death", "Ein Villager ist gestorben.", 4f);
         Destroy(textGO, 2.5f);
 
         // Remove from work

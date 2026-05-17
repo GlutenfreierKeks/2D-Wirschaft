@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Photon.Pun;
 
 public enum IslandType { Plains, Desert, Jungle, Stone }
 public enum ResourceType { Wood, Stone, Iron, Gold, Animal, Fruit, Wheat, None }
@@ -68,6 +69,8 @@ public class IslandManager : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
+        ApplyLobbySettings();
+
         allLandCells.Clear();
         resourceNodes.Clear();
         resourceNodeRenderers.Clear();
@@ -78,6 +81,40 @@ public class IslandManager : MonoBehaviour
             tex.SetPixel(0, 0, Color.white);
             tex.Apply();
             defaultNodeSprite = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1.0f);
+        }
+    }
+
+    private void ApplyLobbySettings()
+    {
+        if (!PhotonNetwork.InRoom)
+        {
+            return;
+        }
+
+        if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.WorldSize, out object worldSizeObj))
+        {
+            string preset = worldSizeObj.ToString();
+            switch (preset)
+            {
+                case "Kompakt":
+                    islandCount = 4;
+                    blocksPerIsland = 700;
+                    minDistanceBetweenIslands = 360f;
+                    mapMargin = 80f;
+                    break;
+                case "Gross":
+                    islandCount = 8;
+                    blocksPerIsland = 1350;
+                    minDistanceBetweenIslands = 620f;
+                    mapMargin = 120f;
+                    break;
+                default:
+                    islandCount = 6;
+                    blocksPerIsland = 1000;
+                    minDistanceBetweenIslands = 500f;
+                    mapMargin = 100f;
+                    break;
+            }
         }
     }
 
