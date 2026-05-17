@@ -2,13 +2,14 @@ Shader "Custom/CloudFogShader"
 {
     Properties
     {
-        _MainTex ("Cloud Texture", 2D) = "white" {}
+        _MainTex ("Cloud Texture (Fog1)", 2D) = "white" {}
+        _DetailTex ("Detail Texture (Fog2)", 2D) = "white" {}
         _MaskTex ("Current Visibility Mask", 2D) = "white" {}
         _ExploredTex ("Explored Mask", 2D) = "black" {}
-        _CloudColor ("Cloud Color", Color) = (0.8, 0.8, 0.8, 1)
-        _ShroudColor ("Shroud Color", Color) = (0.4, 0.4, 0.4, 0.7)
-        _Speed ("Speed", Float) = 0.5
-        _Scale ("Scale", Float) = 2.0
+        _CloudColor ("Cloud Color", Color) = (0.9, 0.9, 0.9, 1)
+        _ShroudColor ("Shroud Color", Color) = (0.2, 0.2, 0.2, 0.5)
+        _Speed ("Speed", Float) = 0.05
+        _Scale ("Scale", Float) = 15.0
     }
     SubShader
     {
@@ -27,6 +28,7 @@ Shader "Custom/CloudFogShader"
             struct v2f { float2 uv : TEXCOORD0; float4 vertex : SV_POSITION; };
 
             sampler2D _MainTex;
+            sampler2D _DetailTex;
             sampler2D _MaskTex;
             sampler2D _ExploredTex;
             fixed4 _CloudColor;
@@ -43,17 +45,38 @@ Shader "Custom/CloudFogShader"
 
             fixed4 frag (v2f i) : SV_Target
             {
+                // Sample exploration / visibility masks (naturally smooth due to bilinear filtering)
                 float visible = tex2D(_MaskTex, i.uv).r;
                 float explored = tex2D(_ExploredTex, i.uv).r;
                 
-                // If currently visible, it's clear (alpha 0)
-                if (visible > 0.5) return fixed4(0,0,0,0);
+                // Calculate scrolling UVs for natural cloud movements
+                float2 uvMain = i.uv * _Scale + float2(_Time.y * _Speed, _Time.y * _Speed * 0.4);
+                float2 uvDetail = i.uv * _Scale * 1.6 + float2(-_Time.y * _Speed * 0.7, _Time.y * _Speed * 0.5);
                 
-                // If explored but not visible, show shroud (semi-transparent gray)
-                if (explored > 0.5) return _ShroudColor;
+                // Sample both fog textures
+                fixed4 colMain = tex2D(_MainTex, uvMain);
+                fixed4 colDetail = tex2D(_DetailTex, uvDetail);
                 
-                // Otherwise show full clouds
-                return _CloudColor;
+                // Combine textures for rich, multi-layered cloud density (multiply and amplify)
+                float density = colMain.r * colDetail.r * 2.0;
+                density = saturate(density);
+                
+                // Unexplored areas must be completely opaque (alpha = 1.0) so the player cannot see through the fog!
+                // We modulate the color slightly based on density to show gorgeous dynamic cloud shapes.
+                float unexploredAlpha = lerp(0.98, 1.0, density); // Opaque base
+                fixed4 unexploredCol = fixed4(_CloudColor.rgb * (0.85 + 0.15 * density), unexploredAlpha);
+                
+                // Explored-but-invisible shroud is semi-transparent so the player can see the terrain, but with cloud textures.
+                float shroudAlpha = _ShroudColor.a * lerp(0.4, 1.0, density);
+                fixed4 shroudCol = fixed4(_ShroudColor.rgb * (0.8 + 0.2 * density), shroudAlpha);
+                
+                // Smooth interpolation between unexplored clouds and explored shroud
+                fixed4 baseCloud = lerp(unexploredCol, shroudCol, saturate(explored));
+                
+                // Smoothly fade out fog to transparent inside the visible sight range
+                fixed4 finalCol = lerp(baseCloud, fixed4(0, 0, 0, 0), saturate(visible));
+                
+                return finalCol;
             }
             ENDCG
         }
