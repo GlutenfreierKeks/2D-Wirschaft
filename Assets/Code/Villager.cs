@@ -13,6 +13,10 @@ public class Villager : MonoBehaviour
     
     [HideInInspector]
     public bool isOperatingWorker = false;
+    [HideInInspector]
+    public float stamina = 100f;
+    [HideInInspector]
+    public float mood = 100f; // Villager Mood: starts at 100%
     private float workActionCooldown = 0f;
 
     private SpriteRenderer sr;
@@ -31,9 +35,37 @@ public class Villager : MonoBehaviour
 
     private void Update()
     {
+        // Erhöhte Sterberate für alle bei schlechtem Mood
+        if (VillagerManager.Instance != null)
+        {
+            float gMood = VillagerManager.Instance.globalMood;
+            if (gMood < 45f)
+            {
+                // Sickness chance: higher when mood is closer to 0 (balanced to not be too extreme)
+                float sicknessIntensity = 1f - (gMood / 45f); // 0.0 to 1.0
+                if (Random.value < Time.deltaTime * 0.00012f * sicknessIntensity)
+                {
+                    DieOfSickness();
+                    return;
+                }
+            }
+
+            // Food availability mood scaling
+            float foodEffect = VillagerManager.Instance.GetFoodMoodEffect();
+            if (foodEffect > 0f)
+                mood = Mathf.Min(100f, mood + foodEffect * Time.deltaTime);
+            else if (foodEffect < 0f)
+                mood = Mathf.Max(0f, mood + foodEffect * Time.deltaTime);
+        }
+
         if (isMoving)
         {
-            transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * Time.deltaTime);
+            // Apply mood visual modifier to move speed: happy runs fast, sad walks slowly!
+            float speedMod = 1.0f;
+            if (mood > 80f) speedMod = 1.25f;
+            else if (mood < 30f) speedMod = 0.7f;
+
+            transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * speedMod * Time.deltaTime);
             
             if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
             {
@@ -44,25 +76,127 @@ public class Villager : MonoBehaviour
         {
             if (isOperatingWorker && assignedBuilding != null)
             {
-                // Decrease cooldown
-                if (workActionCooldown > 0f)
+                float hour = DayNightManager.Instance != null ? DayNightManager.Instance.currentHour : 12f;
+                bool isWorkTime = assignedBuilding.IsCurrentlyWorkTime();
+
+                if (isWorkTime)
                 {
-                    workActionCooldown -= Time.deltaTime;
+                    // WORK TIME: stay close, work, consume stamina if night
+                    SetVisibility(true);
+
+                    // Restore color tint
+                    if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 1f);
+
+                    // Stamina drain if forced to work at night
+                    if (hour >= 18f || hour < 6f)
+                    {
+                        stamina = Mathf.Max(0f, stamina - Time.deltaTime * 2.0f);
+                        if (stamina <= 0f && Random.value < Time.deltaTime * 0.02f)
+                        {
+                            DieOfExhaustion();
+                            return;
+                        }
+                    }
+
+                    // VERY SLOW Mood changes during active work hours:
+                    if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Leisure)
+                    {
+                        // Leisure shift slowly increases mood
+                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.1f);
+                    }
+                    else if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.DayOnly)
+                    {
+                        // Regular day shift is mildly tiring: decays very slowly to a baseline of 25%
+                        mood = Mathf.Max(25f, mood - Time.deltaTime * 0.025f);
+                    }
+                    else if (assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Continuous)
+                    {
+                        // 24/7 night-shift work decays mood slowly but surely to 0%
+                        mood = Mathf.Max(0f, mood - Time.deltaTime * 0.15f);
+                    }
+
+                    // Active working actions
+                    if (workActionCooldown > 0f)
+                    {
+                        workActionCooldown -= Time.deltaTime;
+                    }
+                    else
+                    {
+                        PerformWorkAction(0.25f); // Tight work inside
+                    }
+
+                    // Occasionally work animation
+                    if (Random.value < 0.005f)
+                    {
+                        StartCoroutine(WorkAnimationRoutine());
+                    }
                 }
                 else
                 {
-                    // Choose a new spot to "work" at
-                    PerformWorkAction();
-                }
+                    // NOT WORK TIME: Either sleep or leisure
+                    bool isLeisureTime = hour >= 12f && hour < 15f && assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Leisure;
 
-                // Occasionally hop to simulate working
-                if (Random.value < 0.005f)
-                {
-                    StartCoroutine(HopRoutine());
+                    if (isLeisureTime)
+                    {
+                        // LEISURE TIME: wander freely and recover stamina & mood slowly
+                        SetVisibility(true);
+                        
+                        // Restore color tint
+                        if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 1f);
+
+                        stamina = Mathf.Min(100f, stamina + Time.deltaTime * 3.0f);
+                        mood = Mathf.Min(100f, mood + Time.deltaTime * 0.22f); // Slow leisure recovery
+
+                        if (workActionCooldown > 0f)
+                        {
+                            workActionCooldown -= Time.deltaTime;
+                        }
+                        else
+                        {
+                            PerformWorkAction(4.5f); // Wide stroll around building
+                        }
+                    }
+                    else
+                    {
+                        // SLEEP TIME: go to nearest house to sleep, recover stamina & mood slowly
+                        BuildingInstance sleepHouse = FindSleepHouse();
+
+                        if (sleepHouse != null)
+                        {
+                            float dist = Vector2.Distance(transform.position, sleepHouse.transform.position);
+                            if (dist < 0.4f)
+                            {
+                                // Inside sleeping!
+                                SetVisibility(false);
+                                stamina = Mathf.Min(100f, stamina + Time.deltaTime * 5.0f);
+                                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.18f); // Sleep slowly recovers mood
+                            }
+                            else
+                            {
+                                // Walk to sleep house
+                                SetVisibility(true);
+                                targetPosition = sleepHouse.transform.position;
+                                isMoving = true;
+                            }
+                        }
+                        else
+                        {
+                            // Sleep outside near building center (fade transparency)
+                            SetVisibility(true);
+                            if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 0.4f); // semi-transparent sleep
+                            stamina = Mathf.Min(100f, stamina + Time.deltaTime * 3.5f);
+                            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.08f); // sleeping outside is less comfortable
+                        }
+                    }
                 }
             }
             else if (assignedBuilding == null)
             {
+                // Unemployed: ensure visible and recover stamina & mood slowly
+                SetVisibility(true);
+                stamina = Mathf.Min(100f, stamina + Time.deltaTime * 1.5f);
+                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.06f); // happy just wandering slowly
+
                 // Just idle wander, much less frequent
                 if (Random.value < 0.002f) Wander();
             }
@@ -83,7 +217,8 @@ public class Villager : MonoBehaviour
     {
         isOperatingWorker = true;
         assignedBuilding = building;
-        targetPosition = (Vector2)building.transform.position + Random.insideUnitCircle * 1.2f;
+        // Keep them strictly inside the building's visual boundaries (radius 0.25f)
+        targetPosition = (Vector2)building.transform.position + Random.insideUnitCircle * 0.25f;
         isMoving = true;
         workActionCooldown = Random.Range(3f, 7f);
         
@@ -95,10 +230,13 @@ public class Villager : MonoBehaviour
 
     private void PerformWorkAction()
     {
+        PerformWorkAction(0.25f);
+    }
+
+    private void PerformWorkAction(float radius)
+    {
         if (assignedBuilding == null) return;
         
-        // Find a random spot very close to the building's operating stand
-        float radius = 1.0f;
         targetPosition = (Vector2)assignedBuilding.transform.position + Random.insideUnitCircle * radius;
         isMoving = true;
         
@@ -106,23 +244,38 @@ public class Villager : MonoBehaviour
         workActionCooldown = Random.Range(3f, 7f);
     }
 
-    private IEnumerator HopRoutine()
+    private IEnumerator WorkAnimationRoutine()
     {
         float elapsed = 0f;
-        float duration = 0.3f;
-        float height = 0.2f;
+        float duration = 1.0f; // 1 second of active working action
         Vector3 basePos = transform.position;
         
         while (elapsed < duration)
         {
-            if (isMoving) yield break; // Cancel hop if they started moving
+            if (isMoving) 
+            {
+                transform.rotation = Quaternion.identity;
+                yield break;
+            }
             elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            float yOffset = Mathf.Sin(t * Mathf.PI) * height;
+            
+            // 1. Shaking left and right (tilting)
+            float tiltAngle = Mathf.Sin(elapsed * 25f) * 12f; // Fast tilt
+            transform.rotation = Quaternion.Euler(0, 0, tiltAngle);
+            
+            // 2. Tiny bounce up and down
+            float yOffset = Mathf.Abs(Mathf.Sin(elapsed * 12f)) * 0.15f;
             transform.position = new Vector3(basePos.x, basePos.y + yOffset, basePos.z);
+            
             yield return null;
         }
-        if (!isMoving) transform.position = basePos;
+        
+        // Reset to normal state
+        if (!isMoving)
+        {
+            transform.position = basePos;
+            transform.rotation = Quaternion.identity;
+        }
     }
 
     private void Wander()
@@ -235,6 +388,8 @@ public class Villager : MonoBehaviour
             }
 
             // Transform into Soldier
+            transform.rotation = Quaternion.identity; // Reset rotation!
+            SetVisibility(true); // Ensure visible!
             Soldier s = gameObject.AddComponent<Soldier>();
             s.soldierType = (SoldierType)Random.Range(0, 4);
             s.team = Team.Player;
@@ -264,11 +419,116 @@ public class Villager : MonoBehaviour
         assignedBuilding = null;
         isMoving = false;
         role = Role.Villager; // Reset role back to Villager so they can find new jobs
+        transform.rotation = Quaternion.identity; // Reset rotation!
+        SetVisibility(true); // Ensure visible!
         
         // Reset color to normal white
         if (sr != null) sr.color = Color.white;
         else if (rend != null) rend.material.color = Color.white;
         
         Wander();
+    }
+
+    private void SetVisibility(bool visible)
+    {
+        if (sr != null) sr.enabled = visible;
+        else if (rend != null) rend.enabled = visible;
+    }
+
+    private BuildingInstance FindSleepHouse()
+    {
+        BuildingInstance[] buildings = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        BuildingInstance nearestHouse = null;
+        float minDist = float.MaxValue;
+        
+        foreach (var b in buildings)
+        {
+            if (b.IsConstructed() && (b.data.productionResourceId == "bevolkerung" || b.name.Contains("Haus") || b.name.Contains("Warehouse") || b.name.Contains("MyWarehouse")))
+            {
+                float dist = Vector2.Distance(transform.position, b.transform.position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearestHouse = b;
+                }
+            }
+        }
+        return nearestHouse;
+    }
+
+    private void DieOfExhaustion()
+    {
+        Debug.LogWarning($"[Villager] Ein Dorfbewohner ist vor Erschöpfung gestorben!");
+        
+        // Spawn a cute floating warning text above them!
+        GameObject textGO = new GameObject("ExhaustionText");
+        textGO.transform.position = transform.position + Vector3.up * 0.5f;
+        var textMesh = textGO.AddComponent<TextMesh>();
+        textMesh.text = "☠ Erschöpft gestorben!";
+        textMesh.fontSize = 18;
+        textMesh.characterSize = 0.08f;
+        textMesh.color = Color.red;
+        textMesh.alignment = TextAlignment.Center;
+        textMesh.anchor = TextAnchor.MiddleCenter;
+        
+        // Add a simple translation over time
+        textGO.AddComponent<SelfMovingText>();
+        
+        Destroy(textGO, 2f);
+        
+        if (assignedBuilding != null)
+        {
+            assignedBuilding.RemoveOperatingWorker(this);
+        }
+        
+        if (VillagerManager.Instance != null)
+        {
+            VillagerManager.Instance.NotifyVillagerConverted(this);
+        }
+        
+        Destroy(gameObject);
+    }
+
+    private void DieOfSickness()
+    {
+        Debug.LogWarning($"[Villager] {gameObject.name} ist an Stress/Krankheit gestorben!");
+        
+        // Spawn a cute floating warning text above them!
+        GameObject textGO = new GameObject("SicknessText");
+        textGO.transform.position = transform.position + Vector3.up * 0.5f;
+        var textMesh = textGO.AddComponent<TextMesh>();
+        textMesh.text = "☠ An Stress gestorben!";
+        textMesh.fontSize = 18;
+        textMesh.characterSize = 0.08f;
+        textMesh.color = new Color(0.9f, 0.1f, 0.1f); // red
+        textMesh.alignment = TextAlignment.Center;
+        textMesh.anchor = TextAnchor.MiddleCenter;
+        
+        // Float upwards
+        textGO.AddComponent<SelfMovingText>();
+        
+        Destroy(textGO, 2.5f);
+
+        // Remove from work
+        if (assignedBuilding != null)
+        {
+            assignedBuilding.RemoveOperatingWorker(this);
+        }
+        
+        if (VillagerManager.Instance != null)
+        {
+            VillagerManager.Instance.NotifyVillagerConverted(this);
+        }
+        
+        Destroy(gameObject);
+    }
+}
+
+// Tiny helper to float the death text upward
+public class SelfMovingText : MonoBehaviour
+{
+    private void Update()
+    {
+        transform.Translate(Vector3.up * Time.deltaTime * 0.6f);
     }
 }

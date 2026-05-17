@@ -8,9 +8,14 @@ public class VillagerManager : MonoBehaviour
     [Header("Settings")]
     public GameObject villagerPrefab;
     public float wanderRadius = 10f;
+    [HideInInspector]
+    public float globalMood = 100f;
 
     private List<Villager> activeVillagers = new List<Villager>();
     private List<BuildingInstance> pendingBuildings = new List<BuildingInstance>();
+    private float currentFoodMoodEffect = 0f;
+    private float wheatConsumedAccumulator = 0f;
+    private float luxuryConsumedAccumulator = 0f;
 
     private void Awake()
     {
@@ -76,6 +81,7 @@ public class VillagerManager : MonoBehaviour
 
     private void Update()
     {
+        UpdateFoodEffect();
         UpdateHUD();
 
         if (pendingBuildings.Count > 0)
@@ -118,6 +124,21 @@ public class VillagerManager : MonoBehaviour
         Player_UI.Instance.SetResource("dorfbewohner", freeVillagers);
         Player_UI.Instance.SetResource("arbeiter", workers);
         Player_UI.Instance.SetResource("bevolkerung", totalVillagers + workers);
+
+        // Calculate global mood based on all active villagers
+        float totalMood = 0f;
+        int moodCount = 0;
+        foreach (var v in activeVillagers)
+        {
+            if (v != null)
+            {
+                totalMood += v.mood;
+                moodCount++;
+            }
+        }
+        globalMood = moodCount > 0 ? (totalMood / moodCount) : 100f;
+        int avgMood = Mathf.RoundToInt(globalMood);
+        Player_UI.Instance.SetResource("stimmung", avgMood);
     }
 
     public Villager GetAvailableVillager()
@@ -190,6 +211,87 @@ public class VillagerManager : MonoBehaviour
             Villager v = activeVillagers[activeVillagers.Count - 1];
             activeVillagers.RemoveAt(activeVillagers.Count - 1);
             Destroy(v.gameObject);
+        }
+    }
+
+    public float GetFoodMoodEffect() => currentFoodMoodEffect;
+
+    private void UpdateFoodEffect()
+    {
+        if (Player_UI.Instance == null) return;
+
+        int fruits = Player_UI.Instance.GetResource("fruechte");
+        int meat = Player_UI.Instance.GetResource("fleisch");
+        int weizen = Player_UI.Instance.GetResource("weizen");
+        int pop = Mathf.Max(1, activeVillagers.Count);
+        
+        // 1. Wheat reserve levels (Primary food: crisis if low)
+        float wheatRatio = (float)weizen / pop;
+        float wheatEffect = 0f;
+        if (weizen == 0)
+        {
+            // Wheat fully depleted: severe starvation!
+            wheatEffect = -0.15f;
+        }
+        else if (wheatRatio < 0.5f)
+        {
+            // Low wheat reserve: strong shortage panic!
+            wheatEffect = -0.08f;
+        }
+
+        // 2. Dynamic Fruits & Meat reserve scales (Feasting: consume more when abundant, granting stronger boosts!)
+        float fruitsRatio = (float)fruits / pop;
+        float meatRatio = (float)meat / pop;
+        
+        float fruitsConsMod = fruits > 0 ? Mathf.Clamp(fruitsRatio, 0.2f, 4.0f) : 0f;
+        float meatConsMod = meat > 0 ? Mathf.Clamp(meatRatio, 0.2f, 4.0f) : 0f;
+        
+        float luxuryEffect = 0f;
+        if (fruits > 0)
+        {
+            luxuryEffect += Mathf.Min(0.12f, fruitsConsMod * 0.03f); // Abundant fruits grant massive boost!
+        }
+        if (meat > 0)
+        {
+            luxuryEffect += Mathf.Min(0.12f, meatConsMod * 0.03f); // Abundant meat grants massive boost!
+        }
+
+        // Combine effects and clamp
+        currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.15f, 0.18f);
+
+        // 3. Proportional consumption for staple (wheat): ALWAYS 1 unit per villager per 60 seconds (1 minute)
+        wheatConsumedAccumulator += pop * (Time.deltaTime / 60f);
+        if (wheatConsumedAccumulator >= 1f)
+        {
+            int toConsume = Mathf.FloorToInt(wheatConsumedAccumulator);
+            wheatConsumedAccumulator -= toConsume;
+            
+            if (weizen >= toConsume)
+            {
+                Player_UI.Instance.AddResource("weizen", -toConsume);
+            }
+            else
+            {
+                if (weizen > 0) Player_UI.Instance.AddResource("weizen", -weizen);
+            }
+        }
+
+        // 4. Dynamic luxury consumption (fruits & meat): consume more when abundant, up to 4x base rate!
+        luxuryConsumedAccumulator += pop * (Time.deltaTime / 60f);
+        if (luxuryConsumedAccumulator >= 1f)
+        {
+            int baseToConsume = Mathf.FloorToInt(luxuryConsumedAccumulator);
+            luxuryConsumedAccumulator -= baseToConsume;
+            
+            // Scaled consumption based on abundance
+            int targetFruits = fruits > 0 ? Mathf.Max(1, Mathf.RoundToInt(baseToConsume * fruitsConsMod)) : 0;
+            int targetMeat = meat > 0 ? Mathf.Max(1, Mathf.RoundToInt(baseToConsume * meatConsMod)) : 0;
+            
+            int fruitsTaken = Mathf.Min(fruits, targetFruits);
+            int meatTaken = Mathf.Min(meat, targetMeat);
+            
+            if (fruitsTaken > 0) Player_UI.Instance.AddResource("fruechte", -fruitsTaken);
+            if (meatTaken > 0) Player_UI.Instance.AddResource("fleisch", -meatTaken);
         }
     }
 }

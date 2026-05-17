@@ -15,6 +15,7 @@ public class SelectionManager : MonoBehaviour
         cam = Camera.main;
         CreateHighlightObject();
         EnsureInfoPanel();
+        EnsureDayNightManager();
     }
 
     /// <summary>
@@ -28,6 +29,16 @@ public class SelectionManager : MonoBehaviour
             GameObject panelGO = new GameObject("BuildingInfoPanel");
             infoPanel = panelGO.AddComponent<BuildingInfoPanel>();
             Debug.Log("[SelectionManager] BuildingInfoPanel auto-created.");
+        }
+    }
+
+    private void EnsureDayNightManager()
+    {
+        if (DayNightManager.Instance == null)
+        {
+            GameObject go = new GameObject("DayNightManager");
+            go.AddComponent<DayNightManager>();
+            Debug.Log("[SelectionManager] DayNightManager auto-created.");
         }
     }
 

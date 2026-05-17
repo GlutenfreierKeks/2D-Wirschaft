@@ -18,6 +18,10 @@ public class BuildingInstance : MonoBehaviour
     public float ProductionProgress { get; private set; } = 0f;
     private float productionTimer = 0f;
 
+    // ── Schedule ─────────────────────────────────────────────────────────
+    public enum ScheduleMode { Continuous, DayOnly, Leisure }
+    public ScheduleMode currentSchedule = ScheduleMode.DayOnly;
+
     public bool IsConstructed() => isConstructed;
 
     private int workersArrived = 0;
@@ -84,6 +88,39 @@ public class BuildingInstance : MonoBehaviour
             {
                 break; 
             }
+        }
+    }
+
+    public bool IsCurrentlyWorkTime()
+    {
+        if (!isConstructed || IsProductionPaused) return false;
+        if (DayNightManager.Instance == null) return true;
+
+        float hour = DayNightManager.Instance.currentHour;
+
+        switch (currentSchedule)
+        {
+            case ScheduleMode.Continuous:
+                return true;
+
+            case ScheduleMode.DayOnly:
+                return hour >= 6f && hour < 18f;
+
+            case ScheduleMode.Leisure:
+                bool isDay = hour >= 6f && hour < 18f;
+                bool isLeisureTime = hour >= 12f && hour < 15f;
+                return isDay && !isLeisureTime;
+
+            default:
+                return true;
+        }
+    }
+
+    public void RemoveOperatingWorker(Villager v)
+    {
+        if (operatingWorkers.Contains(v))
+        {
+            operatingWorkers.Remove(v);
         }
     }
 
@@ -221,6 +258,32 @@ public class BuildingInstance : MonoBehaviour
             // 2. Produzieren
             bool producedSomething = false;
             if (!string.IsNullOrEmpty(data.productionResourceId))
+        while (true)
+        {
+            yield return new WaitForSeconds(1.0f);
+
+            // Check if building is paused, not work time, or understaffed
+            if (IsProductionPaused || !IsCurrentlyWorkTime() || operatingWorkers.Count < data.workersNeeded)
+            {
+                continue;
+            }
+
+            // Wait for the production interval
+            float elapsed = 0f;
+            bool aborted = false;
+            while (elapsed < data.productionInterval)
+            {
+                yield return new WaitForSeconds(1.0f);
+                elapsed += 1.0f;
+                if (IsProductionPaused || !IsCurrentlyWorkTime() || operatingWorkers.Count < data.workersNeeded)
+                {
+                    aborted = true;
+                    break;
+                }
+            }
+            if (aborted) continue;
+
+            if (ResourceManager.Instance != null)
             {
                 ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
                 TotalProduced += data.productionAmount;
@@ -234,12 +297,36 @@ public class BuildingInstance : MonoBehaviour
                     VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
                     TotalProduced++;
                     producedSomething = true;
+                // 2. Produzieren
+                int baseAmount = data.productionAmount;
+                float globalMood = 100f;
+                if (VillagerManager.Instance != null)
+                {
+                    globalMood = VillagerManager.Instance.globalMood;
+                }
+                
+                // Mood modifier: slowly declining yield down to 30% under worst conditions (0% mood)
+                float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMood / 100f);
+                int actualProduction = Mathf.Max(1, Mathf.RoundToInt(baseAmount * yieldModifier));
+
+                if (!string.IsNullOrEmpty(data.productionResourceId))
+                {
+                    ResourceManager.Instance.AddResource(data.productionResourceId, actualProduction);
+                    TotalProduced += actualProduction;
                 }
             }
 
             if (producedSomething)
             {
                 SpawnProductionParticles();
+                if (data.producesVillagers && VillagerManager.Instance != null)
+                {
+                    if (Player_UI.Instance.GetResource("bevolkerung") < Player_UI.Instance.GetMaxPopulation())
+                    {
+                        VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                        TotalProduced++;
+                    }
+                }
             }
         }
     }
