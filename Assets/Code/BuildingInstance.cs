@@ -36,24 +36,24 @@ public class BuildingInstance : MonoBehaviour
             TryHireOperatingWorkers();
         }
 
-        // Production timer logic
+        // Production timer logic (pauses during night / when understaffed / when paused)
         if (isConstructed && !IsProductionPaused)
         {
             bool canProduce = !string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers;
             if (canProduce)
             {
-                if (operatingWorkers.Count >= data.workersNeeded)
+                if (operatingWorkers.Count >= data.workersNeeded && IsCurrentlyWorkTime())
                 {
                     productionTimer += Time.deltaTime;
                     float interval = data.productionInterval > 0f ? data.productionInterval : 1f;
                     ProductionProgress = Mathf.Clamp01(productionTimer / interval);
 
                     if (productionTimer >= interval)
-                    {
-                        productionTimer = 0f;
-                        ProductionProgress = 0f;
-                        TriggerProductionCycle();
-                    }
+                     {
+                         productionTimer = 0f;
+                         ProductionProgress = 0f;
+                         TriggerProductionCycle();
+                     }
                 }
                 else
                 {
@@ -131,9 +131,6 @@ public class BuildingInstance : MonoBehaviour
         if (revealer != null) revealer.enabled = false;
 
         // Add a collider so the building can be clicked via Physics2D overlap.
-        // Size must be in LOCAL space: worldSize = localScale * localSize
-        // We want worldSize = (data.width, data.height), so:
-        //   localSize = (data.width / localScale.x, data.height / localScale.y)
         if (GetComponent<Collider2D>() == null)
         {
             var col = gameObject.AddComponent<BoxCollider2D>();
@@ -229,11 +226,9 @@ public class BuildingInstance : MonoBehaviour
         TryHireOperatingWorkers();
 
         // If it's a worker hub, maybe it converts nearby villagers? 
-        // For now just handle production
         if (data.productionResourceId == "bevolkerung")
         {
             Player_UI.Instance.AddMaxPopulation(data.productionAmount);
-            // Soldier limit increases with population capacity (e.g. 1 soldier per 2 people)
             int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
             Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
         }
@@ -243,6 +238,9 @@ public class BuildingInstance : MonoBehaviour
     {
         // Check if building has enough operating workers to produce
         if (operatingWorkers.Count < data.workersNeeded) return;
+
+        // Check if it's currently work time according to the schedule
+        if (!IsCurrentlyWorkTime()) return;
 
         if (ResourceManager.Instance != null)
         {
@@ -258,46 +256,7 @@ public class BuildingInstance : MonoBehaviour
             // 2. Produzieren
             bool producedSomething = false;
             if (!string.IsNullOrEmpty(data.productionResourceId))
-        while (true)
-        {
-            yield return new WaitForSeconds(1.0f);
-
-            // Check if building is paused, not work time, or understaffed
-            if (IsProductionPaused || !IsCurrentlyWorkTime() || operatingWorkers.Count < data.workersNeeded)
             {
-                continue;
-            }
-
-            // Wait for the production interval
-            float elapsed = 0f;
-            bool aborted = false;
-            while (elapsed < data.productionInterval)
-            {
-                yield return new WaitForSeconds(1.0f);
-                elapsed += 1.0f;
-                if (IsProductionPaused || !IsCurrentlyWorkTime() || operatingWorkers.Count < data.workersNeeded)
-                {
-                    aborted = true;
-                    break;
-                }
-            }
-            if (aborted) continue;
-
-            if (ResourceManager.Instance != null)
-            {
-                ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
-                TotalProduced += data.productionAmount;
-                producedSomething = true;
-            }
-
-            if (data.producesVillagers && VillagerManager.Instance != null)
-            {
-                if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
-                {
-                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
-                    TotalProduced++;
-                    producedSomething = true;
-                // 2. Produzieren
                 int baseAmount = data.productionAmount;
                 float globalMood = 100f;
                 if (VillagerManager.Instance != null)
@@ -309,24 +268,24 @@ public class BuildingInstance : MonoBehaviour
                 float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMood / 100f);
                 int actualProduction = Mathf.Max(1, Mathf.RoundToInt(baseAmount * yieldModifier));
 
-                if (!string.IsNullOrEmpty(data.productionResourceId))
+                ResourceManager.Instance.AddResource(data.productionResourceId, actualProduction);
+                TotalProduced += actualProduction;
+                producedSomething = true;
+            }
+
+            if (data.producesVillagers && VillagerManager.Instance != null)
+            {
+                if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
                 {
-                    ResourceManager.Instance.AddResource(data.productionResourceId, actualProduction);
-                    TotalProduced += actualProduction;
+                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                    TotalProduced++;
+                    producedSomething = true;
                 }
             }
 
             if (producedSomething)
             {
                 SpawnProductionParticles();
-                if (data.producesVillagers && VillagerManager.Instance != null)
-                {
-                    if (Player_UI.Instance.GetResource("bevolkerung") < Player_UI.Instance.GetMaxPopulation())
-                    {
-                        VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
-                        TotalProduced++;
-                    }
-                }
             }
         }
     }
@@ -470,4 +429,3 @@ public class BuildingInstance : MonoBehaviour
         operatingWorkers.Clear();
     }
 }
-
