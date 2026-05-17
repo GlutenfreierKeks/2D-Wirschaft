@@ -57,8 +57,8 @@ public class BuildingInstance : MonoBehaviour
                 }
                 else
                 {
-                    productionTimer = 0f;
-                    ProductionProgress = 0f;
+                    // Freeze progress! Do not wipe the production timer or progress to 0.
+                    // This allows workers to resume exactly where they left off when returning from breaks or sleep.
                 }
             }
             else
