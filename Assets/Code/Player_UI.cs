@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Photon.Pun;
 
 /// <summary>
 /// Ressourcen-HUD – Main Camera, Vogelperspektive.
@@ -129,7 +130,22 @@ public class Player_UI : MonoBehaviour
         if (!maxValues.ContainsKey(id)) maxValues[id] = max;
     }
 
-    private void Start() => BuildUI();
+    private void Start()
+    {
+        // Sync Time.timeScale with selected lobby speed!
+        if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("GameSpeed", out object speedObj))
+        {
+            float speed = System.Convert.ToSingle(speedObj);
+            Time.timeScale = speed;
+            Debug.Log($"[GameSpeed] Syncing Time.timeScale to selected lobby speed: {speed}x");
+        }
+        else
+        {
+            Time.timeScale = 1.0f; // Default standard speed
+        }
+
+        BuildUI();
+    }
 
     // ── Öffentliche API ──────────────────────────────────────────────────────
     
