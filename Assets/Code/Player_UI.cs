@@ -114,9 +114,9 @@ public class Player_UI : MonoBehaviour
         EnsureResourceExists("stimmung", 100, 100); // Villager Mood: starts at 100%
         EnsureResourceExists("holz", 100, 999);
         EnsureResourceExists("stein", 100, 999);
-        EnsureResourceExists("eisen", 0, 999);
-        EnsureResourceExists("gold", 0, 999);
-        EnsureResourceExists("weizen", 0, 999);
+        EnsureResourceExists("eisen", 10, 999);
+        EnsureResourceExists("gold", 10, 999);
+        EnsureResourceExists("weizen", 10, 999);
         EnsureResourceExists("fruechte", 0, 999);
         EnsureResourceExists("fleisch", 0, 999);
         EnsureResourceExists("geld", 0, 999);

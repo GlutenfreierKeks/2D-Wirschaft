@@ -230,37 +230,37 @@ public class VillagerManager : MonoBehaviour
         float wheatEffect = 0f;
         if (weizen == 0)
         {
-            // Wheat fully depleted: severe starvation!
-            wheatEffect = -0.15f;
+            // Wheat fully depleted: severe starvation! (increased penalty)
+            wheatEffect = -0.25f;
         }
         else if (wheatRatio < 0.5f)
         {
-            // Low wheat reserve: strong shortage panic!
-            wheatEffect = -0.08f;
+            // Low wheat reserve: strong shortage panic! (increased penalty)
+            wheatEffect = -0.12f;
         }
 
         // 2. Dynamic Fruits & Meat reserve scales (Feasting: consume more when abundant, granting stronger boosts!)
         float fruitsRatio = (float)fruits / pop;
         float meatRatio = (float)meat / pop;
         
-        float fruitsConsMod = fruits > 0 ? Mathf.Clamp(fruitsRatio, 0.2f, 4.0f) : 0f;
-        float meatConsMod = meat > 0 ? Mathf.Clamp(meatRatio, 0.2f, 4.0f) : 0f;
+        float fruitsConsMod = fruits > 0 ? Mathf.Clamp(fruitsRatio, 0.1f, 1.5f) : 0f;
+        float meatConsMod = meat > 0 ? Mathf.Clamp(meatRatio, 0.1f, 1.5f) : 0f;
         
         float luxuryEffect = 0f;
         if (fruits > 0)
         {
-            luxuryEffect += Mathf.Min(0.12f, fruitsConsMod * 0.03f); // Abundant fruits grant massive boost!
+            luxuryEffect += Mathf.Min(0.08f, fruitsConsMod * 0.018f); // Slightly harder positive boosts
         }
         if (meat > 0)
         {
-            luxuryEffect += Mathf.Min(0.12f, meatConsMod * 0.03f); // Abundant meat grants massive boost!
+            luxuryEffect += Mathf.Min(0.08f, meatConsMod * 0.018f); // Slightly harder positive boosts
         }
 
         // Combine effects and clamp
-        currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.15f, 0.18f);
+        currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.25f, 0.12f);
 
-        // 3. Proportional consumption for staple (wheat): ALWAYS 1 unit per villager per 60 seconds (1 minute)
-        wheatConsumedAccumulator += pop * (Time.deltaTime / 60f);
+        // 3. Proportional consumption for staple (wheat): ALWAYS 0.2 units per villager per 60 seconds (1 minute)
+        wheatConsumedAccumulator += pop * 0.2f * (Time.deltaTime / 60f);
         if (wheatConsumedAccumulator >= 1f)
         {
             int toConsume = Mathf.FloorToInt(wheatConsumedAccumulator);
@@ -276,8 +276,8 @@ public class VillagerManager : MonoBehaviour
             }
         }
 
-        // 4. Dynamic luxury consumption (fruits & meat): consume more when abundant, up to 4x base rate!
-        luxuryConsumedAccumulator += pop * (Time.deltaTime / 60f);
+        // 4. Dynamic luxury consumption (fruits & meat): consume more when abundant, up to 1.5x base rate (max 0.225/min)!
+        luxuryConsumedAccumulator += pop * 0.15f * (Time.deltaTime / 60f);
         if (luxuryConsumedAccumulator >= 1f)
         {
             int baseToConsume = Mathf.FloorToInt(luxuryConsumedAccumulator);
