@@ -36,6 +36,9 @@ public class BuildingInfoPanel : MonoBehaviour
     private Button          btnPause;
     private TextMeshProUGUI txtPauseLabel;
     private Button          btnDemolish;
+    private TextMeshProUGUI txtSchedule;
+    private Button          btnToggleSchedule;
+    private TextMeshProUGUI txtScheduleBtnLabel;
 
     // ── Animation & Positionierung ───────────────────────────────────────────
     private float targetPosX = 480f;    // Vollständig außerhalb des Bildschirms rechts
@@ -174,6 +177,34 @@ public class BuildingInfoPanel : MonoBehaviour
         txtWorkers.text = $"<b>Arbeiter benötigt:</b> {d.requiredWorkers}";
         txtSize.text    = $"<b>Größe:</b> {d.width} × {d.height} Grid-Felder";
 
+        // Schedule
+        if (d.workersNeeded > 0)
+        {
+            txtSchedule.gameObject.SetActive(true);
+            btnToggleSchedule.gameObject.SetActive(currentBuilding.IsConstructed());
+            
+            if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.Continuous)
+            {
+                txtSchedule.text = "<b>Arbeitsplan:</b> Nachtarbeit (24/7)\n<color=#FF5555>⚠️ Starker Stress & Erschöpfungsrisiko!</color>";
+                txtScheduleBtnLabel.text = "📅 Plan: 24/7";
+            }
+            else if (currentBuilding.currentSchedule == BuildingInstance.ScheduleMode.DayOnly)
+            {
+                txtSchedule.text = "<b>Arbeitsplan:</b> Regulär (Tag)\n<color=#FFAA44>⚠ Milder Arbeitsstress (Normal)</color>";
+                txtScheduleBtnLabel.text = "📅 Plan: Regulär (Tag)";
+            }
+            else
+            {
+                txtSchedule.text = "<b>Arbeitsplan:</b> Freizeit-Plan\n<color=#88FF88>✔ +Zufriedenheit (Mittagspause & Freizeit)</color>";
+                txtScheduleBtnLabel.text = "📅 Plan: Freizeit";
+            }
+        }
+        else
+        {
+            txtSchedule.gameObject.SetActive(false);
+            btnToggleSchedule.gameObject.SetActive(false);
+        }
+
         // Pause-Button Text
         txtPauseLabel.text = currentBuilding.IsProductionPaused ? "▶  Fortsetzen" : "⏸  Pausieren";
         btnPause.gameObject.SetActive(currentBuilding.IsConstructed() &&
@@ -253,6 +284,14 @@ public class BuildingInfoPanel : MonoBehaviour
         txtWorkers = MakeStatRow(inner.transform, "");
         txtSize    = MakeStatRow(inner.transform, "");
 
+        MakeDivider(inner.transform);
+        txtSchedule = MakeStatRow(inner.transform, "");
+
+        btnToggleSchedule = MakeButton("ToggleScheduleBtn", inner.transform, "📅 Plan ändern", btnNeutral, 350f, 40f, 14f);
+        txtScheduleBtnLabel = btnToggleSchedule.GetComponentInChildren<TextMeshProUGUI>();
+        btnToggleSchedule.onClick.AddListener(OnToggleScheduleClicked);
+        AddLE(btnToggleSchedule.gameObject, minW: 350f, minH: 40f);
+
         // ── Spacer ───────────────────────────────────────────────────────────
         var spacer = new GameObject("Spacer", typeof(RectTransform));
         spacer.transform.SetParent(inner.transform, false);
@@ -287,6 +326,18 @@ public class BuildingInfoPanel : MonoBehaviour
         if (currentBuilding == null) return;
         currentBuilding.Demolish();
         Hide();
+    }
+
+    private void OnToggleScheduleClicked()
+    {
+        if (currentBuilding == null) return;
+        
+        // Cycle: DayOnly -> Leisure -> Continuous
+        int current = (int)currentBuilding.currentSchedule;
+        current = (current + 1) % 3;
+        currentBuilding.currentSchedule = (BuildingInstance.ScheduleMode)current;
+        
+        RefreshStats();
     }
 
     // ── Helper-Methoden ──────────────────────────────────────────────────────

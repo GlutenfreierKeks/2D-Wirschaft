@@ -111,6 +111,7 @@ public class Player_UI : MonoBehaviour
         EnsureResourceExists("dorfbewohner", 10, 999);
         EnsureResourceExists("arbeiter", 2, 999);
         EnsureResourceExists("bevolkerung", 10, 20);
+        EnsureResourceExists("stimmung", 100, 100); // Villager Mood: starts at 100%
         EnsureResourceExists("holz", 100, 999);
         EnsureResourceExists("stein", 100, 999);
         EnsureResourceExists("eisen", 0, 999);
@@ -154,7 +155,9 @@ public class Player_UI : MonoBehaviour
 
         if (labels.TryGetValue(id, out var lbl))
         {
-            if (max > 0)
+            if (id == "stimmung")
+                lbl.text = $"{values[id]}%";
+            else if (max > 0)
                 lbl.text = $"{values[id]}/{max}";
             else
                 lbl.text = values[id].ToString();
@@ -260,6 +263,7 @@ public class Player_UI : MonoBehaviour
         // Ensure critical resources have slots even if not in startingResources list
         EnsureSlot(barGO.transform, "bevolkerung", "Bevölkerung", 10, 20);
         EnsureSlot(barGO.transform, "dorfbewohner", "Freie Arbeiter", 10, 0);
+        EnsureSlot(barGO.transform, "stimmung", "Zufriedenheit", 100, 100); // Spawns right next to workers!
         EnsureSlot(barGO.transform, "arbeiter", "Arbeiter", 2, 0);
         EnsureSlot(barGO.transform, "holz", "Holz", 100, 0);
         EnsureSlot(barGO.transform, "stein", "Stein", 100, 0);
