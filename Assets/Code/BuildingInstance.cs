@@ -15,6 +15,8 @@ public class BuildingInstance : MonoBehaviour
     // ── Produktion ────────────────────────────────────────────────────────
     public bool IsProductionPaused { get; private set; } = false;
     public int  TotalProduced      { get; private set; } = 0;
+    public float ProductionProgress { get; private set; } = 0f;
+    private float productionTimer = 0f;
 
     public bool IsConstructed() => isConstructed;
 
@@ -28,6 +30,41 @@ public class BuildingInstance : MonoBehaviour
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
             TryHireOperatingWorkers();
+        }
+
+        // Production timer logic
+        if (isConstructed && !IsProductionPaused)
+        {
+            bool canProduce = !string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers;
+            if (canProduce)
+            {
+                if (operatingWorkers.Count >= data.workersNeeded)
+                {
+                    productionTimer += Time.deltaTime;
+                    float interval = data.productionInterval > 0f ? data.productionInterval : 1f;
+                    ProductionProgress = Mathf.Clamp01(productionTimer / interval);
+
+                    if (productionTimer >= interval)
+                    {
+                        productionTimer = 0f;
+                        ProductionProgress = 0f;
+                        TriggerProductionCycle();
+                    }
+                }
+                else
+                {
+                    productionTimer = 0f;
+                    ProductionProgress = 0f;
+                }
+            }
+            else
+            {
+                ProductionProgress = 0f;
+            }
+        }
+        else
+        {
+            ProductionProgress = 0f;
         }
     }
 
@@ -163,60 +200,126 @@ public class BuildingInstance : MonoBehaviour
             int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
             Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
         }
-        
-        if (!string.IsNullOrEmpty(data.productionResourceId) || data.producesVillagers)
-        {
-            StartCoroutine(ProductionRoutine());
-        }
     }
 
-    private IEnumerator ProductionRoutine()
+    private void TriggerProductionCycle()
     {
-        while (true)
-        {
-            yield return new WaitForSeconds(data.productionInterval);
+        // Check if building has enough operating workers to produce
+        if (operatingWorkers.Count < data.workersNeeded) return;
 
-            // Pausiert – nichts tun, aber Coroutine läuft weiter
-            if (IsProductionPaused) continue;
-            
-            // Check if building has enough operating workers to produce
-            if (operatingWorkers.Count < data.workersNeeded)
+        if (ResourceManager.Instance != null)
+        {
+            // 1. Verbrauch prüfen
+            if (!string.IsNullOrEmpty(data.consumedResourceId) && data.consumedAmount > 0)
             {
-                Debug.Log($"[BuildingInstance] {data.buildingName} skips production cycle due to missing workers ({operatingWorkers.Count}/{data.workersNeeded})");
-                continue;
+                if (ResourceManager.Instance.HasResource(data.consumedResourceId, data.consumedAmount))
+                    ResourceManager.Instance.SpendResource(data.consumedResourceId, data.consumedAmount);
+                else
+                    return; // Ressourcen fehlen, Zyklus überspringen
             }
 
-            if (ResourceManager.Instance != null)
+            // 2. Produzieren
+            bool producedSomething = false;
+            if (!string.IsNullOrEmpty(data.productionResourceId))
             {
-                // 1. Verbrauch prüfen
-                if (!string.IsNullOrEmpty(data.consumedResourceId) && data.consumedAmount > 0)
-                {
-                    if (ResourceManager.Instance.HasResource(data.consumedResourceId, data.consumedAmount))
-                        ResourceManager.Instance.SpendResource(data.consumedResourceId, data.consumedAmount);
-                    else
-                        continue; // Ressourcen fehlen, Zyklus überspringen
-                }
+                ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
+                TotalProduced += data.productionAmount;
+                producedSomething = true;
+            }
 
-                // 2. Produzieren
-                if (!string.IsNullOrEmpty(data.productionResourceId))
+            if (data.producesVillagers && VillagerManager.Instance != null)
+            {
+                if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
                 {
-                    ResourceManager.Instance.AddResource(data.productionResourceId, data.productionAmount);
-                    TotalProduced += data.productionAmount;
+                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
+                    TotalProduced++;
+                    producedSomething = true;
                 }
+            }
 
-                if (data.producesVillagers && VillagerManager.Instance != null)
-                {
-                    if (Player_UI.Instance.GetResource("dorfbewohner") < Player_UI.Instance.GetMaxPopulation())
-                    // Only spawn if population capacity allows (optional, but good practice)
-                    if (Player_UI.Instance.GetResource("bevolkerung") < Player_UI.Instance.GetMaxPopulation())
-                    {
-                        VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Villager);
-                        TotalProduced++;
-                    }
-                }
+            if (producedSomething)
+            {
+                SpawnProductionParticles();
             }
         }
     }
+
+    private void SpawnProductionParticles()
+    {
+        GameObject pObj = new GameObject("ProductionParticles");
+        pObj.transform.position = transform.position + new Vector3(0f, 0f, -0.5f);
+        
+        ParticleSystem ps = pObj.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        
+        var main = ps.main;
+        main.duration = 1.0f;
+        main.loop = false;
+        main.startLifetime = 1.0f;
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 1.8f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+        main.gravityModifier = -0.3f; // Rise upwards gently
+        main.stopAction = ParticleSystemStopAction.Destroy;
+
+        // Custom resource icon textures as sprites!
+        ParticleSystemRenderer psr = pObj.GetComponent<ParticleSystemRenderer>();
+        if (psr != null)
+        {
+            Sprite resSprite = null;
+            if (!string.IsNullOrEmpty(data.productionResourceId))
+            {
+                string capId = Capitalize(data.productionResourceId);
+                resSprite = Resources.Load<Sprite>($"{capId}_Icon");
+                if (resSprite == null) resSprite = Resources.Load<Sprite>($"{capId}_Overlay");
+            }
+            else if (data.producesVillagers)
+            {
+                resSprite = Resources.Load<Sprite>("Villager");
+            }
+
+            if (resSprite != null)
+            {
+                psr.renderMode = ParticleSystemRenderMode.Billboard;
+                Material mat = new Material(Shader.Find("Sprites/Default"));
+                mat.mainTexture = resSprite.texture;
+                psr.material = mat;
+                main.startColor = Color.white; // Keep original texture colors
+            }
+            else
+            {
+                psr.renderMode = ParticleSystemRenderMode.Billboard;
+                psr.material = new Material(Shader.Find("Sprites/Default"));
+                
+                Color pColor = Color.green;
+                if (data.productionResourceId == "gold") pColor = new Color(1f, 0.85f, 0f);
+                else if (data.productionResourceId == "stein") pColor = Color.gray;
+                else if (data.productionResourceId == "eisen") pColor = new Color(0.7f, 0.7f, 0.8f);
+                else if (data.productionResourceId == "dorfbewohner") pColor = Color.cyan;
+                main.startColor = pColor;
+            }
+        }
+
+        // Add a gentle rotation over time
+        var rot = ps.rotationOverLifetime;
+        rot.enabled = true;
+        rot.z = new ParticleSystem.MinMaxCurve(-90f, 90f);
+
+        var emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0f;
+        
+        var burst = new ParticleSystem.Burst(0f, 12);
+        emission.SetBursts(new ParticleSystem.Burst[] { burst });
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.5f;
+
+        ps.Play();
+    }
+
+    private string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
     // ── Öffentliche Steuerung ────────────────────────────────────────────────
 
@@ -225,6 +328,24 @@ public class BuildingInstance : MonoBehaviour
     {
         IsProductionPaused = !IsProductionPaused;
         Debug.Log($"[BuildingInstance] {data.buildingName} Produktion: {(IsProductionPaused ? "PAUSIERT" : "AKTIV")}");
+
+        if (IsProductionPaused)
+        {
+            // Alle Arbeiter entlassen, damit sie sich andere Arbeit suchen
+            foreach (var w in operatingWorkers)
+            {
+                if (w != null)
+                {
+                    w.Release();
+                }
+            }
+            operatingWorkers.Clear();
+        }
+        else
+        {
+            // Sofort versuchen neue Arbeiter zuzuweisen
+            TryHireOperatingWorkers();
+        }
     }
 
     /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>
