@@ -209,7 +209,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
 
     private void BuildLobbyLayout()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null) return;
 
         // Fix: Make sure canvas is always overlay so camera FOV doesn't clip/hide it
@@ -536,7 +536,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         text.fontStyle = style;
         text.alignment = TextAlignmentOptions.TopLeft;
         text.color = color;
-        text.enableWordWrapping = true;
+        text.textWrappingMode = TextWrappingModes.Normal;
         rect.gameObject.AddComponent<LobbyTextMirror>().Initialize(source, text);
     }
 
@@ -621,7 +621,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         text.fontStyle = FontStyles.Bold;
         text.alignment = TextAlignmentOptions.TopLeft;
         text.color = labelColor;
-        text.enableWordWrapping = true;
+        text.textWrappingMode = TextWrappingModes.Normal;
         return text;
     }
 

@@ -526,7 +526,7 @@ public class Player_UI : MonoBehaviour
         soldierCommandHintLabel.fontStyle = FontStyles.Bold;
         soldierCommandHintLabel.color = valueColor;
         soldierCommandHintLabel.alignment = TextAlignmentOptions.Center;
-        soldierCommandHintLabel.enableWordWrapping = true;
+        soldierCommandHintLabel.textWrappingMode = TextWrappingModes.Normal;
 
         GameObject rowGO = new GameObject("CommandRow", typeof(RectTransform));
         rowGO.transform.SetParent(soldierCommandContainer.transform, false);
@@ -700,7 +700,7 @@ public class Player_UI : MonoBehaviour
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.enableWordWrapping = true;
+        tmp.textWrappingMode = TextWrappingModes.Normal;
 
         // Baukosten hinzufügen
         if (buildingData != null)
@@ -785,7 +785,7 @@ public class Player_UI : MonoBehaviour
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Left;
-        tmp.enableWordWrapping = false;
+        tmp.textWrappingMode = TextWrappingModes.NoWrap;
     }
 
     private void OpenSubMenu(string categoryName)
@@ -1018,7 +1018,7 @@ public class Player_UI : MonoBehaviour
         tooltipBodyText.fontSize = 14f;
         tooltipBodyText.color = valueColor;
         tooltipBodyText.alignment = TextAlignmentOptions.Left;
-        tooltipBodyText.enableWordWrapping = true;
+        tooltipBodyText.textWrappingMode = TextWrappingModes.Normal;
         tooltipBodyText.raycastTarget = false;
 
         tooltipPanel.SetActive(false);
@@ -1172,7 +1172,7 @@ public class Player_UI : MonoBehaviour
             return;
         }
 
-        var buildings = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        var buildings = FindObjectsByType<BuildingInstance>();
         float globalMoodForYield = 100f;
         if (VillagerManager.Instance != null) globalMoodForYield = VillagerManager.Instance.globalMood;
         float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMoodForYield / 100f);
