@@ -13,6 +13,7 @@ public class VillagerManager : MonoBehaviour
     public float globalMood = 100f;
 
     private List<Villager> activeVillagers = new List<Villager>();
+    public IReadOnlyList<Villager> ActiveVillagers => activeVillagers;
     private List<BuildingInstance> pendingBuildings = new List<BuildingInstance>();
     private float currentFoodMoodEffect = 0f;
     private float wheatConsumedAccumulator = 0f;
