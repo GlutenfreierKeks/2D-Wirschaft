@@ -58,7 +58,7 @@ public class NotificationManager : MonoBehaviour
 
     private void EnsureUi()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null)
         {
             return;
@@ -143,7 +143,7 @@ public class NotificationManager : MonoBehaviour
         tmp.fontSize = 18f;
         tmp.color = new Color(1f, 0.95f, 0.78f, 1f);
         tmp.alignment = TextAlignmentOptions.MidlineLeft;
-        tmp.enableWordWrapping = true;
+        tmp.textWrappingMode = TextWrappingModes.Normal;
 
         StartCoroutine(FadeAndDestroyRoutine(itemGO, itemBg, itemOutline, tmp));
     }

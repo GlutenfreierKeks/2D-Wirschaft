@@ -329,7 +329,7 @@ public class Villager : MonoBehaviour
 
     private BuildingInstance FindNearestOpportunity()
     {
-        BuildingInstance[] hubs = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        BuildingInstance[] hubs = FindObjectsByType<BuildingInstance>();
         BuildingInstance nearest = null;
         float minDist = float.MaxValue;
 
@@ -470,7 +470,7 @@ public class Villager : MonoBehaviour
 
     private BuildingInstance FindSleepHouse()
     {
-        BuildingInstance[] buildings = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        BuildingInstance[] buildings = FindObjectsByType<BuildingInstance>();
         BuildingInstance nearestHouse = null;
         float minDist = float.MaxValue;
         

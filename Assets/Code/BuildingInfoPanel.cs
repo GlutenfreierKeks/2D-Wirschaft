@@ -356,7 +356,7 @@ public class BuildingInfoPanel : MonoBehaviour
     private void BuildPanel()
     {
         // Canvas suchen / erstellen
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null)
         {
             var cGO = new GameObject("InfoPanel_Canvas");
@@ -554,7 +554,7 @@ public class BuildingInfoPanel : MonoBehaviour
         var tmp = go.GetComponent<TextMeshProUGUI>();
         tmp.text = text; tmp.fontSize = size; tmp.fontStyle = style;
         tmp.color = color; tmp.alignment = align;
-        tmp.enableWordWrapping = true;
+        tmp.textWrappingMode = TextWrappingModes.Normal;
         return tmp;
     }
 
@@ -755,7 +755,7 @@ public class BuildingInfoPanel : MonoBehaviour
         txtRT.anchorMax = Vector2.one;
         txtRT.sizeDelta = Vector2.zero;
         txt.raycastTarget = false;
-        txt.enableWordWrapping = false;
+        txt.textWrappingMode = TextWrappingModes.NoWrap;
 
         return btn;
     }

@@ -90,7 +90,7 @@ public class DayNightManager : MonoBehaviour
 
     private void CreateNightOverlay()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null) return;
 
         // Create overlay GameObject
@@ -110,7 +110,7 @@ public class DayNightManager : MonoBehaviour
 
     private void CreateClockUI()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null) return;
 
         // Create medieval styled dark box in top right

@@ -252,6 +252,39 @@ public class Soldier : MonoBehaviour
         }
     }
 
+    public void SetTeam(Team newTeam, int newOwnerActorNumber = 0)
+    {
+        team = newTeam;
+
+        if (newOwnerActorNumber > 0)
+        {
+            ownerActorNumber = newOwnerActorNumber;
+        }
+        else if (team == Team.Player && ownerActorNumber == 0 && PhotonNetwork.LocalPlayer != null)
+        {
+            ownerActorNumber = PhotonNetwork.LocalPlayer.ActorNumber;
+        }
+        else if (team == Team.Enemy)
+        {
+            ownerActorNumber = 0;
+        }
+
+        ownerColor = PlayerColorUtility.GetColorForActor(ownerActorNumber, team == Team.Player);
+        ApplyOwnerTint();
+
+        if (circleRenderer != null)
+        {
+            circleRenderer.startColor = new Color(ownerColor.r, ownerColor.g, ownerColor.b, 0.45f);
+            circleRenderer.endColor = circleRenderer.startColor;
+        }
+
+        if (patrolRenderer != null)
+        {
+            patrolRenderer.startColor = new Color(ownerColor.r, ownerColor.g, ownerColor.b, 0.7f);
+            patrolRenderer.endColor = patrolRenderer.startColor;
+        }
+    }
+
     private void ApplyStatsForType()
     {
         spriteRenderer.sprite = GetSpriteForType();

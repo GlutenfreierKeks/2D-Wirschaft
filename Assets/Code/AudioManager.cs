@@ -143,7 +143,7 @@ public class AudioManager : MonoBehaviour
             }
         }
 
-        Villager[] villagers = FindObjectsByType<Villager>(FindObjectsSortMode.None);
+        Villager[] villagers = FindObjectsByType<Villager>();
         for (int i = 0; i < villagers.Length; i++)
         {
             if (villagers[i] != null && Vector2.Distance(camPos, villagers[i].transform.position) <= radius)

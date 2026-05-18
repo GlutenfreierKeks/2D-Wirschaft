@@ -9,6 +9,9 @@ public class Enemy_Place : MonoBehaviour
     public GameObject swordSoldierPrefab;
     public GameObject bowSoldierPrefab;
 
+    [Header("Team Einstellungen")]
+    public Team placementTeam = Team.Player;
+
     // Der aktuell ausgewählte Soldat
     private GameObject selectedPrefab;
 
@@ -29,7 +32,8 @@ public class Enemy_Place : MonoBehaviour
             if (Keyboard.current.digit4Key.wasPressedThisFrame) SelectSoldier(bowSoldierPrefab, "Bogensoldat");
         }
 
-        // Platzieren mit Linksklick
+        // Platzieren mit Linksklick (deaktiviert)
+        /*
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             // Block placement if a sub-menu is open or mouse is over UI
@@ -38,6 +42,7 @@ public class Enemy_Place : MonoBehaviour
 
             PlaceSoldier();
         }
+        */
     }
 
     // Funktion um den ausgewählten Soldaten zu wechseln (Kann auch von UI-Buttons aufgerufen werden)
@@ -59,6 +64,11 @@ public class Enemy_Place : MonoBehaviour
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         
         // Den Soldaten an der Mausposition platzieren
-        Instantiate(selectedPrefab, mousePos, Quaternion.identity);
+        GameObject newSoldierObj = Instantiate(selectedPrefab, mousePos, Quaternion.identity);
+        Soldier soldier = newSoldierObj.GetComponent<Soldier>();
+        if (soldier != null)
+        {
+            soldier.SetTeam(placementTeam);
+        }
     }
 }

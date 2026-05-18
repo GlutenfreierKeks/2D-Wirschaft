@@ -188,7 +188,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
     private void BuildRuntimeMenu()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null)
         {
             return;
@@ -512,7 +512,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
         text.fontStyle = FontStyles.Bold;
         text.alignment = TextAlignmentOptions.Center;
         text.color = color;
-        text.enableWordWrapping = true;
+        text.textWrappingMode = TextWrappingModes.Normal;
         return text;
     }
 

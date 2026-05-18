@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Photon.Pun;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// Ressourcen-HUD – Main Camera, Vogelperspektive.
@@ -107,6 +108,12 @@ public class Player_UI : MonoBehaviour
     private Button moveCommandButton;
     private Button attackCommandButton;
     private Button observeCommandButton;
+    
+    // ── Tooltip ──────────────────────────────────────────────────────────────
+    private GameObject tooltipPanel;
+    private TextMeshProUGUI tooltipTitleText;
+    private TextMeshProUGUI tooltipBodyText;
+    private string activeTooltipResourceId = "";
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -273,6 +280,7 @@ public class Player_UI : MonoBehaviour
         scaler.matchWidthOrHeight  = 0.5f;
 
         canvasGO.AddComponent<GraphicRaycaster>();
+        EnsureEventSystemExists();
 
         // ── Goldener Rahmen (äußere Hülle) ──────────────────────────────────
         var borderGO = new GameObject("BarBorder",
@@ -343,6 +351,7 @@ public class Player_UI : MonoBehaviour
 
         BuildBottomMenu(canvasGO.transform);
         BuildSoldierCommandMenu(canvasGO.transform);
+        BuildTooltipPanel(canvasGO.transform);
     }
 
     private void EnsureSlot(Transform parent, string id, string name, int start, int max)
@@ -517,7 +526,7 @@ public class Player_UI : MonoBehaviour
         soldierCommandHintLabel.fontStyle = FontStyles.Bold;
         soldierCommandHintLabel.color = valueColor;
         soldierCommandHintLabel.alignment = TextAlignmentOptions.Center;
-        soldierCommandHintLabel.enableWordWrapping = true;
+        soldierCommandHintLabel.textWrappingMode = TextWrappingModes.Normal;
 
         GameObject rowGO = new GameObject("CommandRow", typeof(RectTransform));
         rowGO.transform.SetParent(soldierCommandContainer.transform, false);
@@ -691,7 +700,7 @@ public class Player_UI : MonoBehaviour
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.enableWordWrapping = true;
+        tmp.textWrappingMode = TextWrappingModes.Normal;
 
         // Baukosten hinzufügen
         if (buildingData != null)
@@ -776,7 +785,7 @@ public class Player_UI : MonoBehaviour
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = valueColor;
         tmp.alignment = TextAlignmentOptions.Left;
-        tmp.enableWordWrapping = false;
+        tmp.textWrappingMode = TextWrappingModes.NoWrap;
     }
 
     private void OpenSubMenu(string categoryName)
@@ -860,6 +869,7 @@ public class Player_UI : MonoBehaviour
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         slot.transform.SetParent(wrapper.transform, false);
         slot.GetComponent<Image>().color = slotColor;
+        slot.AddComponent<ResourceTooltipTrigger>().resourceId = def.id;
 
         var hl = slot.AddComponent<HorizontalLayoutGroup>();
         hl.padding                = new RectOffset(
@@ -938,5 +948,365 @@ public class Player_UI : MonoBehaviour
         valTMP.raycastTarget = false;
 
         return valTMP;
+    }
+
+    // ── Tooltip Logik & Hilfsklassen ─────────────────────────────────────────
+
+    private void Update()
+    {
+        if (tooltipPanel != null && tooltipPanel.activeSelf)
+        {
+            UpdateTooltipContent();
+        }
+    }
+
+    private void BuildTooltipPanel(Transform canvasTransform)
+    {
+        tooltipPanel = new GameObject("ResourceTooltip", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        tooltipPanel.transform.SetParent(canvasTransform, false);
+
+        var img = tooltipPanel.GetComponent<Image>();
+        img.color = new Color(barColor.r, barColor.g, barColor.b, 0.98f);
+        img.raycastTarget = false;
+
+        var outline = tooltipPanel.AddComponent<Outline>();
+        outline.effectColor = borderColor;
+        outline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        var shadow = tooltipPanel.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+        shadow.effectDistance = new Vector2(4f, -4f);
+
+        var rt = tooltipPanel.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.sizeDelta = new Vector2(320f, 180f);
+
+        var vl = tooltipPanel.AddComponent<VerticalLayoutGroup>();
+        vl.padding = new RectOffset(14, 14, 14, 14);
+        vl.spacing = 8f;
+        vl.childAlignment = TextAnchor.UpperLeft;
+        vl.childForceExpandHeight = false;
+        vl.childForceExpandWidth = true;
+
+        var csf = tooltipPanel.AddComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+        var titleGO = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        titleGO.transform.SetParent(tooltipPanel.transform, false);
+        tooltipTitleText = titleGO.GetComponent<TextMeshProUGUI>();
+        tooltipTitleText.fontSize = 18f;
+        tooltipTitleText.fontStyle = FontStyles.Bold;
+        tooltipTitleText.color = borderColor;
+        tooltipTitleText.alignment = TextAlignmentOptions.Left;
+        tooltipTitleText.raycastTarget = false;
+
+        var divGO = new GameObject("Divider", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        divGO.transform.SetParent(tooltipPanel.transform, false);
+        var divImg = divGO.GetComponent<Image>();
+        divImg.color = new Color(borderColor.r, borderColor.g, borderColor.b, 0.4f);
+        divImg.raycastTarget = false;
+        var divLE = divGO.AddComponent<LayoutElement>();
+        divLE.minHeight = 1f;
+        divLE.preferredHeight = 1f;
+
+        var bodyGO = new GameObject("Body", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        bodyGO.transform.SetParent(tooltipPanel.transform, false);
+        tooltipBodyText = bodyGO.GetComponent<TextMeshProUGUI>();
+        tooltipBodyText.fontSize = 14f;
+        tooltipBodyText.color = valueColor;
+        tooltipBodyText.alignment = TextAlignmentOptions.Left;
+        tooltipBodyText.textWrappingMode = TextWrappingModes.Normal;
+        tooltipBodyText.raycastTarget = false;
+
+        tooltipPanel.SetActive(false);
+    }
+
+    public void ShowTooltip(string resourceId, Vector3 slotPosition)
+    {
+        activeTooltipResourceId = resourceId;
+        UpdateTooltipContent();
+
+        if (tooltipPanel != null)
+        {
+            tooltipPanel.SetActive(true);
+            var rt = tooltipPanel.GetComponent<RectTransform>();
+            Vector2 localPoint;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                tooltipPanel.transform.parent as RectTransform,
+                slotPosition,
+                null,
+                out localPoint
+            );
+            rt.anchoredPosition = new Vector2(localPoint.x, localPoint.y - barHeight / 2f - 10f);
+        }
+    }
+
+    public void HideTooltip()
+    {
+        activeTooltipResourceId = "";
+        if (tooltipPanel != null)
+        {
+            tooltipPanel.SetActive(false);
+        }
+    }
+
+    private void UpdateTooltipContent()
+    {
+        if (string.IsNullOrEmpty(activeTooltipResourceId)) return;
+
+        string displayName = GetResourceDisplayName(activeTooltipResourceId);
+        tooltipTitleText.text = displayName.ToUpper();
+
+        float production = 0f;
+        float consumption = 0f;
+        List<string> breakdown = new List<string>();
+
+        CalculateResourceRates(activeTooltipResourceId, out production, out consumption, breakdown);
+
+        string body = "";
+        bool isTickResource = activeTooltipResourceId != "bevolkerung" && 
+                              activeTooltipResourceId != "dorfbewohner" && 
+                              activeTooltipResourceId != "arbeiter" && 
+                              activeTooltipResourceId != "soldaten" && 
+                              activeTooltipResourceId != "stimmung";
+
+        if (isTickResource)
+        {
+            float net = production - consumption;
+            string netColor = net >= 0 ? "#55FF55" : "#FF5555";
+            string netPrefix = net > 0 ? "+" : "";
+            body += $"<b>Änderung:</b> <color={netColor}>{netPrefix}{net:F1}/Min</color>\n";
+            body += $"<b>Plus:</b> <color=#55FF55>+{production:F1}/Min</color>   ";
+            body += $"<b>Minus:</b> <color=#FF5555>-{consumption:F1}/Min</color>\n\n";
+        }
+
+        if (breakdown.Count > 0)
+        {
+            body += string.Join("\n", breakdown);
+        }
+
+        if (isTickResource && breakdown.Count == 0)
+        {
+            body += "Keine aktiven Quellen oder Verbraucher.";
+        }
+
+        tooltipBodyText.text = body;
+    }
+
+    private void EnsureEventSystemExists()
+    {
+        if (EventSystem.current != null) return;
+
+        var eventSystemGO = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        eventSystemGO.transform.SetParent(transform);
+    }
+
+    private void CalculateResourceRates(string id, out float production, out float consumption, List<string> breakdown)
+    {
+        production = 0f;
+        consumption = 0f;
+
+        int pop = 1;
+        int activeVillagerCount = 0;
+        if (VillagerManager.Instance != null && VillagerManager.Instance.ActiveVillagers != null)
+        {
+            activeVillagerCount = VillagerManager.Instance.ActiveVillagers.Count;
+        }
+        pop = Mathf.Max(1, activeVillagerCount);
+
+        if (id == "bevolkerung")
+        {
+            int current = GetResource("bevolkerung");
+            int max = GetMaxResource("bevolkerung");
+            breakdown.Add($"Aktuelle Gesamtbevölkerung: {current}");
+            breakdown.Add($"Maximales Limit: {max}");
+            breakdown.Add("");
+            breakdown.Add("Erhöhe dein Limit durch den Bau von Wohnhäusern.");
+            return;
+        }
+
+        if (id == "dorfbewohner")
+        {
+            int current = GetResource("dorfbewohner");
+            breakdown.Add($"Freie, nicht in Betrieben arbeitende Bürger: {current}");
+            breakdown.Add("");
+            breakdown.Add("Freie Arbeiter errichten Gebäude und können zu Soldaten rekrutiert werden.");
+            return;
+        }
+
+        if (id == "arbeiter")
+        {
+            int current = GetResource("arbeiter");
+            breakdown.Add($"In Produktionsbetrieben angestellte Bürger: {current}");
+            breakdown.Add("");
+            breakdown.Add("Arbeiter verrichten ihren Dienst in Farmen, Minen und Werkstätten.");
+            return;
+        }
+
+        if (id == "soldaten")
+        {
+            int current = GetResource("soldaten");
+            int max = GetMaxResource("soldaten");
+            breakdown.Add($"Ausgebildete Soldaten: {current} / {max}");
+            breakdown.Add("");
+            breakdown.Add("Kaserne erhöht das Limit und bildet Soldaten aus freien Bürgern aus.");
+            return;
+        }
+
+        if (id == "stimmung")
+        {
+            float globalMood = 100f;
+            if (VillagerManager.Instance != null) globalMood = VillagerManager.Instance.globalMood;
+            
+            float foodEffect = 0f;
+            if (VillagerManager.Instance != null) foodEffect = VillagerManager.Instance.GetFoodMoodEffect();
+
+            breakdown.Add($"Globale Zufriedenheit: {globalMood:F0}%");
+            breakdown.Add("");
+            breakdown.Add($"Nahrungs-Effekt: {(foodEffect >= 0 ? "+" : "")}{foodEffect * 100f:F0}%");
+            breakdown.Add("");
+            breakdown.Add("Höhere Zufriedenheit steigert das Arbeitstempo und die Erträge in Betrieben.");
+            return;
+        }
+
+        var buildings = FindObjectsByType<BuildingInstance>();
+        float globalMoodForYield = 100f;
+        if (VillagerManager.Instance != null) globalMoodForYield = VillagerManager.Instance.globalMood;
+        float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMoodForYield / 100f);
+
+        Dictionary<string, float> prodSources = new Dictionary<string, float>();
+        Dictionary<string, float> consSources = new Dictionary<string, float>();
+
+        foreach (var b in buildings)
+        {
+            if (b == null || !b.isLocal || !b.IsConstructed()) continue;
+
+            if (!string.IsNullOrEmpty(b.data.productionResourceId) && b.data.productionResourceId == id && !b.data.isBarracks)
+            {
+                if (!b.IsProductionPaused)
+                {
+                    int baseAmount = b.data.productionAmount;
+                    int actualProduction = Mathf.Max(1, Mathf.RoundToInt(baseAmount * yieldModifier));
+                    float interval = b.data.productionInterval > 0f ? b.data.productionInterval : 60f;
+                    float rate = (actualProduction * 60f) / interval;
+
+                    string bName = b.data.buildingName;
+                    if (prodSources.ContainsKey(bName)) prodSources[bName] += rate;
+                    else prodSources[bName] = rate;
+
+                    production += rate;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(b.data.consumedResourceId) && b.data.consumedResourceId == id)
+            {
+                if (!b.IsProductionPaused)
+                {
+                    float interval = b.data.productionInterval > 0f ? b.data.productionInterval : 60f;
+                    float rate = (b.data.consumedAmount * 60f) / interval;
+
+                    string bName = b.data.buildingName;
+                    if (consSources.ContainsKey(bName)) consSources[bName] += rate;
+                    else consSources[bName] = rate;
+
+                    consumption += rate;
+                }
+            }
+        }
+
+        if (id == "weizen")
+        {
+            float rate = pop * 0.2f;
+            consumption += rate;
+            consSources["Bürger (Grundnahrung)"] = rate;
+        }
+        else if (id == "fruechte")
+        {
+            int fruits = GetResource("fruechte");
+            float fruitsRatio = (float)fruits / pop;
+            float fruitsConsMod = fruits > 0 ? Mathf.Clamp(fruitsRatio, 0.1f, 1.5f) : 0f;
+            float rate = pop * 0.15f * fruitsConsMod;
+            if (rate > 0)
+            {
+                consumption += rate;
+                consSources["Bürger (Luxusbedarf)"] = rate;
+            }
+        }
+        else if (id == "fleisch")
+        {
+            int meat = GetResource("fleisch");
+            float meatRatio = (float)meat / pop;
+            float meatConsMod = meat > 0 ? Mathf.Clamp(meatRatio, 0.1f, 1.5f) : 0f;
+            float rate = pop * 0.15f * meatConsMod;
+            if (rate > 0)
+            {
+                consumption += rate;
+                consSources["Bürger (Luxusbedarf)"] = rate;
+            }
+        }
+
+        if (prodSources.Count > 0)
+        {
+            breakdown.Add("<b>Einnahmen / Produktion:</b>");
+            foreach (var kvp in prodSources)
+            {
+                breakdown.Add($"<color=#55FF55>+{kvp.Value:F1}/Min</color> durch {kvp.Key}");
+            }
+        }
+
+        if (consSources.Count > 0)
+        {
+            if (breakdown.Count > 0) breakdown.Add("");
+            breakdown.Add("<b>Ausgaben / Verbrauch:</b>");
+            foreach (var kvp in consSources)
+            {
+                breakdown.Add($"<color=#FF5555>-{kvp.Value:F1}/Min</color> durch {kvp.Key}");
+            }
+        }
+    }
+
+    private string GetResourceDisplayName(string id)
+    {
+        foreach (var res in startingResources)
+        {
+            if (res.id == id) return res.displayName;
+        }
+        switch(id)
+        {
+            case "bevolkerung": return "Bevölkerung";
+            case "dorfbewohner": return "Freie Arbeiter";
+            case "arbeiter": return "Arbeiter";
+            case "stimmung": return "Zufriedenheit";
+            case "soldaten": return "Soldaten";
+            case "weizen": return "Weizen";
+            case "fruechte": return "Früchte";
+            case "fleisch": return "Fleisch";
+            case "geld": return "Geld";
+            default: return id;
+        }
+    }
+}
+
+public class ResourceTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+{
+    public string resourceId;
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (Player_UI.Instance != null)
+        {
+            Player_UI.Instance.ShowTooltip(resourceId, transform.position);
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        if (Player_UI.Instance != null)
+        {
+            Player_UI.Instance.HideTooltip();
+        }
     }
 }
