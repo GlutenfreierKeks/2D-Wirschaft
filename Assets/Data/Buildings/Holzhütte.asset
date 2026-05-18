@@ -27,9 +27,9 @@ MonoBehaviour:
   isWorkerHub: 0
   isBarracks: 0
   productionResourceId: holz
-  productionAmount: 5
+  productionAmount: 6
   consumedResourceId: 
   consumedAmount: 0
-  productionInterval: 50
+  productionInterval: 60
   producesVillagers: 0
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

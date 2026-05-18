@@ -30,6 +30,6 @@ MonoBehaviour:
   productionAmount: 3
   consumedResourceId: 
   consumedAmount: 0
-  productionInterval: 100
+  productionInterval: 60
   producesVillagers: 0
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}

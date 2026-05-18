@@ -300,12 +300,12 @@ public class BuildingInfoPanel : MonoBehaviour
                 btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
                 if (currentBuilding.isBuilderHut)
                 {
-                    txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte";
+                    txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte (Kosten: 1 Weizen)";
                     btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
                 }
                 else
                 {
-                    txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus";
+                    txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus (Kosten: 1 Weizen)";
                     btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
                 }
             }
@@ -508,8 +508,28 @@ public class BuildingInfoPanel : MonoBehaviour
     {
         if (currentBuilding == null) return;
         
-        currentBuilding.ToggleHutType();
-        RefreshStats();
+        bool success = currentBuilding.ToggleHutType();
+        if (success)
+        {
+            RefreshStats();
+        }
+        else
+        {
+            // Spawn a beautiful floating warning text above the building!
+            GameObject textGO = new GameObject("HutTypeErrorText");
+            textGO.transform.position = currentBuilding.transform.position + Vector3.up * 1.2f;
+            var textMesh = textGO.AddComponent<TextMesh>();
+            textMesh.text = "⚠️ Weizen fehlt!";
+            textMesh.fontSize = 22;
+            textMesh.characterSize = 0.07f;
+            textMesh.color = new Color(1f, 0.4f, 0.4f); // beautiful warning red/orange
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            
+            // Add a simple procedurally animated moving script
+            textGO.AddComponent<BuildingErrorTextMover>();
+            Destroy(textGO, 1.8f);
+        }
     }
 
     // ── Helper-Methoden ──────────────────────────────────────────────────────
@@ -780,5 +800,14 @@ public class BuildingInfoPanel : MonoBehaviour
             var o = btn.GetComponent<Outline>();
             if (o != null) Destroy(o);
         }
+    }
+}
+
+// Procedural text animator for error alerts in the game scene
+public class BuildingErrorTextMover : MonoBehaviour
+{
+    private void Update()
+    {
+        transform.Translate(Vector3.up * Time.deltaTime * 0.6f);
     }
 }

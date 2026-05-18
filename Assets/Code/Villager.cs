@@ -169,7 +169,14 @@ public class Villager : MonoBehaviour
                                 // Inside sleeping!
                                 SetVisibility(false);
                                 stamina = Mathf.Min(100f, stamina + Time.deltaTime * 5.0f);
-                                mood = Mathf.Min(100f, mood + Time.deltaTime * 0.12f); // Sleep slowly recovers mood (was 0.18f)
+                                
+                                // Large house gives a comfort boost to mood recovery!
+                                float sleepMoodRecovery = 0.12f;
+                                if (sleepHouse.data != null && sleepHouse.data.buildingName.Contains("Großes Haus"))
+                                {
+                                    sleepMoodRecovery = 0.22f; // Much faster mood recovery for premium comfort!
+                                }
+                                mood = Mathf.Min(100f, mood + Time.deltaTime * sleepMoodRecovery);
                             }
                             else
                             {
