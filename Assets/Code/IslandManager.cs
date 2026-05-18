@@ -135,6 +135,19 @@ public class IslandManager : MonoBehaviour
 
     private void GenerateIslands()
     {
+        if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.MapSeed, out object seedObj))
+        {
+            int seed = System.Convert.ToInt32(seedObj);
+            Random.InitState(seed);
+            Debug.Log($"[IslandManager] Initializing procedural generation with synchronized seed: {seed}");
+        }
+        else
+        {
+            int fallbackSeed = Random.Range(1, 1000000);
+            Random.InitState(fallbackSeed);
+            Debug.Log($"[IslandManager] Offline/No seed found, generated local seed: {fallbackSeed}");
+        }
+
         float range = (GridManager.Instance != null) ? (GridManager.Instance.GetGridSize() / 2f) - mapMargin : 1000f;
 
         IslandType[] allTypes = (IslandType[])System.Enum.GetValues(typeof(IslandType));

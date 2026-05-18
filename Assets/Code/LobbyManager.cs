@@ -81,6 +81,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         if (!currentProps.ContainsKey(LobbySettingsKeys.StartVillagers)) props[LobbySettingsKeys.StartVillagers] = 10;
         if (!currentProps.ContainsKey(LobbySettingsKeys.StartWorkers)) props[LobbySettingsKeys.StartWorkers] = 2;
         if (!currentProps.ContainsKey(LobbySettingsKeys.WorldSize)) props[LobbySettingsKeys.WorldSize] = "Standard";
+        if (!currentProps.ContainsKey(LobbySettingsKeys.MapSeed)) props[LobbySettingsKeys.MapSeed] = Random.Range(1, 1000000);
 
         if (props.Count > 0)
         {
