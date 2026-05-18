@@ -34,6 +34,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
     private void Start()
     {
+        PhotonNetwork.AutomaticallySyncScene = true;
         SetUIInteractable(false);
         LoadPlayerName();
         BuildRuntimeMenu();
@@ -45,6 +46,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
     {
         statusText.text = "Verbunden. Erstelle eine Lobby oder tritt einer Runde bei.";
         SetUIInteractable(true);
+        PhotonNetwork.JoinLobby();
     }
 
     private void LoadPlayerName()
@@ -161,6 +163,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
+        Debug.Log($"[MainMenu] OnJoinedRoom: Raum={PhotonNetwork.CurrentRoom.Name}, Spieler={PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
         statusText.text = "Lobby gefunden. Wechsle in den Warteraum...";
         PhotonNetwork.LoadLevel(SceneNames.LobbyScene);
     }

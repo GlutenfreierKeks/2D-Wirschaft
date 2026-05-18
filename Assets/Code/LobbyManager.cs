@@ -1,11 +1,16 @@
+using System.Collections.Generic;
+using ExitGames.Client.Photon;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class LobbyManager : MonoBehaviourPunCallbacks
+public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
 {
+    private const byte LobbyChatEventCode = 1;
+    private readonly int maxChatMessages = 8;
+
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI roomInfoText;
     [SerializeField] private TextMeshProUGUI playerListText;
@@ -13,6 +18,12 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] private Button leaveRoomButton;
     [SerializeField] private Button startTestButton;
     [SerializeField] private JoinLogUI joinLogUI;
+    [SerializeField] private GameObject chatLogTextPrefab;
+
+    private readonly List<string> chatMessages = new List<string>();
+    private TextMeshProUGUI chatLogText;
+    private TMP_InputField chatInputField;
+    private Button chatSendButton;
 
     [Header("Speed Settings")]
     [SerializeField] private Sprite pfeil1;
@@ -41,6 +52,16 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     private Button[] villagerButtons;
     private Button[] workerButtons;
     private Button[] worldSizeButtons;
+
+    private void OnEnable()
+    {
+        PhotonNetwork.AddCallbackTarget(this);
+    }
+
+    private void OnDisable()
+    {
+        PhotonNetwork.RemoveCallbackTarget(this);
+    }
 
     private void Start()
     {
@@ -207,6 +228,15 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         }
     }
 
+    public void OnEvent(EventData photonEvent)
+    {
+        if (photonEvent.Code != LobbyChatEventCode) return;
+        if (photonEvent.CustomData is string message)
+        {
+            AddChatMessage(message);
+        }
+    }
+
     private void BuildLobbyLayout()
     {
         Canvas canvas = FindFirstObjectByType<Canvas>();
@@ -253,6 +283,8 @@ public class LobbyManager : MonoBehaviourPunCallbacks
             logOutline.effectColor = new Color(accentColor.r, accentColor.g, accentColor.b, 0.35f);
             logOutline.effectDistance = new Vector2(1f, -1f);
         }
+
+        CreateChatPanel(leftCard);
 
         if (startTestButton != null)
         {
@@ -357,6 +389,149 @@ public class LobbyManager : MonoBehaviourPunCallbacks
 
         lobbyStartButton = startBtnGO.GetComponent<Button>();
         lobbyStartButton.onClick.AddListener(OnLobbyStartButtonClicked);
+    }
+
+    private void CreateChatPanel(RectTransform parent)
+    {
+        RectTransform chatRoot = CreateRect("LobbyChatPanel", parent);
+        chatRoot.anchorMin = new Vector2(0.04f, 0.02f);
+        chatRoot.anchorMax = new Vector2(0.96f, 0.28f);
+        chatRoot.pivot = new Vector2(0.5f, 0f);
+        chatRoot.anchoredPosition = Vector2.zero;
+        chatRoot.offsetMin = Vector2.zero;
+        chatRoot.offsetMax = Vector2.zero;
+
+        Image chatBg = chatRoot.gameObject.AddComponent<Image>();
+        chatBg.color = new Color(0.09f, 0.11f, 0.14f, 0.95f);
+        Outline chatOutline = chatRoot.gameObject.AddComponent<Outline>();
+        chatOutline.effectColor = accentColor;
+        chatOutline.effectDistance = new Vector2(2f, -2f);
+
+        TextMeshProUGUI title = CreateStaticLabel(chatRoot, "LOBBY-CHAT", 16f, new Vector2(14f, -10f), new Vector2(-28f, 22f));
+        title.color = new Color(0.85f, 0.80f, 0.65f, 1f);
+        title.alignment = TextAlignmentOptions.TopLeft;
+
+        RectTransform logRect = CreateRect("ChatLog", chatRoot);
+        logRect.anchorMin = new Vector2(0f, 0.28f);
+        logRect.anchorMax = new Vector2(1f, 1f);
+        logRect.pivot = new Vector2(0.5f, 1f);
+        logRect.anchoredPosition = new Vector2(0f, -36f);
+        logRect.offsetMin = new Vector2(12f, 0f);
+        logRect.offsetMax = new Vector2(-12f, 0f);
+
+        chatLogText = logRect.gameObject.AddComponent<TextMeshProUGUI>();
+        chatLogText.text = "Schreibe eine Nachricht, um den Lobby-Chat zu testen.";
+        chatLogText.fontSize = 14f;
+        chatLogText.alignment = TextAlignmentOptions.TopLeft;
+        chatLogText.color = new Color(0.92f, 0.92f, 0.92f, 1f);
+        chatLogText.enableWordWrapping = true;
+        chatLogText.overflowMode = TextOverflowModes.Truncate;
+
+        RectTransform inputRow = CreateRect("ChatInputRow", chatRoot);
+        inputRow.anchorMin = new Vector2(0f, 0f);
+        inputRow.anchorMax = new Vector2(1f, 0f);
+        inputRow.pivot = new Vector2(0.5f, 0f);
+        inputRow.anchoredPosition = new Vector2(0f, 12f);
+        inputRow.sizeDelta = new Vector2(-24f, 36f);
+
+        RectTransform inputFieldRect = CreateRect("ChatInputField", inputRow);
+        inputFieldRect.anchorMin = new Vector2(0f, 0f);
+        inputFieldRect.anchorMax = new Vector2(0.72f, 1f);
+        inputFieldRect.offsetMin = Vector2.zero;
+        inputFieldRect.offsetMax = Vector2.zero;
+
+        Image inputBg = inputFieldRect.gameObject.AddComponent<Image>();
+        inputBg.color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+        Outline inputOutline = inputFieldRect.gameObject.AddComponent<Outline>();
+        inputOutline.effectColor = new Color(0.5f, 0.5f, 0.55f, 0.7f);
+        inputOutline.effectDistance = new Vector2(1f, -1f);
+
+        chatInputField = inputFieldRect.gameObject.AddComponent<TMP_InputField>();
+        chatInputField.textViewport = inputFieldRect;
+        chatInputField.textComponent = CreateInputText(inputFieldRect, "");
+        chatInputField.placeholder = CreateInputText(inputFieldRect, "Nachricht...", true);
+        chatInputField.characterLimit = 120;
+        chatInputField.onSubmit.AddListener(OnChatInputEndEdit);
+
+        RectTransform buttonRect = CreateRect("ChatSendButton", inputRow);
+        buttonRect.anchorMin = new Vector2(0.74f, 0f);
+        buttonRect.anchorMax = new Vector2(1f, 1f);
+        buttonRect.offsetMin = Vector2.zero;
+        buttonRect.offsetMax = Vector2.zero;
+
+        chatSendButton = buttonRect.gameObject.AddComponent<Button>();
+        Image buttonImage = buttonRect.gameObject.AddComponent<Image>();
+        buttonImage.color = new Color(0.22f, 0.33f, 0.18f, 1f);
+        Outline buttonOutline = buttonRect.gameObject.AddComponent<Outline>();
+        buttonOutline.effectColor = accentColor;
+        buttonOutline.effectDistance = new Vector2(2f, -2f);
+        chatSendButton.onClick.AddListener(SubmitChatInput);
+
+        TextMeshProUGUI buttonText = CreateCenteredButtonText(buttonRect.transform, "Senden");
+        buttonText.fontSize = 14f;
+        buttonText.color = labelColor;
+        buttonText.alignment = TextAlignmentOptions.Center;
+
+        AddChatMessage("Lobby-Chat aktiv. Schreibe hier, um zu prüfen, ob du in derselben Lobby bist.");
+    }
+
+    private TextMeshProUGUI CreateInputText(RectTransform parent, string value, bool isPlaceholder = false)
+    {
+        RectTransform rect = CreateRect(isPlaceholder ? "Placeholder" : "InputText", parent);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(8f, 6f);
+        rect.offsetMax = new Vector2(-8f, -6f);
+
+        TextMeshProUGUI text = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        text.text = value;
+        text.fontSize = 14f;
+        text.alignment = TextAlignmentOptions.Left;
+        text.color = isPlaceholder ? new Color(0.68f, 0.68f, 0.68f, 1f) : new Color(0.95f, 0.95f, 0.95f, 1f);
+        text.enableWordWrapping = false;
+        return text;
+    }
+
+    private void SubmitChatInput()
+    {
+        if (chatInputField == null) return;
+        string message = chatInputField.text.Trim();
+        if (string.IsNullOrEmpty(message)) return;
+        SendChatMessage(message);
+        chatInputField.text = string.Empty;
+        chatInputField.ActivateInputField();
+    }
+
+    private void OnChatInputEndEdit(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        SubmitChatInput();
+    }
+
+    private void SendChatMessage(string message)
+    {
+        if (!PhotonNetwork.InRoom) return;
+        string sender = string.IsNullOrEmpty(PhotonNetwork.NickName) ? "Spieler" : PhotonNetwork.NickName;
+        string payload = $"[{sender}] {message}";
+
+        RaiseEventOptions options = new RaiseEventOptions { Receivers = ReceiverGroup.All };
+        SendOptions sendOptions = new SendOptions { Reliability = true };
+
+        PhotonNetwork.RaiseEvent(LobbyChatEventCode, payload, options, sendOptions);
+    }
+
+    private void AddChatMessage(string message)
+    {
+        chatMessages.Add(message);
+        if (chatMessages.Count > maxChatMessages)
+        {
+            chatMessages.RemoveAt(0);
+        }
+
+        if (chatLogText != null)
+        {
+            chatLogText.text = string.Join("\n", chatMessages);
+        }
     }
 
     private void SetGameSpeed(int speed)
