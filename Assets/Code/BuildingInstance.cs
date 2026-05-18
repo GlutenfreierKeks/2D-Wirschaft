@@ -32,13 +32,21 @@ public class BuildingInstance : MonoBehaviour
     public bool swordSelected = true;
     public bool bowSelected = true;
 
+    [Header("Barracks Cost Settings")]
+    public int woodSoldierCost = 5;
+    public int stoneSoldierCost = 5;
+    public int goldSoldierCost = 5;
+    public int ironSoldierCost = 5;
+
     public enum BarracksResource { Wood, Stone, Gold, Iron }
     public BarracksResource selectedResource = BarracksResource.Stone;
 
     public bool autoRecruit = false;
     
     public Queue<SoldierType> recruitQueue = new Queue<SoldierType>();
+    public Queue<BarracksResource> recruitResourceQueue = new Queue<BarracksResource>();
     public SoldierType currentRecruitingType;
+    private BarracksResource currentRecruitingResource;
     private float recruitmentTimer = 0f;
     private const float RECRUIT_INTERVAL = 8f;
 
@@ -498,9 +506,58 @@ public class BuildingInstance : MonoBehaviour
         return true;
     }
 
+    public bool CanAffordSoldier()
+    {
+        if (ResourceManager.Instance == null) return false;
+        
+        switch (selectedResource)
+        {
+            case BarracksResource.Wood:
+                return ResourceManager.Instance.HasResource("holz", woodSoldierCost);
+            case BarracksResource.Stone:
+                return ResourceManager.Instance.HasResource("stein", stoneSoldierCost);
+            case BarracksResource.Gold:
+                return ResourceManager.Instance.HasResource("gold", goldSoldierCost);
+            case BarracksResource.Iron:
+                return ResourceManager.Instance.HasResource("eisen", ironSoldierCost);
+            default:
+                return true;
+        }
+    }
+
+    public void SpendSoldierResources()
+    {
+        if (ResourceManager.Instance == null) return;
+        
+        switch (selectedResource)
+        {
+            case BarracksResource.Wood:
+                ResourceManager.Instance.SpendResource("holz", woodSoldierCost);
+                break;
+            case BarracksResource.Stone:
+                ResourceManager.Instance.SpendResource("stein", stoneSoldierCost);
+                break;
+            case BarracksResource.Gold:
+                ResourceManager.Instance.SpendResource("gold", goldSoldierCost);
+                break;
+            case BarracksResource.Iron:
+                ResourceManager.Instance.SpendResource("eisen", ironSoldierCost);
+                break;
+        }
+    }
+
     public void OrderSoldier(SoldierType sType)
     {
-        recruitQueue.Enqueue(sType);
+        if (CanAffordSoldier())
+        {
+            SpendSoldierResources();
+            recruitQueue.Enqueue(sType);
+            recruitResourceQueue.Enqueue(selectedResource);
+        }
+        else
+        {
+            NotificationManager.Instance?.Notify("barracks_no_resources", "Nicht genügend Ressourcen für Soldaten-Ausbildung!", 5f);
+        }
     }
 
     private void UpdateBarracksRecruitment()
@@ -513,6 +570,7 @@ public class BuildingInstance : MonoBehaviour
             if (recruitQueue.Count > 0)
             {
                 currentRecruitingType = recruitQueue.Dequeue();
+                currentRecruitingResource = recruitResourceQueue.Count > 0 ? recruitResourceQueue.Dequeue() : selectedResource;
                 recruitmentTimer = RECRUIT_INTERVAL;
             }
             else if (autoRecruit)
@@ -533,8 +591,17 @@ public class BuildingInstance : MonoBehaviour
 
                     if (activeTypes.Count > 0)
                     {
-                        currentRecruitingType = activeTypes[Random.Range(0, activeTypes.Count)];
-                        recruitmentTimer = RECRUIT_INTERVAL;
+                        if (CanAffordSoldier())
+                        {
+                            SpendSoldierResources();
+                            currentRecruitingType = activeTypes[Random.Range(0, activeTypes.Count)];
+                            currentRecruitingResource = selectedResource;
+                            recruitmentTimer = RECRUIT_INTERVAL;
+                        }
+                        else
+                        {
+                            NotificationManager.Instance?.Notify("barracks_no_resources", "Auto-Ausbildung pausiert: Keine Ressourcen!", 10f);
+                        }
                     }
                 }
             }
@@ -615,7 +682,7 @@ public class BuildingInstance : MonoBehaviour
             }
 
             // Map BarracksResource to WeaponMaterial (top-level enum)
-            switch (selectedResource)
+            switch (currentRecruitingResource)
             {
                 case BarracksResource.Wood:  s.weaponMaterial = WeaponMaterial.Wood; break;
                 case BarracksResource.Stone: s.weaponMaterial = WeaponMaterial.Stone; break;

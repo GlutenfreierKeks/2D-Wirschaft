@@ -220,6 +220,29 @@ public class BuildingInfoPanel : MonoBehaviour
                 btnAutoRecruit.GetComponent<Image>().color = btnWarning;
             }
 
+            // Update order button labels with current costs
+            int currentCost = 0;
+            switch (currentBuilding.selectedResource)
+            {
+                case BuildingInstance.BarracksResource.Wood:
+                    currentCost = currentBuilding.woodSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Stone:
+                    currentCost = currentBuilding.stoneSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Gold:
+                    currentCost = currentBuilding.goldSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Iron:
+                    currentCost = currentBuilding.ironSoldierCost;
+                    break;
+            }
+
+            if (btnOrderSpear != null)  btnOrderSpear.GetComponentInChildren<TextMeshProUGUI>().text = $"+Speer ({currentCost})";
+            if (btnOrderShield != null) btnOrderShield.GetComponentInChildren<TextMeshProUGUI>().text = $"+Schild ({currentCost})";
+            if (btnOrderSword != null)  btnOrderSword.GetComponentInChildren<TextMeshProUGUI>().text = $"+Schwert ({currentCost})";
+            if (btnOrderBow != null)    btnOrderBow.GetComponentInChildren<TextMeshProUGUI>().text = $"+Bogen ({currentCost})";
+
             // Order/Queue state text
             int qCount = currentBuilding.recruitQueue.Count;
             if (qCount > 0)
