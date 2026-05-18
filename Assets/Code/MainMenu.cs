@@ -93,11 +93,17 @@ public class MainMenu : MonoBehaviourPunCallbacks
         }
 
         byte selectedMaxPlayers = maxPlayersOptions[Mathf.Clamp(maxPlayersDropdown.value, 0, maxPlayersOptions.Length - 1)];
+        int seed = Random.Range(1, 1000000);
         RoomOptions roomOptions = new RoomOptions
         {
             MaxPlayers = selectedMaxPlayers,
             IsOpen = true,
-            IsVisible = true
+            IsVisible = true,
+            CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { 
+                { LobbySettingsKeys.WorldSize, "Standard" },
+                { LobbySettingsKeys.MapSeed, seed } 
+            },
+            CustomRoomPropertiesForLobby = new[] { LobbySettingsKeys.WorldSize, LobbySettingsKeys.MapSeed }
         };
 
         statusText.text = $"Erstelle Lobby '{roomName}'...";
@@ -135,13 +141,17 @@ public class MainMenu : MonoBehaviourPunCallbacks
         if (!SetupPlayerName()) return;
 
         string roomName = "TestRoom_" + Random.Range(1000, 9999);
+        int seed = Random.Range(1, 1000000);
         RoomOptions roomOptions = new RoomOptions
         {
             MaxPlayers = 4,
             IsOpen = true,
             IsVisible = false,
-            CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { { "TestMode", true } },
-            CustomRoomPropertiesForLobby = new[] { "TestMode" }
+            CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { 
+                { "TestMode", true },
+                { LobbySettingsKeys.MapSeed, seed }
+            },
+            CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed }
         };
 
         statusText.text = "Erstelle Test-Lobby...";
