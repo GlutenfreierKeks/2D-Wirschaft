@@ -133,8 +133,13 @@ public class IslandManager : MonoBehaviour
         }
     }
 
-    private void GenerateIslands()
+    public bool IsGenerated { get; private set; } = false;
+
+    public void GenerateIslands()
     {
+        if (IsGenerated) return;
+        IsGenerated = true;
+
         if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.MapSeed, out object seedObj))
         {
             int seed = System.Convert.ToInt32(seedObj);

@@ -36,6 +36,9 @@ public class GameManager : MonoBehaviourPunCallbacks
             return;
         }
 
+        // Ensure islands are generated before we look up their positions
+        IslandManager.Instance.GenerateIslands();
+
         // Check if we are in Test Mode
         bool isTestMode = false;
         if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("TestMode", out object testModeValue))
