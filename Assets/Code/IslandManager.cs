@@ -178,9 +178,11 @@ public class IslandManager : MonoBehaviour
 
         Vector2 biasDir = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)).normalized;
 
-        for (int i = 0; i < blocksPerIsland; i++)
+        int attempts = 0;
+        while (occupiedCells.Count < blocksPerIsland && attempts < blocksPerIsland * 10)
         {
-            if (i % (blocksPerIsland / 4) == 0)
+            attempts++;
+            if (attempts % (blocksPerIsland / 4) == 0)
                 biasDir = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)).normalized;
 
             int index = (Random.value > 0.6f) ? edgeGrowthCells.Count - 1 : Random.Range(0, edgeGrowthCells.Count);
@@ -194,13 +196,33 @@ public class IslandManager : MonoBehaviour
                 return scoreB.CompareTo(scoreA);
             });
 
+            bool addedAny = false;
             foreach (Vector2 next in neighbors)
             {
                 if (!occupiedCells.Contains(next))
                 {
                     occupiedCells.Add(next);
                     edgeGrowthCells.Add(next);
+                    addedAny = true;
                     if (Random.value > 0.3f) break;
+                }
+            }
+
+            // Remove interior cells from growth list to optimize
+            if (!addedAny)
+            {
+                bool completelySurrounded = true;
+                foreach (Vector2 n in neighbors)
+                {
+                    if (!occupiedCells.Contains(n))
+                    {
+                        completelySurrounded = false;
+                        break;
+                    }
+                }
+                if (completelySurrounded)
+                {
+                    edgeGrowthCells.RemoveAt(index);
                 }
             }
         }
