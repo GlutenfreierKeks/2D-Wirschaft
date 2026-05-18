@@ -32,7 +32,8 @@ public class Enemy_Place : MonoBehaviour
             if (Keyboard.current.digit4Key.wasPressedThisFrame) SelectSoldier(bowSoldierPrefab, "Bogensoldat");
         }
 
-        // Platzieren mit Linksklick
+        // Platzieren mit Linksklick (deaktiviert)
+        /*
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             // Block placement if a sub-menu is open or mouse is over UI
@@ -41,6 +42,7 @@ public class Enemy_Place : MonoBehaviour
 
             PlaceSoldier();
         }
+        */
     }
 
     // Funktion um den ausgewählten Soldaten zu wechseln (Kann auch von UI-Buttons aufgerufen werden)
