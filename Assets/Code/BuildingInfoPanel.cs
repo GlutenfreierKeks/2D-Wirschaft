@@ -211,13 +211,6 @@ public class BuildingInfoPanel : MonoBehaviour
             var autoTxt = btnAutoRecruit.GetComponentInChildren<TextMeshProUGUI>();
             if (currentBuilding.autoRecruit)
             {
-                txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte (Kosten: 1 Weizen)";
-                btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
-            }
-            else
-            {
-                txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus (Kosten: 1 Weizen)";
-                btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
                 autoTxt.text = "🤖 Autorekrutierung (20%): AN";
                 btnAutoRecruit.GetComponent<Image>().color = new Color(0.15f, 0.55f, 0.15f);
             }
@@ -307,12 +300,12 @@ public class BuildingInfoPanel : MonoBehaviour
                 btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
                 if (currentBuilding.isBuilderHut)
                 {
-                    txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte";
+                    txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte (Kosten: 1 Weizen)";
                     btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f); // orange/gold theme
                 }
                 else
                 {
-                    txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus";
+                    txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus (Kosten: 1 Weizen)";
                     btnToggleHutType.GetComponent<Image>().color = btnNeutral; // standard green/neutral
                 }
             }
