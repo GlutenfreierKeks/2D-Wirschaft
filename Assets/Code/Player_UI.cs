@@ -98,6 +98,10 @@ public class Player_UI : MonoBehaviour
     private readonly Dictionary<string, int>                values = new();
     private readonly Dictionary<string, int>                maxValues = new();
     private readonly Dictionary<string, TextMeshProUGUI>    labels = new();
+    private readonly Dictionary<string, string>             currentRates = new();
+
+    private float rateUpdateTimer = 0f;
+    private List<string> dummyBreakdown = new List<string>();
 
     private GameObject mainMenuContainer;
     private GameObject subMenuBlocker;
@@ -114,6 +118,15 @@ public class Player_UI : MonoBehaviour
     private TextMeshProUGUI tooltipTitleText;
     private TextMeshProUGUI tooltipBodyText;
     private string activeTooltipResourceId = "";
+    private Vector2 activeTooltipScreenPosition;
+
+    private class RateSourceEntry
+    {
+        public string Label;
+        public int Count;
+        public float RatePerUnit;
+        public float TotalRate;
+    }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -229,12 +242,16 @@ public class Player_UI : MonoBehaviour
 
         if (labels.TryGetValue(id, out var lbl))
         {
+            string baseText = "";
             if (id == "stimmung")
-                lbl.text = $"{values[id]}%";
+                baseText = $"{values[id]}%";
             else if (max > 0)
-                lbl.text = $"{values[id]}/{max}";
+                baseText = $"{values[id]}/{max}";
             else
-                lbl.text = values[id].ToString();
+                baseText = values[id].ToString();
+
+            string rateText = currentRates.ContainsKey(id) ? currentRates[id] : "";
+            lbl.text = baseText + rateText;
         }
     }
 
@@ -934,6 +951,7 @@ public class Player_UI : MonoBehaviour
         var valGO = new GameObject("Value",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         valGO.transform.SetParent(col.transform, false);
+        valGO.AddComponent<ResourceTooltipTrigger>().resourceId = def.id;
         var valTMP = valGO.GetComponent<TextMeshProUGUI>();
         
         if (def.maxValue > 0)
@@ -945,7 +963,7 @@ public class Player_UI : MonoBehaviour
         valTMP.fontStyle     = FontStyles.Bold;
         valTMP.color         = valueColor;
         valTMP.alignment     = TextAlignmentOptions.Left;
-        valTMP.raycastTarget = false;
+        valTMP.raycastTarget = true;
 
         return valTMP;
     }
@@ -957,6 +975,49 @@ public class Player_UI : MonoBehaviour
         if (tooltipPanel != null && tooltipPanel.activeSelf)
         {
             UpdateTooltipContent();
+        }
+
+        rateUpdateTimer -= Time.deltaTime;
+        if (rateUpdateTimer <= 0f)
+        {
+            rateUpdateTimer = 1f; // Jede Sekunde aktualisieren
+            UpdateAllRates();
+        }
+    }
+
+    private void UpdateAllRates()
+    {
+        List<string> keys = new List<string>(values.Keys);
+        foreach (string id in keys)
+        {
+            bool isTickResource = id != "bevolkerung" && id != "dorfbewohner" && id != "arbeiter" && id != "soldaten" && id != "stimmung";
+            if (!isTickResource)
+            {
+                currentRates[id] = "";
+                continue;
+            }
+
+            float prod, cons;
+            dummyBreakdown.Clear();
+            CalculateResourceRates(id, out prod, out cons, dummyBreakdown);
+            float net = prod - cons;
+
+            if (Mathf.Abs(net) > 0.01f)
+            {
+                string netColor = net >= 0 ? "#55FF55" : "#FF5555";
+                string prefix = net > 0 ? "+" : "";
+                currentRates[id] = $" <size=14><color={netColor}>{prefix}{net:F1}/Min</color></size>";
+            }
+            else
+            {
+                currentRates[id] = " <size=14><color=#AAAAAA>0/Min</color></size>";
+            }
+
+            // Label aktualisieren
+            if (labels.ContainsKey(id))
+            {
+                SetResource(id, values[id]);
+            }
         }
     }
 
@@ -1024,23 +1085,25 @@ public class Player_UI : MonoBehaviour
         tooltipPanel.SetActive(false);
     }
 
-    public void ShowTooltip(string resourceId, Vector3 slotPosition)
+    public void ShowTooltip(string resourceId, Vector2 screenPosition)
     {
         activeTooltipResourceId = resourceId;
+        activeTooltipScreenPosition = screenPosition;
         UpdateTooltipContent();
 
         if (tooltipPanel != null)
         {
             tooltipPanel.SetActive(true);
-            var rt = tooltipPanel.GetComponent<RectTransform>();
-            Vector2 localPoint;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                tooltipPanel.transform.parent as RectTransform,
-                slotPosition,
-                null,
-                out localPoint
-            );
-            rt.anchoredPosition = new Vector2(localPoint.x, localPoint.y - barHeight / 2f - 10f);
+            UpdateTooltipPosition(screenPosition);
+        }
+    }
+
+    public void UpdateTooltipHoverPosition(Vector2 screenPosition)
+    {
+        activeTooltipScreenPosition = screenPosition;
+        if (tooltipPanel != null && tooltipPanel.activeSelf)
+        {
+            UpdateTooltipPosition(screenPosition);
         }
     }
 
@@ -1051,6 +1114,39 @@ public class Player_UI : MonoBehaviour
         {
             tooltipPanel.SetActive(false);
         }
+    }
+
+    private void UpdateTooltipPosition(Vector2 screenPosition)
+    {
+        if (tooltipPanel == null)
+        {
+            return;
+        }
+
+        var rt = tooltipPanel.GetComponent<RectTransform>();
+        Vector2 localPoint;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            tooltipPanel.transform.parent as RectTransform,
+            screenPosition,
+            null,
+            out localPoint
+        );
+
+        float tooltipWidth = rt.rect.width > 0f ? rt.rect.width : 320f;
+        float tooltipHeight = rt.rect.height > 0f ? rt.rect.height : 180f;
+        float x = localPoint.x + (tooltipWidth * 0.5f) + 16f;
+        float y = localPoint.y - 16f;
+
+        RectTransform parentRect = tooltipPanel.transform.parent as RectTransform;
+        if (parentRect != null)
+        {
+            float halfWidth = parentRect.rect.width * 0.5f;
+            float halfHeight = parentRect.rect.height * 0.5f;
+            x = Mathf.Clamp(x, -halfWidth + tooltipWidth * 0.5f + 8f, halfWidth - tooltipWidth * 0.5f - 8f);
+            y = Mathf.Clamp(y, -halfHeight + tooltipHeight + 8f, halfHeight - 8f);
+        }
+
+        rt.anchoredPosition = new Vector2(x, y);
     }
 
     private void UpdateTooltipContent()
@@ -1088,7 +1184,21 @@ public class Player_UI : MonoBehaviour
             body += string.Join("\n", breakdown);
         }
 
-        if (isTickResource && breakdown.Count == 0)
+        string detailedBreakdown = "";
+        if (isTickResource)
+        {
+            detailedBreakdown = BuildDetailedRateBreakdown(activeTooltipResourceId);
+            if (!string.IsNullOrEmpty(detailedBreakdown))
+            {
+                if (!string.IsNullOrEmpty(body) && !body.EndsWith("\n\n"))
+                {
+                    body += "\n\n";
+                }
+                body += detailedBreakdown;
+            }
+        }
+
+        if (isTickResource && breakdown.Count == 0 && string.IsNullOrEmpty(detailedBreakdown))
         {
             body += "Keine aktiven Quellen oder Verbraucher.";
         }
@@ -1184,6 +1294,16 @@ public class Player_UI : MonoBehaviour
         {
             if (b == null || !b.isLocal || !b.IsConstructed()) continue;
 
+            if (b.GetOperatingWorkerCount() < b.data.workersNeeded) continue;
+
+            float scheduleMultiplier = 1.0f;
+            switch (b.currentSchedule)
+            {
+                case BuildingInstance.ScheduleMode.DayOnly: scheduleMultiplier = 0.5f; break;
+                case BuildingInstance.ScheduleMode.Leisure: scheduleMultiplier = 0.375f; break;
+                case BuildingInstance.ScheduleMode.Continuous: scheduleMultiplier = 1.0f; break;
+            }
+
             if (!string.IsNullOrEmpty(b.data.productionResourceId) && b.data.productionResourceId == id && !b.data.isBarracks)
             {
                 if (!b.IsProductionPaused)
@@ -1191,7 +1311,7 @@ public class Player_UI : MonoBehaviour
                     int baseAmount = b.data.productionAmount;
                     int actualProduction = Mathf.Max(1, Mathf.RoundToInt(baseAmount * yieldModifier));
                     float interval = b.data.productionInterval > 0f ? b.data.productionInterval : 60f;
-                    float rate = (actualProduction * 60f) / interval;
+                    float rate = ((actualProduction * 60f) / interval) * scheduleMultiplier;
 
                     string bName = b.data.buildingName;
                     if (prodSources.ContainsKey(bName)) prodSources[bName] += rate;
@@ -1206,7 +1326,7 @@ public class Player_UI : MonoBehaviour
                 if (!b.IsProductionPaused)
                 {
                     float interval = b.data.productionInterval > 0f ? b.data.productionInterval : 60f;
-                    float rate = (b.data.consumedAmount * 60f) / interval;
+                    float rate = ((b.data.consumedAmount * 60f) / interval) * scheduleMultiplier;
 
                     string bName = b.data.buildingName;
                     if (consSources.ContainsKey(bName)) consSources[bName] += rate;
@@ -1268,6 +1388,175 @@ public class Player_UI : MonoBehaviour
         }
     }
 
+    private string BuildDetailedRateBreakdown(string resourceId)
+    {
+        List<string> lines = new List<string>();
+        Dictionary<string, RateSourceEntry> productionSources = new Dictionary<string, RateSourceEntry>();
+        Dictionary<string, RateSourceEntry> consumptionSources = new Dictionary<string, RateSourceEntry>();
+
+        var buildings = FindObjectsByType<BuildingInstance>();
+        float globalMoodForYield = VillagerManager.Instance != null ? VillagerManager.Instance.globalMood : 100f;
+        float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMoodForYield / 100f);
+
+        foreach (var building in buildings)
+        {
+            if (building == null || !building.isLocal || !building.IsConstructed() || building.IsProductionPaused)
+            {
+                continue;
+            }
+
+            if (building.GetOperatingWorkerCount() < building.data.workersNeeded)
+            {
+                continue;
+            }
+
+            float scheduleMultiplier = 1f;
+            switch (building.currentSchedule)
+            {
+                case BuildingInstance.ScheduleMode.DayOnly:
+                    scheduleMultiplier = 0.5f;
+                    break;
+                case BuildingInstance.ScheduleMode.Leisure:
+                    scheduleMultiplier = 0.375f;
+                    break;
+                case BuildingInstance.ScheduleMode.Continuous:
+                    scheduleMultiplier = 1f;
+                    break;
+            }
+
+            if (!string.IsNullOrEmpty(building.data.productionResourceId) && building.data.productionResourceId == resourceId && !building.data.isBarracks)
+            {
+                int actualProduction = Mathf.Max(1, Mathf.RoundToInt(building.data.productionAmount * yieldModifier));
+                float interval = building.data.productionInterval > 0f ? building.data.productionInterval : 60f;
+                float rate = ((actualProduction * 60f) / interval) * scheduleMultiplier;
+                AddOrUpdateDetailedSource(productionSources, building.data.buildingName, rate);
+            }
+
+            if (!string.IsNullOrEmpty(building.data.consumedResourceId) && building.data.consumedResourceId == resourceId)
+            {
+                float interval = building.data.productionInterval > 0f ? building.data.productionInterval : 60f;
+                float rate = ((building.data.consumedAmount * 60f) / interval) * scheduleMultiplier;
+                AddOrUpdateDetailedSource(consumptionSources, building.data.buildingName, rate);
+            }
+        }
+
+        int villagerCount = 0;
+        if (VillagerManager.Instance != null && VillagerManager.Instance.ActiveVillagers != null)
+        {
+            villagerCount = VillagerManager.Instance.ActiveVillagers.Count;
+        }
+
+        if (resourceId == "weizen" && villagerCount > 0)
+        {
+            AddDetailedFixedSource(consumptionSources, "Bürger", villagerCount, 0.2f);
+        }
+        else if (resourceId == "fruechte" && villagerCount > 0)
+        {
+            int fruits = GetResource("fruechte");
+            float fruitsRatio = (float)fruits / Mathf.Max(1, villagerCount);
+            float perVillagerRate = fruits > 0 ? 0.15f * Mathf.Clamp(fruitsRatio, 0.1f, 1.5f) : 0f;
+            if (perVillagerRate > 0f)
+            {
+                AddDetailedFixedSource(consumptionSources, "Bürger", villagerCount, perVillagerRate);
+            }
+        }
+        else if (resourceId == "fleisch" && villagerCount > 0)
+        {
+            int meat = GetResource("fleisch");
+            float meatRatio = (float)meat / Mathf.Max(1, villagerCount);
+            float perVillagerRate = meat > 0 ? 0.15f * Mathf.Clamp(meatRatio, 0.1f, 1.5f) : 0f;
+            if (perVillagerRate > 0f)
+            {
+                AddDetailedFixedSource(consumptionSources, "Bürger", villagerCount, perVillagerRate);
+            }
+        }
+
+        if (productionSources.Count > 0)
+        {
+            lines.Add("<b>Details:</b>");
+            foreach (var entry in GetSortedDetailedSources(productionSources))
+            {
+                lines.Add($"<color=#55FF55>+{entry.TotalRate:F1}/Min</color> durch {FormatDetailedSource(entry)}");
+            }
+        }
+
+        if (consumptionSources.Count > 0)
+        {
+            if (lines.Count == 0)
+            {
+                lines.Add("<b>Details:</b>");
+            }
+            foreach (var entry in GetSortedDetailedSources(consumptionSources))
+            {
+                lines.Add($"<color=#FF5555>-{entry.TotalRate:F1}/Min</color> durch {FormatDetailedSource(entry)}");
+            }
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private void AddOrUpdateDetailedSource(Dictionary<string, RateSourceEntry> sources, string label, float rate)
+    {
+        if (sources.TryGetValue(label, out var entry))
+        {
+            entry.Count++;
+            entry.TotalRate += rate;
+            entry.RatePerUnit = entry.TotalRate / Mathf.Max(1, entry.Count);
+            return;
+        }
+
+        sources[label] = new RateSourceEntry
+        {
+            Label = label,
+            Count = 1,
+            RatePerUnit = rate,
+            TotalRate = rate
+        };
+    }
+
+    private void AddDetailedFixedSource(Dictionary<string, RateSourceEntry> sources, string label, int count, float ratePerUnit)
+    {
+        sources[label] = new RateSourceEntry
+        {
+            Label = label,
+            Count = count,
+            RatePerUnit = ratePerUnit,
+            TotalRate = count * ratePerUnit
+        };
+    }
+
+    private List<RateSourceEntry> GetSortedDetailedSources(Dictionary<string, RateSourceEntry> sources)
+    {
+        List<RateSourceEntry> entries = new List<RateSourceEntry>(sources.Values);
+        entries.Sort((a, b) => b.TotalRate.CompareTo(a.TotalRate));
+        return entries;
+    }
+
+    private string FormatDetailedSource(RateSourceEntry entry)
+    {
+        if (entry.Count <= 1)
+        {
+            return $"{entry.Label} ({entry.RatePerUnit:F2}/Min)";
+        }
+
+        return $"{entry.Count}x {entry.Label} (je {entry.RatePerUnit:F2}/Min)";
+    }
+
+    private void AddRateSource(Dictionary<string, RateSourceEntry> sources, string label, float rate)
+    {
+        AddOrUpdateDetailedSource(sources, label, rate);
+    }
+
+    private List<RateSourceEntry> GetSortedRateSources(Dictionary<string, RateSourceEntry> sources)
+    {
+        return GetSortedDetailedSources(sources);
+    }
+
+    private string FormatRateSource(RateSourceEntry entry)
+    {
+        return FormatDetailedSource(entry);
+    }
+
     private string GetResourceDisplayName(string id)
     {
         foreach (var res in startingResources)
@@ -1290,7 +1579,7 @@ public class Player_UI : MonoBehaviour
     }
 }
 
-public class ResourceTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+public class ResourceTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerMoveHandler
 {
     public string resourceId;
 
@@ -1298,7 +1587,7 @@ public class ResourceTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPoin
     {
         if (Player_UI.Instance != null)
         {
-            Player_UI.Instance.ShowTooltip(resourceId, transform.position);
+            Player_UI.Instance.ShowTooltip(resourceId, eventData.position);
         }
     }
 
@@ -1307,6 +1596,14 @@ public class ResourceTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPoin
         if (Player_UI.Instance != null)
         {
             Player_UI.Instance.HideTooltip();
+        }
+    }
+
+    public void OnPointerMove(PointerEventData eventData)
+    {
+        if (Player_UI.Instance != null)
+        {
+            Player_UI.Instance.UpdateTooltipHoverPosition(eventData.position);
         }
     }
 }

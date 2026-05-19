@@ -245,14 +245,32 @@ public class BuildingInfoPanel : MonoBehaviour
 
             // Produktion
             if (!string.IsNullOrEmpty(d.productionResourceId) && d.productionResourceId != "bevolkerung")
-                txtProduces.text = $"<b>Produziert:</b>  +{d.productionAmount} {Capitalize(d.productionResourceId)}\n" +
-                                   $"<b>Intervall:</b> alle {d.productionInterval:F0}s";
+            {
+                float globalMood = 100f;
+                if (VillagerManager.Instance != null) globalMood = VillagerManager.Instance.globalMood;
+                float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMood / 100f);
+                int actualProduction = Mathf.Max(1, Mathf.RoundToInt(d.productionAmount * yieldModifier));
+
+                string prodText = $"<b>Produziert:</b>  +{actualProduction} {Capitalize(d.productionResourceId)}";
+                if (actualProduction < d.productionAmount)
+                {
+                    prodText += $" <size=13><color=#FF7777>(-{d.productionAmount - actualProduction} wg. Stimmung)</color></size>";
+                }
+                prodText += $"\n<b>Intervall:</b> alle {d.productionInterval:F0}s";
+                txtProduces.text = prodText;
+            }
             else if (d.producesVillagers)
+            {
                 txtProduces.text = "<b>Produziert:</b> Dorfbewohner";
+            }
             else if (d.productionResourceId == "bevolkerung")
+            {
                 txtProduces.text = $"Erhöht Bevölkerungs-\nkapazität um {d.productionAmount}";
+            }
             else
+            {
                 txtProduces.text = "<b>Produziert:</b> –";
+            }
 
             // Verbrauch
             txtConsumes.text = (!string.IsNullOrEmpty(d.consumedResourceId) && d.consumedAmount > 0)

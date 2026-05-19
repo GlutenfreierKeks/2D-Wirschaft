@@ -22,9 +22,6 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI gameStatusText;
 
-    [Header("Player Settings")]
-    [SerializeField] private string playerPrefabName = "Player"; // Prefab must be in a 'Resources' folder
-
     private void OnEnable()
     {
         PhotonNetwork.AddCallbackTarget(this);
