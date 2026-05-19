@@ -16,6 +16,8 @@ public class VillagerManager : MonoBehaviour
     public IReadOnlyList<Villager> ActiveVillagers => activeVillagers;
     private List<BuildingInstance> pendingBuildings = new List<BuildingInstance>();
     private float currentFoodMoodEffect = 0f;
+    private float currentWheatMoodEffect = 0f;
+    private float currentLuxuryMoodEffect = 0f;
     private float wheatConsumedAccumulator = 0f;
     private float luxuryConsumedAccumulator = 0f;
     private bool lowWheatAlertSent;
@@ -248,11 +250,141 @@ public class VillagerManager : MonoBehaviour
 
     public float GetFoodMoodEffect() => currentFoodMoodEffect;
 
+    public void AppendMoodTooltipBreakdown(List<string> breakdown)
+    {
+        if (breakdown == null) return;
+
+        breakdown.Add("<b>Nahrung:</b>");
+        if (currentWheatMoodEffect < -0.001f)
+        {
+            breakdown.Add($"<color=#FF5555>Weizen knapp: {currentWheatMoodEffect * 100f:F0}%/s Stimmung</color>");
+        }
+        else if (currentWheatMoodEffect > 0.001f)
+        {
+            breakdown.Add($"<color=#55FF55>Weizen-Vorrat: +{currentWheatMoodEffect * 100f:F0}%/s Stimmung</color>");
+        }
+        else
+        {
+            breakdown.Add("Weizen-Vorrat: stabil");
+        }
+
+        if (currentLuxuryMoodEffect > 0.001f)
+        {
+            breakdown.Add($"<color=#55FF55>Luxus (Fleisch/Früchte): +{currentLuxuryMoodEffect * 100f:F0}%/s Stimmung</color>");
+        }
+
+        breakdown.Add("");
+        breakdown.Add("<b>Arbeit (alle Arbeiter):</b>");
+
+        float totalWorkStressPerSecond = 0f;
+        int workStressCount = 0;
+        float totalWorkBonusPerSecond = 0f;
+        int workBonusCount = 0;
+
+        float totalHousePerSecond = 0f;
+        int houseSleepCount = 0;
+        float totalHomelessPerSecond = 0f;
+        int homelessSleepCount = 0;
+
+        foreach (var villager in activeVillagers)
+        {
+            if (villager == null || !villager.isOperatingWorker)
+            {
+                continue;
+            }
+
+            Villager.MoodRateSnapshot snapshot = villager.GetMoodRateSnapshot();
+
+            if (snapshot.workRatePerSecond < -0.0001f)
+            {
+                totalWorkStressPerSecond += snapshot.workRatePerSecond;
+                workStressCount++;
+            }
+            else if (snapshot.workRatePerSecond > 0.0001f)
+            {
+                totalWorkBonusPerSecond += snapshot.workRatePerSecond;
+                workBonusCount++;
+            }
+
+            if (snapshot.isSleepingInHouse)
+            {
+                totalHousePerSecond += snapshot.housingRatePerSecond;
+                houseSleepCount++;
+            }
+            else if (snapshot.isSleepingHomeless)
+            {
+                totalHomelessPerSecond += snapshot.housingRatePerSecond;
+                homelessSleepCount++;
+            }
+        }
+
+        if (workStressCount > 0)
+        {
+            float totalPerMinute = totalWorkStressPerSecond * 60f;
+            float avgPerMinute = totalPerMinute / workStressCount;
+            breakdown.Add($"<color=#FF5555>Arbeitsstress gesamt ({workStressCount}): {totalPerMinute:F1} Pkt/Min</color>");
+            breakdown.Add($"<color=#FF5555>Ø pro Arbeiter: {avgPerMinute:F1} Pkt/Min</color>");
+        }
+        else
+        {
+            breakdown.Add("Arbeitsstress: keine aktive Belastung");
+        }
+
+        if (workBonusCount > 0)
+        {
+            float totalPerMinute = totalWorkBonusPerSecond * 60f;
+            float avgPerMinute = totalPerMinute / workBonusCount;
+            breakdown.Add($"<color=#88FF88>Arbeitsbonus gesamt ({workBonusCount}): +{totalPerMinute:F1} Pkt/Min</color>");
+            breakdown.Add($"<color=#88FF88>Ø pro Arbeiter: +{avgPerMinute:F1} Pkt/Min</color>");
+        }
+
+        breakdown.Add("");
+        breakdown.Add("<b>Unterkunft (Schlaf):</b>");
+
+        const float referenceHouseRatePerMinute = 0.12f * 60f;
+
+        if (houseSleepCount > 0)
+        {
+            float totalPerMinute = totalHousePerSecond * 60f;
+            float avgPerMinute = totalPerMinute / houseSleepCount;
+            breakdown.Add($"<color=#55FF55>Haus ({houseSleepCount}): +{totalPerMinute:F1} Pkt/Min gesamt</color>");
+            breakdown.Add($"<color=#55FF55>Ø pro Person: +{avgPerMinute:F1} Pkt/Min</color>");
+        }
+        else
+        {
+            breakdown.Add("Haus: aktuell niemand im Schlaf");
+        }
+
+        if (homelessSleepCount > 0)
+        {
+            float totalPerMinute = totalHomelessPerSecond * 60f;
+            float avgPerMinute = totalPerMinute / homelessSleepCount;
+            float deltaVsHouse = avgPerMinute - referenceHouseRatePerMinute;
+            breakdown.Add($"<color=#FFAA44>Obdachlosigkeit ({homelessSleepCount}): +{totalPerMinute:F1} Pkt/Min gesamt</color>");
+            breakdown.Add($"<color=#FFAA44>Ø pro Person: +{avgPerMinute:F1} Pkt/Min</color>");
+            if (deltaVsHouse < -0.05f)
+            {
+                breakdown.Add($"<color=#FF5555>vs. Haus: {deltaVsHouse:F1} Pkt/Min</color>");
+            }
+        }
+        else
+        {
+            breakdown.Add("Obdachlosigkeit: niemand schläft draußen");
+        }
+
+        float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMood / 100f);
+        if (yieldModifier < 0.995f)
+        {
+            breakdown.Add($"<color=#FF5555>Ertragsmalus (niedrige Stimmung): −{(1f - yieldModifier) * 100f:F0}%</color>");
+        }
+    }
+
     private void UpdateFoodEffect()
     {
         if (Player_UI.Instance == null) return;
 
-        int fruits = Player_UI.Instance.GetResource("fruechte");
+        int desertFruits = Player_UI.Instance.GetResource("wüstenfrucht");
+        int fruits = Player_UI.Instance.GetResource("fruechte") + desertFruits;
         int meat = Player_UI.Instance.GetResource("fleisch");
         int weizen = Player_UI.Instance.GetResource("weizen");
         int pop = Mathf.Max(1, activeVillagers.Count);
@@ -288,7 +420,8 @@ public class VillagerManager : MonoBehaviour
             luxuryEffect += Mathf.Min(0.08f, meatConsMod * 0.018f); // Slightly harder positive boosts
         }
 
-        // Combine effects and clamp
+        currentWheatMoodEffect = wheatEffect;
+        currentLuxuryMoodEffect = luxuryEffect;
         currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.25f, 0.12f);
 
         // 3. Proportional consumption for staple (wheat): ALWAYS 0.2 units per villager per 60 seconds (1 minute)
@@ -321,8 +454,14 @@ public class VillagerManager : MonoBehaviour
             
             int fruitsTaken = Mathf.Min(fruits, targetFruits);
             int meatTaken = Mathf.Min(meat, targetMeat);
-            
-            if (fruitsTaken > 0) Player_UI.Instance.AddResource("fruechte", -fruitsTaken);
+
+            if (fruitsTaken > 0)
+            {
+                int fromDesert = Mathf.Min(desertFruits, fruitsTaken);
+                int fromRegular = fruitsTaken - fromDesert;
+                if (fromDesert > 0) Player_UI.Instance.AddResource("wüstenfrucht", -fromDesert);
+                if (fromRegular > 0) Player_UI.Instance.AddResource("fruechte", -fromRegular);
+            }
             if (meatTaken > 0) Player_UI.Instance.AddResource("fleisch", -meatTaken);
         }
     }

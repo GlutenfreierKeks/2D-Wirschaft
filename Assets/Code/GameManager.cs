@@ -122,7 +122,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                     GameObject islandRevealer = new GameObject("StartIslandRevealer");
                     islandRevealer.transform.position = new Vector3(pos.x, pos.y, 0);
                     FogRevealer fr = islandRevealer.AddComponent<FogRevealer>();
-                    fr.radius = 80f; // Large enough to cover the spawn island
+                    fr.radius = 95f; // Large enough to cover the spawn island
                     fr.isLocalPlayer = true;
                     
                     // Also register it as fully explored

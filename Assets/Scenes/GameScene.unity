@@ -1668,10 +1668,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IslandManager
   islandMaterial: {fileID: 2100000, guid: d3e45ab9618baa44598a9ea35a7eae73, type: 2}
-  islandCount: 10
-  blocksPerIsland: 25000
-  mapMargin: 2000
-  minDistanceBetweenIslands: 100
+  islandCount: 6
+  blocksPerIsland: 1300
+  mapMargin: 110
+  minDistanceBetweenIslands: 560
 --- !u!4 &1223887161
 Transform:
   m_ObjectHideFlags: 0

@@ -144,6 +144,7 @@ public class Player_UI : MonoBehaviour
         EnsureResourceExists("gold", 10, 999);
         EnsureResourceExists("weizen", 10, 999);
         EnsureResourceExists("fruechte", 0, 999);
+        EnsureResourceExists("wüstenfrucht", 0, 999);
         EnsureResourceExists("fleisch", 0, 999);
         EnsureResourceExists("geld", 0, 999);
         EnsureResourceExists("soldaten", 0, 5); // Start mit Limit 5
@@ -1274,8 +1275,14 @@ public class Player_UI : MonoBehaviour
             if (VillagerManager.Instance != null) foodEffect = VillagerManager.Instance.GetFoodMoodEffect();
 
             breakdown.Add($"Globale Zufriedenheit: {globalMood:F0}%");
+            breakdown.Add($"Nahrungs-Effekt (gesamt): {(foodEffect >= 0 ? "+" : "")}{foodEffect * 100f:F0}%/s");
             breakdown.Add("");
-            breakdown.Add($"Nahrungs-Effekt: {(foodEffect >= 0 ? "+" : "")}{foodEffect * 100f:F0}%");
+
+            if (VillagerManager.Instance != null)
+            {
+                VillagerManager.Instance.AppendMoodTooltipBreakdown(breakdown);
+            }
+
             breakdown.Add("");
             breakdown.Add("Höhere Zufriedenheit steigert das Arbeitstempo und die Erträge in Betrieben.");
             return;
@@ -1342,9 +1349,9 @@ public class Player_UI : MonoBehaviour
             consumption += rate;
             consSources["Bürger (Grundnahrung)"] = rate;
         }
-        else if (id == "fruechte")
+        else if (id == "fruechte" || id == "wüstenfrucht")
         {
-            int fruits = GetResource("fruechte");
+            int fruits = GetResource("fruechte") + GetResource("wüstenfrucht");
             float fruitsRatio = (float)fruits / pop;
             float fruitsConsMod = fruits > 0 ? Mathf.Clamp(fruitsRatio, 0.1f, 1.5f) : 0f;
             float rate = pop * 0.15f * fruitsConsMod;
@@ -1449,9 +1456,9 @@ public class Player_UI : MonoBehaviour
         {
             AddDetailedFixedSource(consumptionSources, "Bürger", villagerCount, 0.2f);
         }
-        else if (resourceId == "fruechte" && villagerCount > 0)
+        else if ((resourceId == "fruechte" || resourceId == "wüstenfrucht") && villagerCount > 0)
         {
-            int fruits = GetResource("fruechte");
+            int fruits = GetResource("fruechte") + GetResource("wüstenfrucht");
             float fruitsRatio = (float)fruits / Mathf.Max(1, villagerCount);
             float perVillagerRate = fruits > 0 ? 0.15f * Mathf.Clamp(fruitsRatio, 0.1f, 1.5f) : 0f;
             if (perVillagerRate > 0f)
@@ -1571,6 +1578,7 @@ public class Player_UI : MonoBehaviour
             case "soldaten": return "Soldaten";
             case "weizen": return "Weizen";
             case "fruechte": return "Früchte";
+            case "wüstenfrucht": return "Wüstenfrucht";
             case "fleisch": return "Fleisch";
             case "geld": return "Geld";
             default: return id;

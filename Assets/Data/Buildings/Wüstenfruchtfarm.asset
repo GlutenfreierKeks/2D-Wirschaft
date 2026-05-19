@@ -24,9 +24,10 @@ MonoBehaviour:
   goldCost: 0
   buildTime: 5
   requiredWorkers: 1
+  workersNeeded: 1
   isWorkerHub: 0
   isBarracks: 0
-  productionResourceId: fruechte
+  productionResourceId: "w\xFCstenfrucht"
   productionAmount: 3
   consumedResourceId: 
   consumedAmount: 0

@@ -10,6 +10,7 @@ public class Villager : MonoBehaviour
     private Vector2 targetPosition;
     private bool isMoving = false;
     private BuildingInstance assignedBuilding;
+    public BuildingInstance AssignedBuilding => assignedBuilding;
     
     [HideInInspector]
     public bool isOperatingWorker = false;
@@ -466,6 +467,74 @@ public class Villager : MonoBehaviour
     {
         if (sr != null) sr.enabled = visible;
         else if (rend != null) rend.enabled = visible;
+    }
+
+    public struct MoodRateSnapshot
+    {
+        public float workRatePerSecond;
+        public float housingRatePerSecond;
+        public bool isSleepingInHouse;
+        public bool isSleepingHomeless;
+    }
+
+    /// <summary>Aktuelle Stimmungsänderung durch Arbeit/Schlaf (Punkte pro Sekunde, 0–100-Skala).</summary>
+    public MoodRateSnapshot GetMoodRateSnapshot()
+    {
+        MoodRateSnapshot snapshot = new MoodRateSnapshot();
+        float hour = DayNightManager.Instance != null ? DayNightManager.Instance.currentHour : 12f;
+
+        if (isOperatingWorker && assignedBuilding != null)
+        {
+            if (assignedBuilding.IsCurrentlyWorkTime())
+            {
+                switch (assignedBuilding.currentSchedule)
+                {
+                    case BuildingInstance.ScheduleMode.Leisure:
+                        snapshot.workRatePerSecond = 0.07f;
+                        break;
+                    case BuildingInstance.ScheduleMode.DayOnly:
+                        snapshot.workRatePerSecond = -0.04f;
+                        break;
+                    case BuildingInstance.ScheduleMode.Continuous:
+                        snapshot.workRatePerSecond = -0.22f;
+                        break;
+                }
+            }
+            else
+            {
+                bool isLeisureTime = hour >= 12f && hour < 15f &&
+                    assignedBuilding.currentSchedule == BuildingInstance.ScheduleMode.Leisure;
+
+                if (isLeisureTime)
+                {
+                    snapshot.workRatePerSecond = 0.16f;
+                }
+                else
+                {
+                    BuildingInstance sleepHouse = FindSleepHouse();
+                    if (sleepHouse != null)
+                    {
+                        float dist = Vector2.Distance(transform.position, sleepHouse.transform.position);
+                        if (dist < 0.4f)
+                        {
+                            snapshot.isSleepingInHouse = true;
+                            snapshot.housingRatePerSecond = 0.12f;
+                            if (sleepHouse.data != null && sleepHouse.data.buildingName.Contains("Großes Haus"))
+                            {
+                                snapshot.housingRatePerSecond = 0.22f;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        snapshot.isSleepingHomeless = true;
+                        snapshot.housingRatePerSecond = 0.08f;
+                    }
+                }
+            }
+        }
+
+        return snapshot;
     }
 
     private BuildingInstance FindSleepHouse()

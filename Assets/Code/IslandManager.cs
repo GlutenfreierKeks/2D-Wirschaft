@@ -50,9 +50,9 @@ public class IslandManager : MonoBehaviour
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
     [SerializeField] private int islandCount = 6;
-    [SerializeField] private int blocksPerIsland = 1000;
-    [SerializeField] private float mapMargin = 100f;
-    [SerializeField] private float minDistanceBetweenIslands = 500f;
+    [SerializeField] private int blocksPerIsland = 1300;
+    [SerializeField] private float mapMargin = 110f;
+    [SerializeField] private float minDistanceBetweenIslands = 560f;
 
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
@@ -98,21 +98,21 @@ public class IslandManager : MonoBehaviour
             {
                 case "Kompakt":
                     islandCount = 4;
-                    blocksPerIsland = 700;
-                    minDistanceBetweenIslands = 360f;
-                    mapMargin = 80f;
+                    blocksPerIsland = 900;
+                    minDistanceBetweenIslands = 420f;
+                    mapMargin = 90f;
                     break;
                 case "Gross":
                     islandCount = 8;
-                    blocksPerIsland = 1350;
-                    minDistanceBetweenIslands = 620f;
-                    mapMargin = 120f;
+                    blocksPerIsland = 1750;
+                    minDistanceBetweenIslands = 700f;
+                    mapMargin = 130f;
                     break;
                 default:
                     islandCount = 6;
-                    blocksPerIsland = 1000;
-                    minDistanceBetweenIslands = 500f;
-                    mapMargin = 100f;
+                    blocksPerIsland = 1300;
+                    minDistanceBetweenIslands = 560f;
+                    mapMargin = 110f;
                     break;
             }
         }
