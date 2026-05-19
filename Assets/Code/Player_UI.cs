@@ -1298,7 +1298,7 @@ public class Player_UI : MonoBehaviour
 
         foreach (var b in buildings)
         {
-            if (b == null || !b.isLocal || !b.IsConstructed()) continue;
+            if (b == null || b.data == null || !b.isLocal || !b.IsConstructed()) continue;
 
             if (b.GetOperatingWorkerCount() < b.data.workersNeeded) continue;
 
@@ -1406,7 +1406,7 @@ public class Player_UI : MonoBehaviour
 
         foreach (var building in buildings)
         {
-            if (building == null || !building.isLocal || !building.IsConstructed() || building.IsProductionPaused)
+            if (building == null || building.data == null || !building.isLocal || !building.IsConstructed() || building.IsProductionPaused)
             {
                 continue;
             }

@@ -57,8 +57,65 @@ public class BuildingInstance : MonoBehaviour
     private List<Villager> assignedWorkers = new List<Villager>();
     private List<Villager> operatingWorkers = new List<Villager>();
 
+    [HideInInspector] public bool isPreBuiltLodging = false;
+    [HideInInspector] public string displayNameOverride = "";
+    [HideInInspector] public int sleepCapacityOverride = 0;
+    private readonly List<Villager> sleepingVillagers = new List<Villager>();
+
+    public string GetDisplayName()
+    {
+        if (!string.IsNullOrEmpty(displayNameOverride)) return displayNameOverride;
+        return data != null ? data.buildingName : gameObject.name;
+    }
+
+    public int GetSleepCapacity()
+    {
+        if (sleepCapacityOverride > 0) return sleepCapacityOverride;
+        if (data == null) return 0;
+        if (data.sleepCapacity > 0) return data.sleepCapacity;
+        if (data.productionResourceId == "bevolkerung")
+        {
+            return data.buildingName.Contains("Groß") ? 4 : 2;
+        }
+        return 0;
+    }
+
+    public bool ProvidesSleep => GetSleepCapacity() > 0;
+
+    public int GetSleepingCount()
+    {
+        sleepingVillagers.RemoveAll(v => v == null);
+        return sleepingVillagers.Count;
+    }
+
+    public bool HasFreeSleepSlot(Villager villager)
+    {
+        if (!ProvidesSleep || !IsConstructed()) return false;
+        sleepingVillagers.RemoveAll(v => v == null);
+        if (villager != null && sleepingVillagers.Contains(villager)) return true;
+        return sleepingVillagers.Count < GetSleepCapacity();
+    }
+
+    public bool TryRegisterSleeper(Villager villager)
+    {
+        if (villager == null || !ProvidesSleep || !IsConstructed()) return false;
+        sleepingVillagers.RemoveAll(v => v == null);
+        if (sleepingVillagers.Contains(villager)) return true;
+        if (sleepingVillagers.Count >= GetSleepCapacity()) return false;
+        sleepingVillagers.Add(villager);
+        return true;
+    }
+
+    public void UnregisterSleeper(Villager villager)
+    {
+        if (villager == null) return;
+        sleepingVillagers.Remove(villager);
+    }
+
     private void Update()
     {
+        if (data == null) return;
+
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
             TryHireOperatingWorkers();
@@ -165,27 +222,50 @@ public class BuildingInstance : MonoBehaviour
         revealer = GetComponent<FogRevealer>();
         if (revealer != null) revealer.enabled = false;
 
-        // Add a collider so the building can be clicked via Physics2D overlap.
-        if (GetComponent<Collider2D>() == null)
+        if (isPreBuiltLodging)
         {
-            var col = gameObject.AddComponent<BoxCollider2D>();
-            Vector3 s = transform.localScale;
-            col.size = new Vector2(
-                s.x > 0.001f ? data.width  / s.x : data.width,
-                s.y > 0.001f ? data.height / s.y : data.height
-            );
-            Debug.Log($"[BuildingInstance] Collider size set to {col.size} " +
-                      $"(scale={s}, w={data.width}, h={data.height})");
+            isConstructed = true;
+            if (revealer != null) revealer.enabled = true;
+            EnsureLodgingCollider();
+            return;
         }
 
-        // Request workers from manager
+        if (data == null)
+        {
+            Debug.LogWarning($"[BuildingInstance] {name} has no BuildingData.");
+            return;
+        }
+
+        EnsureBuildingCollider();
+
         if (VillagerManager.Instance != null)
             VillagerManager.Instance.RequestConstruction(this);
 
         StartCoroutine(ConstructionRoutine());
     }
 
-    public bool NeedsMoreWorkers() => workersAssigned < data.requiredWorkers;
+    private void EnsureBuildingCollider()
+    {
+        if (GetComponent<Collider2D>() != null) return;
+
+        var col = gameObject.AddComponent<BoxCollider2D>();
+        Vector3 s = transform.localScale;
+        col.size = new Vector2(
+            s.x > 0.001f ? data.width / s.x : data.width,
+            s.y > 0.001f ? data.height / s.y : data.height
+        );
+    }
+
+    private void EnsureLodgingCollider()
+    {
+        if (GetComponent<Collider2D>() != null) return;
+
+        var col = gameObject.AddComponent<BoxCollider2D>();
+        Vector3 s = transform.localScale;
+        col.size = new Vector2(Mathf.Max(1f, s.x), Mathf.Max(1f, s.y));
+    }
+
+    public bool NeedsMoreWorkers() => data != null && workersAssigned < data.requiredWorkers;
     public int GetAssignedWorkerCount() => workersAssigned;
     public int GetOperatingWorkerCount() => operatingWorkers.Count;
 
@@ -704,6 +784,16 @@ public class BuildingInstance : MonoBehaviour
 
     private void OnDestroy()
     {
+        List<Villager> sleepers = new List<Villager>(sleepingVillagers);
+        foreach (var sleeper in sleepers)
+        {
+            if (sleeper != null)
+            {
+                sleeper.ClearSleepHouseReference();
+            }
+        }
+        sleepingVillagers.Clear();
+
         // Release construction workers if still building
         foreach (var w in assignedWorkers)
         {

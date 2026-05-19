@@ -125,5 +125,11 @@ public class BuildingManager : MonoBehaviour
         
         RegisterOccupancy(position, 3, 3);
         Destroy(warehouse.GetComponent<MeshCollider>());
+
+        BuildingInstance lodging = warehouse.AddComponent<BuildingInstance>();
+        lodging.isLocal = isLocal;
+        lodging.isPreBuiltLodging = true;
+        lodging.displayNameOverride = "Hauptlager";
+        lodging.sleepCapacityOverride = 5;
     }
 }

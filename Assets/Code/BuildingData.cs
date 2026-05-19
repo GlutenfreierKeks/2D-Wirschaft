@@ -35,6 +35,10 @@ public class BuildingData : ScriptableObject
     [Header("Operation")]
     public int workersNeeded = 1;
 
+    [Header("Housing")]
+    [Tooltip("0 = kein Schlafplatz. Kleines Haus: 2, Großes Haus: 4, Hauptlager: 5")]
+    public int sleepCapacity = 0;
+
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
 }

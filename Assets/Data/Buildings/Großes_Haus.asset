@@ -32,4 +32,6 @@ MonoBehaviour:
   consumedAmount: 0
   productionInterval: 100
   producesVillagers: 1
+  workersNeeded: 1
+  sleepCapacity: 4
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}
