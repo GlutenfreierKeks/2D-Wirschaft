@@ -951,7 +951,6 @@ public class Player_UI : MonoBehaviour
         var valGO = new GameObject("Value",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         valGO.transform.SetParent(col.transform, false);
-        valGO.AddComponent<ResourceTooltipTrigger>().resourceId = def.id;
         var valTMP = valGO.GetComponent<TextMeshProUGUI>();
         
         if (def.maxValue > 0)
@@ -963,7 +962,7 @@ public class Player_UI : MonoBehaviour
         valTMP.fontStyle     = FontStyles.Bold;
         valTMP.color         = valueColor;
         valTMP.alignment     = TextAlignmentOptions.Left;
-        valTMP.raycastTarget = true;
+        valTMP.raycastTarget = false; // raycastTarget = false lets the raycast hit the slot container directly
 
         return valTMP;
     }
@@ -1039,8 +1038,8 @@ public class Player_UI : MonoBehaviour
         shadow.effectDistance = new Vector2(4f, -4f);
 
         var rt = tooltipPanel.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0f, 1f);
-        rt.anchorMax = new Vector2(0f, 1f);
+        rt.anchorMin = new Vector2(0.5f, 0.5f); // Use center anchors to match the pivot of the ScreenSpaceOverlay Canvas
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 1f);
         rt.sizeDelta = new Vector2(320f, 180f);
 
