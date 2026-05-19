@@ -31,22 +31,34 @@ public class MainMenu : MonoBehaviourPunCallbacks
     private TMP_InputField runtimeRoomNameInput;
     private TMP_Dropdown runtimeMaxPlayersDropdown;
     private TextMeshProUGUI runtimeStatusText;
+    private CanvasGroup runtimeMenuCanvasGroup;
 
     private void Start()
     {
         PhotonNetwork.AutomaticallySyncScene = true;
-        SetUIInteractable(false);
         LoadPlayerName();
         BuildRuntimeMenu();
-        statusText.text = "Verbinde mit Photon...";
+        SetUIInteractable(false);
+        SetStatus("Verbinde mit Photon...");
         PhotonNetwork.ConnectUsingSettings();
     }
 
     public override void OnConnectedToMaster()
     {
-        statusText.text = "Verbunden. Erstelle eine Lobby oder tritt einer Runde bei.";
-        SetUIInteractable(true);
+        SetStatus("Verbinde mit Lobby-Dienst...");
         PhotonNetwork.JoinLobby();
+    }
+
+    public override void OnJoinedLobby()
+    {
+        SetStatus("Verbunden. Erstelle eine Lobby oder tritt einer Runde bei.");
+        SetUIInteractable(true);
+    }
+
+    public override void OnDisconnected(DisconnectCause cause)
+    {
+        SetStatus($"Verbindung getrennt: {cause}");
+        SetUIInteractable(false);
     }
 
     private void LoadPlayerName()
@@ -66,6 +78,41 @@ public class MainMenu : MonoBehaviourPunCallbacks
         if (roomNameInput != null) roomNameInput.interactable = isInteractable;
         if (maxPlayersDropdown != null) maxPlayersDropdown.interactable = isInteractable;
         if (testLobbyButton != null) testLobbyButton.interactable = isInteractable;
+
+        if (runtimePlayerNameInput != null) runtimePlayerNameInput.interactable = isInteractable;
+        if (runtimeRoomNameInput != null) runtimeRoomNameInput.interactable = isInteractable;
+        if (runtimeMaxPlayersDropdown != null) runtimeMaxPlayersDropdown.interactable = isInteractable;
+
+        if (runtimeMenuCanvasGroup != null)
+        {
+            runtimeMenuCanvasGroup.interactable = isInteractable;
+            runtimeMenuCanvasGroup.blocksRaycasts = isInteractable;
+            runtimeMenuCanvasGroup.alpha = isInteractable ? 1f : 0.72f;
+        }
+    }
+
+    private bool EnsureReadyForMatchmaking()
+    {
+        if (PhotonNetwork.IsConnectedAndReady)
+        {
+            return true;
+        }
+
+        SetStatus("Noch nicht mit Photon verbunden. Bitte kurz warten...");
+        return false;
+    }
+
+    private void SetStatus(string message)
+    {
+        if (statusText != null)
+        {
+            statusText.text = message;
+        }
+
+        if (runtimeStatusText != null)
+        {
+            runtimeStatusText.text = message;
+        }
     }
 
     private bool SetupPlayerName()
@@ -73,7 +120,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
         string playerName = playerNameInput.text.Trim();
         if (string.IsNullOrEmpty(playerName))
         {
-            statusText.text = "Bitte gib erst einen Spielernamen ein.";
+            SetStatus("Bitte gib erst einen Spielernamen ein.");
             return false;
         }
 
@@ -85,12 +132,12 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
     public void OnCreateRoomButtonClicked()
     {
-        if (!SetupPlayerName()) return;
+        if (!EnsureReadyForMatchmaking() || !SetupPlayerName()) return;
 
         string roomName = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(roomName))
         {
-            statusText.text = "Bitte gib einen Lobby-Namen ein.";
+            SetStatus("Bitte gib einen Lobby-Namen ein.");
             return;
         }
 
@@ -108,39 +155,39 @@ public class MainMenu : MonoBehaviourPunCallbacks
             CustomRoomPropertiesForLobby = new[] { LobbySettingsKeys.WorldSize, LobbySettingsKeys.MapSeed }
         };
 
-        statusText.text = $"Erstelle Lobby '{roomName}'...";
+        SetStatus($"Erstelle Lobby '{roomName}'...");
         SetUIInteractable(false);
         PhotonNetwork.CreateRoom(roomName, roomOptions);
     }
 
     public void OnJoinByNameButtonClicked()
     {
-        if (!SetupPlayerName()) return;
+        if (!EnsureReadyForMatchmaking() || !SetupPlayerName()) return;
 
         string roomName = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(roomName))
         {
-            statusText.text = "Bitte gib den Namen der Lobby ein.";
+            SetStatus("Bitte gib den Namen der Lobby ein.");
             return;
         }
 
-        statusText.text = $"Trete Lobby '{roomName}' bei...";
+        SetStatus($"Trete Lobby '{roomName}' bei...");
         SetUIInteractable(false);
         PhotonNetwork.JoinRoom(roomName);
     }
 
     public void OnJoinRandomButtonClicked()
     {
-        if (!SetupPlayerName()) return;
+        if (!EnsureReadyForMatchmaking() || !SetupPlayerName()) return;
 
-        statusText.text = "Suche eine offene Lobby...";
+        SetStatus("Suche eine offene Lobby...");
         SetUIInteractable(false);
         PhotonNetwork.JoinRandomRoom();
     }
 
     public void OnTestLobbyButtonClicked()
     {
-        if (!SetupPlayerName()) return;
+        if (!EnsureReadyForMatchmaking() || !SetupPlayerName()) return;
 
         string roomName = "TestRoom_" + Random.Range(1000, 9999);
         int seed = Random.Range(1, 1000000);
@@ -156,7 +203,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
             CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed }
         };
 
-        statusText.text = "Erstelle Test-Lobby...";
+        SetStatus("Erstelle Test-Lobby...");
         SetUIInteractable(false);
         PhotonNetwork.CreateRoom(roomName, roomOptions);
     }
@@ -164,25 +211,25 @@ public class MainMenu : MonoBehaviourPunCallbacks
     public override void OnJoinedRoom()
     {
         Debug.Log($"[MainMenu] OnJoinedRoom: Raum={PhotonNetwork.CurrentRoom.Name}, Spieler={PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
-        statusText.text = "Lobby gefunden. Wechsle in den Warteraum...";
+        SetStatus("Lobby gefunden. Wechsle in den Warteraum...");
         PhotonNetwork.LoadLevel(SceneNames.LobbyScene);
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
-        statusText.text = $"Beitritt fehlgeschlagen: {message}";
+        SetStatus($"Beitritt fehlgeschlagen: {message}");
         SetUIInteractable(true);
     }
 
     public override void OnJoinRandomFailed(short returnCode, string message)
     {
-        statusText.text = "Keine offene Lobby gefunden. Erstelle einfach eine neue.";
+        SetStatus("Keine offene Lobby gefunden. Erstelle einfach eine neue.");
         SetUIInteractable(true);
     }
 
     public override void OnCreateRoomFailed(short returnCode, string message)
     {
-        statusText.text = $"Lobby konnte nicht erstellt werden: {message}";
+        SetStatus($"Lobby konnte nicht erstellt werden: {message}");
         SetUIInteractable(true);
     }
 
@@ -239,6 +286,11 @@ public class MainMenu : MonoBehaviourPunCallbacks
 
         runtimeStatusText = CreateRuntimeLabel(root, "", 16f, 50f, new Color(0.87f, 0.89f, 0.90f, 1f));
         root.gameObject.AddComponent<MainMenuStatusMirror>().Initialize(statusText, runtimeStatusText);
+
+        runtimeMenuCanvasGroup = root.gameObject.AddComponent<CanvasGroup>();
+        runtimeMenuCanvasGroup.interactable = false;
+        runtimeMenuCanvasGroup.blocksRaycasts = false;
+        runtimeMenuCanvasGroup.alpha = 0.72f;
     }
 
     private void HideOriginalUi()

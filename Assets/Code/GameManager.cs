@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using ExitGames.Client.Photon;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
 using Photon.Pun;
@@ -336,7 +337,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     private void Update()
     {
-        if (chatPanelRoot == null || !Input.GetKeyDown(KeyCode.T)) return;
+        if (chatPanelRoot == null) return;
+        if (Keyboard.current == null || !Keyboard.current.tKey.wasPressedThisFrame) return;
         if (chatInputField != null && chatInputField.isFocused) return;
 
         ToggleChatMinimized();
