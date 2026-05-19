@@ -187,6 +187,7 @@ public class BuildingInstance : MonoBehaviour
 
     public bool NeedsMoreWorkers() => workersAssigned < data.requiredWorkers;
     public int GetAssignedWorkerCount() => workersAssigned;
+    public int GetOperatingWorkerCount() => operatingWorkers.Count;
 
     public void RegisterWorker(Villager v)
     {
