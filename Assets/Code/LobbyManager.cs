@@ -24,6 +24,13 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private TextMeshProUGUI chatLogText;
     private TMP_InputField chatInputField;
     private Button chatSendButton;
+    private RectTransform chatPanelRoot;
+    private GameObject chatLogArea;
+    private GameObject chatInputArea;
+    private TextMeshProUGUI chatMinimizeButtonText;
+    private bool chatIsMinimized;
+    private readonly Vector2 chatExpandedAnchorMax = new Vector2(0.96f, 0.28f);
+    private const float chatMinimizedAnchorMaxY = 0.08f;
 
     [Header("Speed Settings")]
     [SerializeField] private Sprite pfeil1;
@@ -394,8 +401,9 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private void CreateChatPanel(RectTransform parent)
     {
         RectTransform chatRoot = CreateRect("LobbyChatPanel", parent);
+        chatPanelRoot = chatRoot;
         chatRoot.anchorMin = new Vector2(0.04f, 0.02f);
-        chatRoot.anchorMax = new Vector2(0.96f, 0.28f);
+        chatRoot.anchorMax = chatExpandedAnchorMax;
         chatRoot.pivot = new Vector2(0.5f, 0f);
         chatRoot.anchoredPosition = Vector2.zero;
         chatRoot.offsetMin = Vector2.zero;
@@ -410,8 +418,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         TextMeshProUGUI title = CreateStaticLabel(chatRoot, "LOBBY-CHAT", 16f, new Vector2(14f, -10f), new Vector2(-28f, 22f));
         title.color = new Color(0.85f, 0.80f, 0.65f, 1f);
         title.alignment = TextAlignmentOptions.TopLeft;
+        title.raycastTarget = false;
 
         RectTransform logRect = CreateRect("ChatLog", chatRoot);
+        chatLogArea = logRect.gameObject;
         logRect.anchorMin = new Vector2(0f, 0.28f);
         logRect.anchorMax = new Vector2(1f, 1f);
         logRect.pivot = new Vector2(0.5f, 1f);
@@ -426,8 +436,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         chatLogText.color = new Color(0.92f, 0.92f, 0.92f, 1f);
         chatLogText.enableWordWrapping = true;
         chatLogText.overflowMode = TextOverflowModes.Truncate;
+        chatLogText.raycastTarget = false;
 
         RectTransform inputRow = CreateRect("ChatInputRow", chatRoot);
+        chatInputArea = inputRow.gameObject;
         inputRow.anchorMin = new Vector2(0f, 0f);
         inputRow.anchorMax = new Vector2(1f, 0f);
         inputRow.pivot = new Vector2(0.5f, 0f);
@@ -473,6 +485,65 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         buttonText.alignment = TextAlignmentOptions.Center;
 
         AddChatMessage("Lobby-Chat aktiv. Schreibe hier, um zu prüfen, ob du in derselben Lobby bist.");
+        CreateChatMinimizeButton(chatRoot);
+    }
+
+    private void CreateChatMinimizeButton(RectTransform parent)
+    {
+        RectTransform btnRect = CreateRect("ChatMinimizeButton", parent);
+        btnRect.anchorMin = new Vector2(1f, 1f);
+        btnRect.anchorMax = new Vector2(1f, 1f);
+        btnRect.pivot = new Vector2(1f, 1f);
+        btnRect.anchoredPosition = new Vector2(-10f, -8f);
+        btnRect.sizeDelta = new Vector2(32f, 28f);
+
+        Image btnImage = btnRect.gameObject.AddComponent<Image>();
+        btnImage.color = new Color(0.14f, 0.17f, 0.22f, 0.95f);
+        btnImage.raycastTarget = true;
+
+        Button minimizeButton = btnRect.gameObject.AddComponent<Button>();
+        minimizeButton.targetGraphic = btnImage;
+        minimizeButton.onClick.AddListener(ToggleChatMinimized);
+
+        chatMinimizeButtonText = CreateCenteredButtonText(btnRect.transform, "−");
+        chatMinimizeButtonText.fontSize = 20f;
+        chatMinimizeButtonText.color = accentColor;
+        chatMinimizeButtonText.raycastTarget = false;
+
+        btnRect.SetAsLastSibling();
+    }
+
+    private void ToggleChatMinimized()
+    {
+        chatIsMinimized = !chatIsMinimized;
+
+        if (chatLogArea != null) chatLogArea.SetActive(!chatIsMinimized);
+        if (chatInputArea != null) chatInputArea.SetActive(!chatIsMinimized);
+
+        if (chatPanelRoot != null)
+        {
+            Vector2 anchorMax = chatPanelRoot.anchorMax;
+            anchorMax.y = chatIsMinimized ? chatMinimizedAnchorMaxY : chatExpandedAnchorMax.y;
+            chatPanelRoot.anchorMax = anchorMax;
+        }
+
+        if (chatMinimizeButtonText != null)
+        {
+            chatMinimizeButtonText.text = chatIsMinimized ? "+" : "−";
+        }
+    }
+
+    private void Update()
+    {
+        if (chatPanelRoot == null || !Input.GetKeyDown(KeyCode.T)) return;
+        if (chatInputField != null && chatInputField.isFocused) return;
+
+        ToggleChatMinimized();
+
+        if (!chatIsMinimized && chatInputField != null)
+        {
+            chatInputField.ActivateInputField();
+        }
     }
 
     private TextMeshProUGUI CreateInputText(RectTransform parent, string value, bool isPlaceholder = false)
