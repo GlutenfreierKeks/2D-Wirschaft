@@ -178,6 +178,12 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         if (PhotonNetwork.IsMasterClient)
         {
+            if (!IsSceneAvailable(SceneNames.GameScene))
+            {
+                Debug.LogError($"Scene '{SceneNames.GameScene}' is not in build settings.");
+                return;
+            }
+
             PhotonNetwork.CurrentRoom.IsOpen = false;
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
@@ -196,9 +202,26 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         bool isTestMode = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("TestMode") && (bool)PhotonNetwork.CurrentRoom.CustomProperties["TestMode"];
         if (!isTestMode && PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom.PlayerCount == PhotonNetwork.CurrentRoom.MaxPlayers)
         {
+            if (!IsSceneAvailable(SceneNames.GameScene))
+            {
+                Debug.LogError($"Scene '{SceneNames.GameScene}' is not in build settings.");
+                return;
+            }
+
             PhotonNetwork.CurrentRoom.IsOpen = false;
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
+    }
+
+    private bool IsSceneAvailable(string sceneName)
+    {
+        int count = UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings;
+        for (int i = 0; i < count; i++)
+        {
+            string path = UnityEngine.SceneManagement.SceneUtility.GetScenePathByBuildIndex(i);
+            if (System.IO.Path.GetFileNameWithoutExtension(path) == sceneName) return true;
+        }
+        return false;
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
