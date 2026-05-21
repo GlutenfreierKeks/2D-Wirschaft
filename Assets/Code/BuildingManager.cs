@@ -1,10 +1,12 @@
 using UnityEngine;
 using Photon.Pun;
+using Photon.Realtime;
+using ExitGames.Client.Photon;
 using System.Collections.Generic;
 
 public enum PlacementRule { LandOnly, WaterOnly, Pier }
 
-public class BuildingManager : MonoBehaviour
+public class BuildingManager : MonoBehaviour, IOnEventCallback
 {
     public static BuildingManager Instance;
     private static HashSet<Vector2> occupiedBuildingCells = new HashSet<Vector2>();
@@ -36,6 +38,42 @@ public class BuildingManager : MonoBehaviour
         else Destroy(gameObject);
 
         occupiedBuildingCells.Clear();
+    }
+
+    private void OnEnable()
+    {
+        PhotonNetwork.AddCallbackTarget(this);
+    }
+
+    private void OnDisable()
+    {
+        PhotonNetwork.RemoveCallbackTarget(this);
+    }
+
+    public void OnEvent(EventData photonEvent)
+    {
+        if (photonEvent.Code == 2)
+        {
+            object[] data = (object[])photonEvent.CustomData;
+            string buildingName = (string)data[0];
+            Vector2 pos = (Vector2)data[1];
+
+            BuildingData bData = GetBuildingDataByName(buildingName);
+            if (bData != null)
+            {
+                SpawnBuilding(bData, pos, false);
+            }
+        }
+    }
+
+    private BuildingData GetBuildingDataByName(string name)
+    {
+        BuildingData[] allData = Resources.FindObjectsOfTypeAll<BuildingData>();
+        foreach (var d in allData)
+        {
+            if (d.buildingName == name) return d;
+        }
+        return null;
     }
 
     public void SpawnBuilding(BuildingData data, Vector2 position, bool isLocal = true)

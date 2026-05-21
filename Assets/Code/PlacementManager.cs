@@ -181,6 +181,13 @@ public class PlacementManager : MonoBehaviour
         ResourceManager.Instance.SpendResources(currentBuilding.woodCost, currentBuilding.stoneCost, currentBuilding.ironCost, currentBuilding.goldCost);
         BuildingManager.Instance.SpawnBuilding(currentBuilding, pos);
 
+        if (Photon.Pun.PhotonNetwork.InRoom)
+        {
+            object[] content = new object[] { currentBuilding.buildingName, pos };
+            ExitGames.Client.Photon.SendOptions sendOptions = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+            Photon.Pun.PhotonNetwork.RaiseEvent(2, content, new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOptions);
+        }
+
         // Remove resource nodes covered by the building footprint
         float startX = -(currentBuilding.width - 1) / 2f;
         float startY = -(currentBuilding.height - 1) / 2f;

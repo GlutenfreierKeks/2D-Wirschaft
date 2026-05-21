@@ -115,6 +115,7 @@ public class BuildingInstance : MonoBehaviour
     private void Update()
     {
         if (data == null) return;
+        if (!isLocal) return;
 
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
@@ -238,7 +239,7 @@ public class BuildingInstance : MonoBehaviour
 
         EnsureBuildingCollider();
 
-        if (VillagerManager.Instance != null)
+        if (VillagerManager.Instance != null && isLocal)
             VillagerManager.Instance.RequestConstruction(this);
 
         StartCoroutine(ConstructionRoutine());
@@ -287,10 +288,13 @@ public class BuildingInstance : MonoBehaviour
         SetColor(Color.cyan);
         SetAlpha(0.2f);
 
-        // Wait for all workers to arrive at the site
-        while (workersArrived < data.requiredWorkers)
+        // Wait for all workers to arrive at the site, but only for local buildings
+        if (isLocal)
         {
-            yield return null;
+            while (workersArrived < data.requiredWorkers)
+            {
+                yield return null;
+            }
         }
 
         // 2. Building Phase: Normal colors, fading in
@@ -332,22 +336,26 @@ public class BuildingInstance : MonoBehaviour
     private void CompleteConstruction()
     {
         isConstructed = true;
-        if (revealer != null) revealer.enabled = true;
-        AudioManager.Instance?.PlayConstructionSound(transform.position);
-
-        // Release workers
-        foreach (var w in assignedWorkers) w.Release();
-        assignedWorkers.Clear();
-
-        // Hire operating workers
-        TryHireOperatingWorkers();
-
-        // If it's a worker hub, maybe it converts nearby villagers? 
-        if (data.productionResourceId == "bevolkerung")
+        if (revealer != null && isLocal) revealer.enabled = true;
+        
+        if (isLocal)
         {
-            Player_UI.Instance.AddMaxPopulation(data.productionAmount);
-            int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
-            Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
+            AudioManager.Instance?.PlayConstructionSound(transform.position);
+
+            // Release workers
+            foreach (var w in assignedWorkers) w.Release();
+            assignedWorkers.Clear();
+
+            // Hire operating workers
+            TryHireOperatingWorkers();
+
+            // If it's a worker hub, maybe it converts nearby villagers? 
+            if (data.productionResourceId == "bevolkerung")
+            {
+                Player_UI.Instance.AddMaxPopulation(data.productionAmount);
+                int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
+                Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
+            }
         }
     }
 
@@ -490,6 +498,8 @@ public class BuildingInstance : MonoBehaviour
     /// <summary>Produktion pausieren / fortsetzen.</summary>
     public void ToggleProduction()
     {
+        if (!isLocal) return;
+
         IsProductionPaused = !IsProductionPaused;
         Debug.Log($"[BuildingInstance] {data.buildingName} Produktion: {(IsProductionPaused ? "PAUSIERT" : "AKTIV")}");
 
@@ -515,6 +525,8 @@ public class BuildingInstance : MonoBehaviour
     /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>
     public void Demolish()
     {
+        if (!isLocal) return;
+
         if (ResourceManager.Instance != null)
         {
             ResourceManager.Instance.AddResource("holz",  data.woodCost  / 2);
@@ -528,6 +540,7 @@ public class BuildingInstance : MonoBehaviour
 
     public bool ToggleHutType()
     {
+        if (!isLocal) return false;
         if (Player_UI.Instance == null) return false;
         
         int wheat = Player_UI.Instance.GetResource("weizen");
@@ -629,6 +642,8 @@ public class BuildingInstance : MonoBehaviour
 
     public void OrderSoldier(SoldierType sType)
     {
+        if (!isLocal) return;
+
         if (CanAffordSoldier())
         {
             SpendSoldierResources();

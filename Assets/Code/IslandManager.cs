@@ -208,11 +208,14 @@ public class IslandManager : MonoBehaviour
 
             Vector2[] neighbors = { current + Vector2.up, current + Vector2.down, current + Vector2.left, current + Vector2.right };
 
-            System.Array.Sort(neighbors, (a, b) => {
-                float scoreA = Vector2.Dot((a - current), biasDir) + Random.Range(-0.5f, 0.5f);
-                float scoreB = Vector2.Dot((b - current), biasDir) + Random.Range(-0.5f, 0.5f);
-                return scoreB.CompareTo(scoreA);
-            });
+            float[] scores = new float[4];
+            for (int i = 0; i < 4; i++)
+            {
+                scores[i] = Vector2.Dot((neighbors[i] - current), biasDir) + Random.Range(-0.5f, 0.5f);
+            }
+            
+            System.Array.Sort(scores, neighbors);
+            System.Array.Reverse(neighbors);
 
             bool addedAny = false;
             foreach (Vector2 next in neighbors)
@@ -510,6 +513,13 @@ public class IslandManager : MonoBehaviour
     {
         List<Vector2> cellList = new List<Vector2>(cells);
         if (cellList.Count == 0) return;
+
+        // Deterministische Sortierung, da HashSet-Reihenfolge nicht garantiert ist
+        cellList.Sort((a, b) => {
+            int cmpX = a.x.CompareTo(b.x);
+            if (cmpX != 0) return cmpX;
+            return a.y.CompareTo(b.y);
+        });
 
         ResourceConfig[] configs = GetResourceConfigsForBiome(biome);
         foreach (var cfg in configs)
