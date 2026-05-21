@@ -73,18 +73,14 @@ public class NotificationManager : MonoBehaviour
         panelGO.transform.SetParent(canvas.transform, false);
 
         Image bg = panelGO.GetComponent<Image>();
-        bg.color = new Color(0.10f, 0.08f, 0.05f, 0.82f);
-
-        Outline outline = panelGO.AddComponent<Outline>();
-        outline.effectColor = new Color(0.72f, 0.52f, 0.18f, 0.95f);
-        outline.effectDistance = new Vector2(2f, -2f);
+        bg.color = new Color(0, 0, 0, 0); // Transparent - kein Hintergrund
 
         panel = panelGO.GetComponent<RectTransform>();
         panel.anchorMin = new Vector2(0f, 0.5f);
         panel.anchorMax = new Vector2(0f, 0.5f);
         panel.pivot = new Vector2(0f, 0.5f);
         panel.anchoredPosition = new Vector2(18f, 0f);
-        panel.sizeDelta = new Vector2(360f, 220f);
+        panel.sizeDelta = new Vector2(280f, 160f);
 
         layout = panelGO.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(12, 12, 12, 12);

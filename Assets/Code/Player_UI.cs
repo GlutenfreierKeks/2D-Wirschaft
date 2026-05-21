@@ -88,10 +88,11 @@ public class Player_UI : MonoBehaviour
     [SerializeField] private Color borderColor = new Color(0.72f, 0.52f, 0.18f, 1.00f);   // goldene Umrandung
     [SerializeField] private Color labelColor  = new Color(0.90f, 0.78f, 0.52f, 0.85f);   // Pergament-Beige
     [SerializeField] private Color valueColor  = new Color(1.00f, 0.95f, 0.75f, 1.00f);   // helles Cremegold
-    [SerializeField] private float barHeight   = 80f;      // größer als vorher
-    [SerializeField] private float slotPadding = 18f;
-    [SerializeField] private float iconSize    = 44f;      // Icons deutlich größer
+    [SerializeField] private float barHeight   = 40f;      // noch kompakter
+    [SerializeField] private float slotPadding = 4f;
+    [SerializeField] private float iconSize    = 28f;      // noch kleinere Icons
     [SerializeField] private float borderWidth = 2f;
+    [SerializeField] private float slotWidth   = 70f;      // breitere Slots
 
     // ── Laufzeit ─────────────────────────────────────────────────────────────
 
@@ -314,10 +315,10 @@ public class Player_UI : MonoBehaviour
         borderGO.GetComponent<Image>().color = borderColor;
 
         var borderRT = borderGO.GetComponent<RectTransform>();
-        borderRT.anchorMin        = new Vector2(0f, 1f);
-        borderRT.anchorMax        = new Vector2(0f, 1f);
-        borderRT.pivot            = new Vector2(0f, 1f);
-        borderRT.anchoredPosition = new Vector2(12f, -12f);
+        borderRT.anchorMin        = new Vector2(0.5f, 1f);
+        borderRT.anchorMax        = new Vector2(0.5f, 1f);
+        borderRT.pivot            = new Vector2(0.5f, 1f);
+        borderRT.anchoredPosition = new Vector2(0f, -12f);
         borderRT.sizeDelta        = new Vector2(0f, barHeight + borderWidth * 2f);
 
         var borderHL = borderGO.AddComponent<HorizontalLayoutGroup>();
@@ -1101,32 +1102,30 @@ public class Player_UI : MonoBehaviour
                 borderColor.r, borderColor.g, borderColor.b, 0.35f);
             var divLE = divGO.AddComponent<LayoutElement>();
             divLE.minWidth  = 1f;
-            divLE.minHeight = barHeight * 0.55f;
+            divLE.minHeight = barHeight * 0.7f;
             divLE.preferredWidth = 1f;
         }
 
-        // ── Slot-Container ─────────────────────────────────────────────────
+        // ── Slot-Container (vertikales Layout: Icon oben, Zahl unten) ───────
         var slot = new GameObject($"Slot_{def.id}",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         slot.transform.SetParent(wrapper.transform, false);
         slot.GetComponent<Image>().color = slotColor;
         slot.AddComponent<ResourceTooltipTrigger>().resourceId = def.id;
 
-        var hl = slot.AddComponent<HorizontalLayoutGroup>();
-        hl.padding                = new RectOffset(
-            (int)slotPadding, (int)slotPadding, 6, 6);
-        hl.spacing                = 10f;
-        hl.childAlignment         = TextAnchor.MiddleCenter;
-        hl.childForceExpandWidth  = false;
-        hl.childForceExpandHeight = true;
-
-        var csf = slot.AddComponent<ContentSizeFitter>();
-        csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        var vl = slot.AddComponent<VerticalLayoutGroup>();
+        vl.padding                = new RectOffset(4, 4, 4, 4);
+        vl.spacing                = 2f;
+        vl.childAlignment         = TextAnchor.MiddleCenter;
+        vl.childForceExpandWidth  = true;
+        vl.childForceExpandHeight = true;
 
         var le = slot.AddComponent<LayoutElement>();
+        le.minWidth  = slotWidth;
+        le.preferredWidth = slotWidth;
         le.minHeight = barHeight - 4f;
 
-        // ── Icon ──────────────────────────────────────────────────────────
+        // ── Icon (oben) ────────────────────────────────────────────────────
         var iconGO = new GameObject("Icon",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         iconGO.transform.SetParent(slot.transform, false);
@@ -1139,42 +1138,19 @@ public class Player_UI : MonoBehaviour
         }
         else
         {
-            // Platzhalter: helles Kästchen mit Anfangsbuchstabe wenn kein Icon
             iconImg.color = new Color(1f, 1f, 1f, 0.08f);
         }
         iconImg.raycastTarget = false;
 
         var iconLE = iconGO.AddComponent<LayoutElement>();
-        iconLE.minWidth      = iconLE.preferredWidth  = iconSize;
-        iconLE.minHeight     = iconLE.preferredHeight = iconSize;
+        iconLE.preferredWidth  = iconSize;
+        iconLE.preferredHeight = iconSize;
+        iconLE.flexibleHeight = 0;
 
-        // ── Textspalte ────────────────────────────────────────────────────
-        var col = new GameObject("TextCol", typeof(RectTransform));
-        col.transform.SetParent(slot.transform, false);
-        col.AddComponent<LayoutElement>().flexibleWidth = 1f;
-
-        var vl = col.AddComponent<VerticalLayoutGroup>();
-        vl.childAlignment         = TextAnchor.MiddleLeft;
-        vl.childForceExpandWidth  = true;
-        vl.childForceExpandHeight = false;
-        vl.spacing                = 1f;
-
-        // Name (klein, Pergamentton)
-        var nameGO = new GameObject("Name",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        nameGO.transform.SetParent(col.transform, false);
-        var nameTMP = nameGO.GetComponent<TextMeshProUGUI>();
-        nameTMP.text          = def.displayName.ToUpper();
-        nameTMP.fontSize      = 11f;
-        nameTMP.fontStyle     = FontStyles.Bold;
-        nameTMP.color         = labelColor;
-        nameTMP.alignment     = TextAlignmentOptions.Left;
-        nameTMP.raycastTarget = false;
-
-        // Wert (groß, Cremegold)
+        // ── Wert (unten) ────────────────────────────────────────────────────
         var valGO = new GameObject("Value",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        valGO.transform.SetParent(col.transform, false);
+        valGO.transform.SetParent(slot.transform, false);
         var valTMP = valGO.GetComponent<TextMeshProUGUI>();
         
         if (def.maxValue > 0)
@@ -1182,11 +1158,11 @@ public class Player_UI : MonoBehaviour
         else
             valTMP.text = def.startValue.ToString();
             
-        valTMP.fontSize      = 22f;
+        valTMP.fontSize      = 14f;
         valTMP.fontStyle     = FontStyles.Bold;
         valTMP.color         = valueColor;
-        valTMP.alignment     = TextAlignmentOptions.Left;
-        valTMP.raycastTarget = false; // raycastTarget = false lets the raycast hit the slot container directly
+        valTMP.alignment     = TextAlignmentOptions.Center;
+        valTMP.raycastTarget = false;
 
         return valTMP;
     }
