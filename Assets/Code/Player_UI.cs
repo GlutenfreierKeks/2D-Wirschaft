@@ -120,6 +120,13 @@ public class Player_UI : MonoBehaviour
     private string activeTooltipResourceId = "";
     private Vector2 activeTooltipScreenPosition;
 
+    // ── Statistik ────────────────────────────────────────────────────────────
+    private GameObject statisticsPanel;
+    private TextMeshProUGUI statisticsContentText;
+    private UI_LineChart statsLineChart;
+    private string[] graphOptions = { "bevolkerung", "stimmung", "soldaten", "holz_income", "stein_income", "eisen_income", "gold_income" };
+    private string currentGraphOption = "bevolkerung";
+
     private class RateSourceEntry
     {
         public string Label;
@@ -370,6 +377,7 @@ public class Player_UI : MonoBehaviour
         BuildBottomMenu(canvasGO.transform);
         BuildSoldierCommandMenu(canvasGO.transform);
         BuildTooltipPanel(canvasGO.transform);
+        BuildStatisticsScreen(canvasGO.transform);
     }
 
     private void EnsureSlot(Transform parent, string id, string name, int start, int max)
@@ -416,6 +424,7 @@ public class Player_UI : MonoBehaviour
         {
             CreateMenuButton(mainMenuContainer.transform, cat.displayName, () => OpenSubMenu(cat.displayName));
         }
+        CreateMenuButton(mainMenuContainer.transform, "Statistik", ToggleStatisticsScreen);
 
         // ── Sub Menu Blocker (Full Screen zum Schließen bei Klick daneben) ──
         subMenuBlocker = new GameObject("SubMenuBlocker", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
@@ -852,6 +861,220 @@ public class Player_UI : MonoBehaviour
         // mainMenuContainer.SetActive(true);
     }
 
+    private void BuildStatisticsScreen(Transform canvasTransform)
+    {
+        if (ResourceHistory.Instance == null)
+        {
+            gameObject.AddComponent<ResourceHistory>();
+        }
+
+        statisticsPanel = new GameObject("StatisticsScreen", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        statisticsPanel.transform.SetParent(canvasTransform, false);
+        var panelRT = statisticsPanel.GetComponent<RectTransform>();
+        panelRT.anchorMin = Vector2.zero;
+        panelRT.anchorMax = Vector2.one;
+        panelRT.sizeDelta = Vector2.zero;
+        
+        var bgImage = statisticsPanel.GetComponent<Image>();
+        bgImage.color = new Color(0, 0, 0, 0.5f);
+
+        var btn = statisticsPanel.GetComponent<Button>();
+        btn.onClick.AddListener(ToggleStatisticsScreen);
+
+        var windowGO = new GameObject("Window", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        windowGO.transform.SetParent(statisticsPanel.transform, false);
+        var winRT = windowGO.GetComponent<RectTransform>();
+        winRT.anchorMin = new Vector2(0.5f, 0.5f);
+        winRT.anchorMax = new Vector2(0.5f, 0.5f);
+        winRT.pivot = new Vector2(0.5f, 0.5f);
+        winRT.sizeDelta = new Vector2(1200f, 750f);
+
+        // Block click-through
+        windowGO.GetComponent<Button>().onClick.AddListener(() => {}); 
+
+        var winImg = windowGO.GetComponent<Image>();
+        winImg.color = barColor;
+
+        var outline = windowGO.AddComponent<Outline>();
+        outline.effectColor = borderColor;
+        outline.effectDistance = new Vector2(borderWidth, -borderWidth);
+
+        var vl = windowGO.AddComponent<VerticalLayoutGroup>();
+        vl.padding = new RectOffset(40, 40, 40, 40);
+        vl.spacing = 20f;
+        vl.childAlignment = TextAnchor.UpperCenter;
+
+        var titleGO = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        titleGO.transform.SetParent(windowGO.transform, false);
+        var titleTxt = titleGO.GetComponent<TextMeshProUGUI>();
+        titleTxt.text = "INSEL-STATISTIKEN & VERLAUF";
+        titleTxt.fontSize = 36f;
+        titleTxt.fontStyle = FontStyles.Bold;
+        titleTxt.color = borderColor;
+        titleTxt.alignment = TextAlignmentOptions.Center;
+
+        // Tabs
+        var tabsGO = new GameObject("Tabs", typeof(RectTransform));
+        tabsGO.transform.SetParent(windowGO.transform, false);
+        var tabsHL = tabsGO.AddComponent<HorizontalLayoutGroup>();
+        tabsHL.spacing = 15f;
+        tabsHL.childAlignment = TextAnchor.MiddleCenter;
+        tabsHL.childForceExpandHeight = false;
+        tabsHL.childForceExpandWidth = false;
+
+        foreach (string opt in graphOptions)
+        {
+            string label = GetGraphLabel(opt);
+            string optionId = opt;
+            CreateMenuButton(tabsGO.transform, label, () => SetGraphOption(optionId), 140f, 45f);
+        }
+
+        // Content Row
+        var contentRowGO = new GameObject("ContentRow", typeof(RectTransform));
+        contentRowGO.transform.SetParent(windowGO.transform, false);
+        var crHL = contentRowGO.AddComponent<HorizontalLayoutGroup>();
+        crHL.spacing = 30f;
+        var crLE = contentRowGO.AddComponent<LayoutElement>();
+        crLE.flexibleHeight = 1f;
+        crLE.flexibleWidth = 1f;
+
+        // Left Side (Text)
+        var contentGO = new GameObject("ContentText", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        contentGO.transform.SetParent(contentRowGO.transform, false);
+        statisticsContentText = contentGO.GetComponent<TextMeshProUGUI>();
+        statisticsContentText.fontSize = 22f;
+        statisticsContentText.color = valueColor;
+        statisticsContentText.alignment = TextAlignmentOptions.TopLeft;
+        statisticsContentText.enableWordWrapping = true;
+        
+        var contentLE = contentGO.AddComponent<LayoutElement>();
+        contentLE.flexibleHeight = 1f;
+        contentLE.minWidth = 350f;
+        contentLE.preferredWidth = 350f;
+
+        // Right Side (Graph)
+        var graphWrapperGO = new GameObject("GraphWrapper", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        graphWrapperGO.transform.SetParent(contentRowGO.transform, false);
+        var gImg = graphWrapperGO.GetComponent<Image>();
+        gImg.color = new Color(0, 0, 0, 0.4f);
+        
+        var gwOutline = graphWrapperGO.AddComponent<Outline>();
+        gwOutline.effectColor = borderColor;
+        gwOutline.effectDistance = new Vector2(1, -1);
+
+        var gwLE = graphWrapperGO.AddComponent<LayoutElement>();
+        gwLE.flexibleHeight = 1f;
+        gwLE.flexibleWidth = 1f;
+        
+        // Inner Graph container (for padding)
+        var innerGraphGO = new GameObject("InnerGraph", typeof(RectTransform));
+        innerGraphGO.transform.SetParent(graphWrapperGO.transform, false);
+        var innerRT = innerGraphGO.GetComponent<RectTransform>();
+        innerRT.anchorMin = Vector2.zero;
+        innerRT.anchorMax = Vector2.one;
+        innerRT.offsetMin = new Vector2(20f, 20f);
+        innerRT.offsetMax = new Vector2(-20f, -20f);
+
+        statsLineChart = innerGraphGO.AddComponent<UI_LineChart>();
+        statsLineChart.graphColor = borderColor;
+
+        statisticsPanel.SetActive(false);
+    }
+
+    private string GetGraphLabel(string opt)
+    {
+        switch(opt) {
+            case "bevolkerung": return "Bevölkerung";
+            case "stimmung": return "Zufriedenheit";
+            case "soldaten": return "Soldaten";
+            case "holz_income": return "Holz/Min";
+            case "stein_income": return "Stein/Min";
+            case "eisen_income": return "Eisen/Min";
+            case "gold_income": return "Gold/Min";
+            default: return opt;
+        }
+    }
+
+    private void SetGraphOption(string opt)
+    {
+        currentGraphOption = opt;
+        UpdateStatisticsData();
+    }
+
+    private void ToggleStatisticsScreen()
+    {
+        if (statisticsPanel == null) return;
+        
+        bool isActive = !statisticsPanel.activeSelf;
+        statisticsPanel.SetActive(isActive);
+
+        if (isActive)
+        {
+            UpdateStatisticsData();
+        }
+    }
+
+    private void UpdateStatisticsData()
+    {
+        if (statisticsContentText == null) return;
+
+        int totalBuildings = 0;
+        int workingBuildings = 0;
+        
+        var buildings = FindObjectsOfType<BuildingInstance>();
+        foreach (var b in buildings)
+        {
+            if (b.isLocal && b.IsConstructed())
+            {
+                totalBuildings++;
+                if (!b.IsProductionPaused && b.GetOperatingWorkerCount() > 0)
+                {
+                    workingBuildings++;
+                }
+            }
+        }
+
+        int pop = GetResource("bevolkerung");
+        int maxPop = GetMaxPopulation();
+        int workers = GetResource("arbeiter");
+        int freeVillagers = GetResource("dorfbewohner");
+        int soldiers = GetResource("soldaten");
+        int maxSoldiers = GetMaxResource("soldaten");
+
+        float mood = 100f;
+        if (VillagerManager.Instance != null) mood = VillagerManager.Instance.globalMood;
+
+        string stats = $"<b>Bevölkerung & Militär</b>\n";
+        stats += $"<color=#CCCCCC>Einwohner:</color> {pop} / {maxPop}\n";
+        stats += $"<color=#CCCCCC>Freie Bürger:</color> {freeVillagers}\n";
+        stats += $"<color=#CCCCCC>Arbeitende Bürger:</color> {workers}\n";
+        stats += $"<color=#CCCCCC>Armee-Stärke:</color> {soldiers} / {maxSoldiers}\n";
+        stats += $"<color=#CCCCCC>Globale Zufriedenheit:</color> {mood:F0}%\n\n";
+
+        stats += $"<b>Infrastruktur</b>\n";
+        stats += $"<color=#CCCCCC>Eigene Gebäude:</color> {totalBuildings}\n";
+        stats += $"<color=#CCCCCC>Aktive Produktionsstätten:</color> {workingBuildings}\n";
+        
+        statisticsContentText.text = stats;
+
+        // Update Graph
+        if (statsLineChart != null && ResourceHistory.Instance != null)
+        {
+            List<float> dataList = new List<float>();
+            switch (currentGraphOption)
+            {
+                case "bevolkerung": dataList = ResourceHistory.Instance.data.popHistory; break;
+                case "stimmung": dataList = ResourceHistory.Instance.data.moodHistory; break;
+                case "soldaten": dataList = ResourceHistory.Instance.data.soldierHistory; break;
+                case "holz_income": dataList = ResourceHistory.Instance.data.woodIncomeHistory; break;
+                case "stein_income": dataList = ResourceHistory.Instance.data.stoneIncomeHistory; break;
+                case "eisen_income": dataList = ResourceHistory.Instance.data.ironIncomeHistory; break;
+                case "gold_income": dataList = ResourceHistory.Instance.data.goldIncomeHistory; break;
+            }
+            statsLineChart.ShowGraph(dataList);
+        }
+    }
+
     private TextMeshProUGUI CreateSlot(Transform parent, ResourceDefinition def)
     {
         // ── Slot-Rahmen (goldene Linie links als Trenner) ─────────────────
@@ -1214,7 +1437,7 @@ public class Player_UI : MonoBehaviour
         eventSystemGO.transform.SetParent(transform);
     }
 
-    private void CalculateResourceRates(string id, out float production, out float consumption, List<string> breakdown)
+    public void CalculateResourceRates(string id, out float production, out float consumption, List<string> breakdown)
     {
         production = 0f;
         consumption = 0f;
