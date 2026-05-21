@@ -49,10 +49,10 @@ public class IslandManager : MonoBehaviour
 
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
-    [SerializeField] private int islandCount = 6;
-    [SerializeField] private int blocksPerIsland = 1300;
-    [SerializeField] private float mapMargin = 110f;
-    [SerializeField] private float minDistanceBetweenIslands = 560f;
+    [SerializeField] private int islandCount = 60;
+    [SerializeField] private int blocksPerIsland = 3750;
+    [SerializeField] private float mapMargin = 70f;
+    [SerializeField] private float minDistanceBetweenIslands = 60f;
 
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
@@ -97,22 +97,22 @@ public class IslandManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    islandCount = 4;
-                    blocksPerIsland = 900;
-                    minDistanceBetweenIslands = 420f;
-                    mapMargin = 90f;
+                    islandCount = 30;
+                    blocksPerIsland = 2000;
+                    minDistanceBetweenIslands = 60f;
+                    mapMargin = 60f;
                     break;
                 case "Gross":
-                    islandCount = 8;
-                    blocksPerIsland = 1750;
-                    minDistanceBetweenIslands = 700f;
-                    mapMargin = 130f;
+                    islandCount = 70;
+                    blocksPerIsland = 3000;
+                    minDistanceBetweenIslands = 90f;
+                    mapMargin = 80f;
                     break;
                 default:
-                    islandCount = 6;
-                    blocksPerIsland = 1300;
-                    minDistanceBetweenIslands = 560f;
-                    mapMargin = 110f;
+                    islandCount = 60;
+                    blocksPerIsland = 3750;
+                    minDistanceBetweenIslands = 60f;
+                    mapMargin = 70f;
                     break;
             }
         }
@@ -159,7 +159,7 @@ public class IslandManager : MonoBehaviour
 
         int typeIndex = 0;
         int attempts = 0;
-        while (islandPositions.Count < islandCount && attempts < 100)
+        while (islandPositions.Count < islandCount && attempts < 5000)
         {
             attempts++;
             float x = Mathf.Round(Random.Range(-range, range));
@@ -274,75 +274,10 @@ public class IslandManager : MonoBehaviour
         // Distribute resources based on logical occupiedCells
         DistributeResources(occupiedCells, type);
 
-        // 2. Visuell vergrößerte Kacheln für weichen Übergang (3 zusätzliche Kachel-Ebenen hinzufügen für tieferen Overlap)
+        // 2. Visuelle Inselkacheln ohne weichen Übergang: nur echte Landzellen
         HashSet<Vector2> visualCells = new HashSet<Vector2>(occupiedCells);
-        HashSet<Vector2> layer1 = new HashSet<Vector2>();
-        foreach (Vector2 cell in visualCells)
-        {
-            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
-            {
-                if (!visualCells.Contains(n)) layer1.Add(n);
-            }
-        }
-        foreach (var c in layer1) visualCells.Add(c);
 
-        HashSet<Vector2> layer2 = new HashSet<Vector2>();
-        foreach (Vector2 cell in layer1)
-        {
-            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
-            {
-                if (!visualCells.Contains(n)) layer2.Add(n);
-            }
-        }
-        foreach (var c in layer2) visualCells.Add(c);
-
-        HashSet<Vector2> layer3 = new HashSet<Vector2>();
-        foreach (Vector2 cell in layer2)
-        {
-            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
-            {
-                if (!visualCells.Contains(n)) layer3.Add(n);
-            }
-        }
-        foreach (var c in layer3) visualCells.Add(c);
-
-        // 3. Abstand zum Ozean für weiches Alpha-Blending berechnen (BFS)
-        Dictionary<Vector2, int> distToOcean = new Dictionary<Vector2, int>();
-        Queue<Vector2> queue = new Queue<Vector2>();
-
-        foreach (Vector2 cell in visualCells)
-        {
-            bool isOuterBorder = false;
-            foreach (Vector2 n in new Vector2[] { cell + Vector2.up, cell + Vector2.down, cell + Vector2.left, cell + Vector2.right })
-            {
-                if (!visualCells.Contains(n))
-                {
-                    isOuterBorder = true;
-                    break;
-                }
-            }
-            if (isOuterBorder)
-            {
-                distToOcean[cell] = 1;
-                queue.Enqueue(cell);
-            }
-        }
-
-        while (queue.Count > 0)
-        {
-            Vector2 curr = queue.Dequeue();
-            int curDist = distToOcean[curr];
-            foreach (Vector2 n in new Vector2[] { curr + Vector2.up, curr + Vector2.down, curr + Vector2.left, curr + Vector2.right })
-            {
-                if (visualCells.Contains(n) && !distToOcean.ContainsKey(n))
-                {
-                    distToOcean[n] = curDist + 1;
-                    queue.Enqueue(n);
-                }
-            }
-        }
-
-        // 4. Bounding Box für UV-Koordinaten berechnen
+        // 3. Bounding Box für UV-Koordinaten berechnen
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
         foreach (Vector2 cell in visualCells)
@@ -367,48 +302,37 @@ public class IslandManager : MonoBehaviour
         MeshFilter meshFilter = islandObj.AddComponent<MeshFilter>();
         MeshRenderer meshRenderer = islandObj.AddComponent<MeshRenderer>();
 
-        // Material-Liste mit allen Textur-Variationen für dieses Biom laden
+        // Material für die gesamte Insel wählen: nur eine Textur pro Insel
         List<string> texNames = GetTextureNamesForBiome(type);
-        List<Material> materials = new List<Material>();
-        foreach (string tName in texNames)
+        int textureIndex = 0;
+        if (texNames.Count > 1)
         {
-            Texture2D texture = Resources.Load<Texture2D>($"Textures/{tName}");
-            Material mat = new Material(Shader.Find("Sprites/Default"));
-            if (texture != null)
-            {
-                mat.mainTexture = texture;
-            }
-            else
-            {
-                Debug.LogError($"[IslandManager] Hintergrund-Textur nicht gefunden: Textures/{tName}");
-            }
-            materials.Add(mat);
+            textureIndex = Mathf.Abs((int)(startPos.x * 73856093) ^ (int)(startPos.y * 19349663)) % texNames.Count;
         }
-        meshRenderer.materials = materials.ToArray();
+        string selectedTexture = texNames[textureIndex];
+
+        Texture2D texture = Resources.Load<Texture2D>($"Textures/{selectedTexture}");
+        Material mat = new Material(Shader.Find("Sprites/Default"));
+        if (texture != null)
+        {
+            mat.mainTexture = texture;
+        }
+        else
+        {
+            Debug.LogError($"[IslandManager] Hintergrund-Textur nicht gefunden: Textures/{selectedTexture}");
+        }
+        meshRenderer.material = mat;
 
         List<Vector3> vertices = new List<Vector3>();
         List<Color> colors = new List<Color>();
         List<Vector2> uvs = new List<Vector2>();
-        
-        // Liste von Dreiecken für jedes Submesh (jede Textur-Variation)
-        List<List<int>> submeshTriangles = new List<List<int>>();
-        for (int i = 0; i < texNames.Count; i++) submeshTriangles.Add(new List<int>());
-        
+        List<int> triangles = new List<int>();
         int vIndex = 0;
 
         foreach (Vector2 cell in visualCells)
         {
-            // Alpha-Wert basierend auf Abstand zum Ozean
-            float alpha = 1.0f;
-            if (distToOcean.TryGetValue(cell, out int d))
-            {
-                // Über 4 Kacheln extrem weich ausblenden
-                alpha = Mathf.Clamp01((d - 1) / 4.0f);
-            }
+            Color cellColor = new Color(1f, 1f, 1f, 1f);
 
-            Color cellColor = new Color(1f, 1f, 1f, alpha);
-
-            // 4 Eckpunkte des Quads
             Vector3 v0 = new Vector3(cell.x - 0.5f, cell.y - 0.5f, 0f);
             Vector3 v1 = new Vector3(cell.x - 0.5f, cell.y + 0.5f, 0f);
             Vector3 v2 = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
@@ -419,7 +343,6 @@ public class IslandManager : MonoBehaviour
             vertices.Add(v2);
             vertices.Add(v3);
 
-            // UV-Koordinaten basierend auf absoluter Position für perfektes Kachel-Tiling (1 Texturbild alle 2x2 Plots)
             float tileSize = 2f;
             uvs.Add(new Vector2(v0.x / tileSize, v0.y / tileSize));
             uvs.Add(new Vector2(v1.x / tileSize, v1.y / tileSize));
@@ -428,17 +351,12 @@ public class IslandManager : MonoBehaviour
 
             for (int j = 0; j < 4; j++) colors.Add(cellColor);
 
-            // Kachel zufällig einer der Textur-Variationen (Submeshes) zuweisen
-            // Wir verwenden einen deterministischen Hash der Kachel-Position, damit das Muster stabil bleibt und nicht flimmert!
-            int hash = Mathf.Abs((int)(cell.x * 73856093) ^ (int)(cell.y * 19349663));
-            int submeshIndex = hash % texNames.Count;
-
-            submeshTriangles[submeshIndex].Add(vIndex);
-            submeshTriangles[submeshIndex].Add(vIndex + 1);
-            submeshTriangles[submeshIndex].Add(vIndex + 2);
-            submeshTriangles[submeshIndex].Add(vIndex);
-            submeshTriangles[submeshIndex].Add(vIndex + 2);
-            submeshTriangles[submeshIndex].Add(vIndex + 3);
+            triangles.Add(vIndex);
+            triangles.Add(vIndex + 1);
+            triangles.Add(vIndex + 2);
+            triangles.Add(vIndex);
+            triangles.Add(vIndex + 2);
+            triangles.Add(vIndex + 3);
             vIndex += 4;
         }
 
@@ -446,12 +364,8 @@ public class IslandManager : MonoBehaviour
         mesh.vertices = vertices.ToArray();
         mesh.uv = uvs.ToArray();
         mesh.colors = colors.ToArray();
-        mesh.subMeshCount = texNames.Count;
-        
-        for (int i = 0; i < texNames.Count; i++)
-        {
-            mesh.SetTriangles(submeshTriangles[i].ToArray(), i);
-        }
+        mesh.subMeshCount = 1;
+        mesh.SetTriangles(triangles.ToArray(), 0);
         
         mesh.RecalculateNormals();
         meshFilter.mesh = mesh;

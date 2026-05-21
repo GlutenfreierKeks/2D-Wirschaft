@@ -7,11 +7,11 @@ public class GridManager : MonoBehaviour
     public static GridManager Instance;
 
     [Header("Grid Settings")]
-    [SerializeField] private int gridSize = 5000;
+    [SerializeField] private int gridSize = 1800;
     [SerializeField] private Material gridMaterial;
     
     [Header("Spawning")]
-    [SerializeField] private float spawnRadius = 800f;
+    [SerializeField] private float spawnRadius = 300f;
 
     private GameObject gridObj;
     private Transform mainCamTransform;
@@ -31,6 +31,7 @@ public class GridManager : MonoBehaviour
         }
 
         CreateGridPlane();
+        CreateBorder();
         if (Camera.main != null) mainCamTransform = Camera.main.transform;
     }
 
@@ -47,16 +48,16 @@ public class GridManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    gridSize = 3200;
-                    spawnRadius = 550f;
+                    gridSize = 1400;
+                    spawnRadius = 220f;
                     break;
                 case "Gross":
-                    gridSize = 7200;
-                    spawnRadius = 1100f;
+                    gridSize = 2600;
+                    spawnRadius = 420f;
                     break;
                 default:
-                    gridSize = 5000;
-                    spawnRadius = 800f;
+                    gridSize = 1800;
+                    spawnRadius = 300f;
                     break;
             }
         }
@@ -76,6 +77,46 @@ public class GridManager : MonoBehaviour
         if (gridMaterial != null)
         {
             gridObj.GetComponent<Renderer>().material = gridMaterial;
+        }
+    }
+
+    private void CreateBorder()
+    {
+        float half = gridSize / 2f;
+        float thickness = 20f;
+        // Dark navy / deep-sea colour so the border reads clearly against the ocean
+        Color borderColor = new Color(0.04f, 0.07f, 0.22f, 1f);
+
+        GameObject borderParent = new GameObject("MapBorder");
+        borderParent.transform.SetParent(transform);
+        borderParent.transform.position = Vector3.zero;
+
+        // (position, scale) for Top / Bottom / Left / Right sides
+        Vector3[] positions = {
+            new Vector3(0f,  half + thickness * 0.5f, -0.06f),
+            new Vector3(0f, -half - thickness * 0.5f, -0.06f),
+            new Vector3(-half - thickness * 0.5f, 0f, -0.06f),
+            new Vector3( half + thickness * 0.5f, 0f, -0.06f)
+        };
+        Vector3[] scales = {
+            new Vector3(gridSize + thickness * 2f, thickness, 1f),
+            new Vector3(gridSize + thickness * 2f, thickness, 1f),
+            new Vector3(thickness, gridSize, 1f),
+            new Vector3(thickness, gridSize, 1f)
+        };
+
+        Material borderMat = new Material(Shader.Find("Sprites/Default"));
+        borderMat.color = borderColor;
+
+        for (int i = 0; i < 4; i++)
+        {
+            GameObject side = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            side.name = "BorderSide_" + i;
+            side.transform.SetParent(borderParent.transform);
+            side.transform.position = positions[i];
+            side.transform.localScale  = scales[i];
+            Destroy(side.GetComponent<MeshCollider>());
+            side.GetComponent<Renderer>().material = borderMat;
         }
     }
 
