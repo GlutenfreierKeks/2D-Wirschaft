@@ -57,11 +57,44 @@ public class IslandManager : MonoBehaviour
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
     private static HashSet<Vector2> allLandCells = new HashSet<Vector2>();
+    private static Dictionary<Vector2, int> islandCellIndices = new Dictionary<Vector2, int>();
     private static Sprite defaultNodeSprite;
 
     public static bool IsLand(Vector2 pos)
     {
         return allLandCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
+    }
+
+    public static int GetIslandIndexAt(Vector2 pos)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
+        return islandCellIndices.TryGetValue(snapped, out int index) ? index : -1;
+    }
+
+    public static int GetLocalPlayerIslandIndex()
+    {
+        if (!PhotonNetwork.InRoom)
+        {
+            return 0;
+        }
+
+        Photon.Realtime.Player[] players = PhotonNetwork.PlayerList;
+        for (int i = 0; i < players.Length; i++)
+        {
+            if (players[i].IsLocal)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    public static bool IsOwnIsland(Vector2 pos)
+    {
+        int islandIndex = GetIslandIndexAt(pos);
+        if (islandIndex < 0) return false;
+        return islandIndex == GetLocalPlayerIslandIndex();
     }
 
     private void Awake()
@@ -181,14 +214,15 @@ public class IslandManager : MonoBehaviour
                 IslandType type = typeIndex < allTypes.Length ? allTypes[typeIndex] : (IslandType)Random.Range(0, allTypes.Length);
                 typeIndex++;
 
+                int islandIndex = islandPositions.Count;
                 islandPositions.Add(newPos);
                 islandTypes.Add(type);
-                CreateIslandMesh(newPos, type);
+                CreateIslandMesh(newPos, type, islandIndex);
             }
         }
     }
 
-    private void CreateIslandMesh(Vector2 startPos, IslandType type)
+    private void CreateIslandMesh(Vector2 startPos, IslandType type, int islandIndex)
     {
         HashSet<Vector2> occupiedCells = new HashSet<Vector2>();
         occupiedCells.Add(startPos);
@@ -269,7 +303,14 @@ public class IslandManager : MonoBehaviour
         }
 
         // 1. Add logical land cells
-        foreach (Vector2 cell in occupiedCells) allLandCells.Add(cell);
+        foreach (Vector2 cell in occupiedCells)
+        {
+            allLandCells.Add(cell);
+            if (!islandCellIndices.ContainsKey(cell))
+            {
+                islandCellIndices[cell] = islandIndex;
+            }
+        }
 
         // Distribute resources based on logical occupiedCells
         DistributeResources(occupiedCells, type);

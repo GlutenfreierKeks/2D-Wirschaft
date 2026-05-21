@@ -131,6 +131,11 @@ public class PlacementManager : MonoBehaviour
                 }
 
                 bool isLand = IslandManager.IsLand(pos);
+                if (isLand && !IslandManager.IsOwnIsland(pos))
+                {
+                    Debug.Log("Placement Failed: Can only build on your own island");
+                    return false;
+                }
 
                 if (currentBuilding.placementRule == PlacementRule.LandOnly && !isLand)
                 {
