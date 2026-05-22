@@ -42,6 +42,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     private void Start()
     {
+        EnsureRequiredManagers();
+
         if (PhotonNetwork.InRoom)
         {
             SpawnPlayer();
@@ -52,6 +54,30 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         {
             if (gameStatusText != null) gameStatusText.text = "Game Started! (Offline Mode)";
             Debug.LogWarning("GameManager loaded, but client is not in a Photon room.");
+        }
+    }
+
+    private void EnsureRequiredManagers()
+    {
+        EnsureManagerExists<GridManager>();
+        EnsureManagerExists<IslandManager>();
+        EnsureManagerExists<BuildingManager>();
+        EnsureManagerExists<ResourceManager>();
+        EnsureManagerExists<PlacementManager>();
+        EnsureManagerExists<FogProjector>();
+        EnsureManagerExists<SelectionManager>();
+        EnsureManagerExists<VillagerManager>();
+        EnsureManagerExists<NotificationManager>();
+        EnsureManagerExists<AudioManager>();
+    }
+
+    private void EnsureManagerExists<T>() where T : MonoBehaviour
+    {
+        if (FindObjectOfType<T>() == null)
+        {
+            GameObject obj = new GameObject(typeof(T).Name);
+            obj.AddComponent<T>();
+            Debug.LogWarning($"[GameManager] Erstellte fehlenden Manager: {typeof(T).Name}");
         }
     }
 

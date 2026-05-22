@@ -249,6 +249,13 @@ public class BuildingInstance : MonoBehaviour
     {
         if (GetComponent<Collider2D>() != null) return;
 
+        var existing3D = GetComponent<Collider>();
+        if (existing3D != null)
+        {
+            Debug.Log("[BuildingInstance] Entferne inkompatiblen 3D-Collider vor dem Hinzufügen eines 2D-Colliders.");
+            DestroyImmediate(existing3D);
+        }
+
         var col = gameObject.AddComponent<BoxCollider2D>();
         Vector3 s = transform.localScale;
         col.size = new Vector2(
@@ -260,6 +267,13 @@ public class BuildingInstance : MonoBehaviour
     private void EnsureLodgingCollider()
     {
         if (GetComponent<Collider2D>() != null) return;
+
+        var existing3D = GetComponent<Collider>();
+        if (existing3D != null)
+        {
+            Debug.Log("[BuildingInstance] Entferne inkompatiblen 3D-Collider vor dem Hinzufügen eines 2D-Colliders.");
+            DestroyImmediate(existing3D);
+        }
 
         var col = gameObject.AddComponent<BoxCollider2D>();
         Vector3 s = transform.localScale;

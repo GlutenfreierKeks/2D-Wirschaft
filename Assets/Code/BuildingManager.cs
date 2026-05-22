@@ -151,18 +151,53 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         revealer.isLocalPlayer = isLocal;
 
         Renderer rend = warehouse.GetComponent<Renderer>();
-        if (!isLocal) rend.material.color = new Color(1f, 0.5f, 0.5f, 1f);
+
+        if (warehouseMaterial != null)
+        {
+            rend.material = new Material(warehouseMaterial);
+        }
+        else
+        {
+            Shader warehouseShader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
+            if (warehouseShader == null)
+            {
+                Debug.LogWarning("[BuildingManager] Keine Warehouse-Shader gefunden. Verwende Standardmaterial.");
+                rend.material = new Material(Shader.Find("Sprites/Default"));
+            }
+            else
+            {
+                rend.material = new Material(warehouseShader);
+            }
+        }
 
         Texture2D tex = Resources.Load<Texture2D>("warehouse_texture");
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>("Textures/warehouse_texture");
+        }
+
         if (tex != null)
         {
-            rend.material = new Material(Shader.Find("Unlit/Transparent"));
             rend.material.mainTexture = tex;
-            if (!isLocal) rend.material.color = new Color(1f, 0.5f, 0.5f, 1f);
         }
-        
+        else
+        {
+            Debug.LogWarning("[BuildingManager] warehouse_texture nicht gefunden. Verwende graues Ersatzmaterial.");
+            rend.material.color = new Color(0.75f, 0.75f, 0.75f, 1f);
+        }
+
+        if (!isLocal)
+        {
+            Color enemyColor = new Color(1f, 0.5f, 0.5f, 1f);
+            rend.material.color = enemyColor;
+        }
+
         RegisterOccupancy(position, 3, 3);
-        Destroy(warehouse.GetComponent<MeshCollider>());
+        var meshCollider = warehouse.GetComponent<MeshCollider>();
+        if (meshCollider != null)
+        {
+            DestroyImmediate(meshCollider);
+        }
 
         BuildingInstance lodging = warehouse.AddComponent<BuildingInstance>();
         lodging.isLocal = isLocal;
