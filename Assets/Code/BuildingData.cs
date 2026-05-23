@@ -55,4 +55,8 @@ public class BuildingData : ScriptableObject
     public float towerDamage = 20f;
     [Tooltip("Cooldown between shots (seconds).")]
     public float towerCooldown = 3f;
+    [Tooltip("Kategorie im Bau-Menü. Leer lässt das System selbst entscheiden.")]
+    public string uiCategoryId = "";
+    [Tooltip("Optionales Icon für das Bau-Menü.")]
+    public Sprite uiIcon = null;
 }

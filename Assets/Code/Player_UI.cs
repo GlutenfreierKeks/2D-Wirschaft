@@ -376,6 +376,7 @@ public class Player_UI : MonoBehaviour
         EnsureSlot(barGO.transform, "fleisch", "Fleisch", 0, 0);
 
         BuildBottomMenu(canvasGO.transform);
+        AutoPopulateBuildingMenu();
         BuildSoldierCommandMenu(canvasGO.transform);
         BuildTooltipPanel(canvasGO.transform);
         BuildStatisticsScreen(canvasGO.transform);
@@ -860,6 +861,69 @@ public class Player_UI : MonoBehaviour
         subMenuBlocker.SetActive(false);
         // Da wir es nicht mehr deaktivieren, brauchen wir es hier auch nicht aktivieren
         // mainMenuContainer.SetActive(true);
+    }
+
+    private void AutoPopulateBuildingMenu()
+    {
+        BuildingData[] allBuildings = Resources.FindObjectsOfTypeAll<BuildingData>();
+        if (allBuildings == null || allBuildings.Length == 0)
+        {
+            allBuildings = Resources.LoadAll<BuildingData>("");
+        }
+        if (allBuildings == null || allBuildings.Length == 0) return;
+
+        foreach (var buildingData in allBuildings)
+        {
+            if (buildingData == null || string.IsNullOrEmpty(buildingData.buildingName)) continue;
+            bool alreadyExists = false;
+
+            foreach (var item in menuItems)
+            {
+                if (item.buildingData == buildingData || (item.buildingData != null && item.buildingData.buildingName == buildingData.buildingName))
+                {
+                    alreadyExists = true;
+                    break;
+                }
+            }
+
+            if (alreadyExists) continue;
+
+            string categoryId = DetermineBuildingCategory(buildingData);
+            if (!menuCategories.Exists(c => c.id == categoryId))
+            {
+                categoryId = "andere";
+            }
+
+            MenuItem newItem = new MenuItem
+            {
+                id = buildingData.buildingName.Replace(" ", "_").ToLowerInvariant(),
+                displayName = buildingData.buildingName,
+                icon = buildingData.uiIcon,
+                categoryId = categoryId,
+                buildingData = buildingData
+            };
+            menuItems.Add(newItem);
+        }
+    }
+
+    private string DetermineBuildingCategory(BuildingData buildingData)
+    {
+        if (!string.IsNullOrEmpty(buildingData.uiCategoryId))
+            return buildingData.uiCategoryId;
+
+        if (buildingData.isDefenseTower)
+            return "andere";
+
+        if (buildingData.isBarracks)
+            return "andere";
+
+        if (buildingData.sleepCapacity > 0 || buildingData.producesVillagers || buildingData.productionResourceId == "bevolkerung")
+            return "hauser";
+
+        if (buildingData.requiredResourceType != ResourceType.None)
+            return "andere";
+
+        return "andere";
     }
 
     private void BuildStatisticsScreen(Transform canvasTransform)

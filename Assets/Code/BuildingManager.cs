@@ -188,10 +188,53 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
 
     public void SpawnBuilding(BuildingData data, Vector2 position, bool isLocal = true)
     {
-        if (data.prefab == null) return;
+        GameObject building = null;
 
-        GameObject building = Instantiate(data.prefab, new Vector3(position.x, position.y, -0.21f), Quaternion.identity);
-        building.name = data.buildingName;
+        if (data.prefab != null)
+        {
+            building = Instantiate(data.prefab, new Vector3(position.x, position.y, -0.21f), Quaternion.identity);
+            building.name = data.buildingName;
+        }
+        else
+        {
+            // Fallback: create a simple Quad using a texture from Resources/Textures matching the building name
+            building = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            building.transform.position = new Vector3(position.x, position.y, -0.21f);
+            building.name = data.buildingName;
+
+            Renderer rend = building.GetComponent<Renderer>();
+            Texture2D tex = null;
+            // Try exact name, then try prefix 'turm' as common tower texture
+            if (data != null && data.uiIcon != null)
+            {
+                tex = data.uiIcon.texture;
+            }
+            if (tex == null)
+            {
+                tex = Resources.Load<Texture2D>("Textures/" + data.buildingName);
+            }
+            if (tex == null)
+            {
+                tex = Resources.Load<Texture2D>("Textures/turm");
+            }
+
+            Shader shader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            rend.material = new Material(shader);
+
+            if (tex != null)
+            {
+                rend.material.mainTexture = tex;
+            }
+            else
+            {
+                // If no texture found, tint gray so it's visible
+                rend.material.color = new Color(0.8f, 0.8f, 0.8f, 1f);
+            }
+
+            var meshCollider = building.GetComponent<MeshCollider>();
+            if (meshCollider != null) DestroyImmediate(meshCollider);
+        }
 
         // Scale the visual so the texture covers exactly the building's grid footprint.
         // We measure the natural rendered size first (independent of any prefab scale),

@@ -122,8 +122,8 @@ public class BuildingInstance : MonoBehaviour
             TryHireOperatingWorkers();
         }
 
-        // Handle Barracks recruitment if this is a constructed barracks
-        if (isConstructed && data.isBarracks)
+        // Handle Barracks recruitment and tower recruitment if this is a constructed barracks or tower
+        if (isConstructed && (data.isBarracks || data.isDefenseTower))
         {
             UpdateBarracksRecruitment();
         }
@@ -658,6 +658,12 @@ public class BuildingInstance : MonoBehaviour
     {
         if (!isLocal) return;
 
+        if (data != null && data.isDefenseTower && sType != SoldierType.Bow)
+        {
+            NotificationManager.Instance?.Notify("tower_bow_only", "Dieser Turm kann nur Bogenschützen ausbilden.", 5f);
+            return;
+        }
+
         if (CanAffordSoldier())
         {
             SpendSoldierResources();
@@ -694,10 +700,17 @@ public class BuildingInstance : MonoBehaviour
                 {
                     // Randomly pick an enabled type
                     List<SoldierType> activeTypes = new List<SoldierType>();
-                    if (spearSelected) activeTypes.Add(SoldierType.Spear);
-                    if (shieldSelected) activeTypes.Add(SoldierType.Shield);
-                    if (swordSelected) activeTypes.Add(SoldierType.Sword);
-                    if (bowSelected) activeTypes.Add(SoldierType.Bow);
+                    if (data != null && data.isDefenseTower)
+                    {
+                        activeTypes.Add(SoldierType.Bow);
+                    }
+                    else
+                    {
+                        if (spearSelected) activeTypes.Add(SoldierType.Spear);
+                        if (shieldSelected) activeTypes.Add(SoldierType.Shield);
+                        if (swordSelected) activeTypes.Add(SoldierType.Sword);
+                        if (bowSelected) activeTypes.Add(SoldierType.Bow);
+                    }
 
                     if (activeTypes.Count > 0)
                     {
