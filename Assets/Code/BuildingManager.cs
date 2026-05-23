@@ -125,6 +125,22 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         FogRevealer revealer = building.GetComponent<FogRevealer>();
         if (revealer == null) revealer = building.AddComponent<FogRevealer>();
         revealer.isLocalPlayer = isLocal;
+        // Use custom reveal radius for certain buildings (e.g. towers, warehouses)
+        if (data != null && data.revealRadius > 0f)
+        {
+            revealer.radius = data.revealRadius;
+        }
+
+        // If this building is a defensive tower, attach tower behaviour
+        if (data != null && data.isDefenseTower)
+        {
+            ArcherTower tower = building.AddComponent<ArcherTower>();
+            tower.slots = Mathf.Max(0, data.archerSlots);
+            tower.range = data.towerRange > 0f ? data.towerRange : tower.range;
+            tower.damage = data.towerDamage > 0f ? data.towerDamage : tower.damage;
+            tower.cooldown = data.towerCooldown > 0f ? data.towerCooldown : tower.cooldown;
+            tower.team = isLocal ? Team.Player : Team.Enemy;
+        }
 
         // Apply red tint to enemy buildings
         if (!isLocal)

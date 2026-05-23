@@ -764,6 +764,19 @@ public class BuildingInstance : MonoBehaviour
                 VillagerManager.Instance.NotifyVillagerConverted(candidate);
             }
 
+                // If this barracks is actually a tower that stations archers, try to place the recruited bow inside
+                if (data != null && data.isDefenseTower && currentRecruitingType == SoldierType.Bow)
+                {
+                    ArcherTower tower = GetComponent<ArcherTower>();
+                    if (tower != null && tower.TryStationArcher())
+                    {
+                        // Recruitment consumed the villager and gained a soldier but no free Soldier GameObject is spawned.
+                        SpawnProductionParticles();
+                        Destroy(candidate.gameObject);
+                        return;
+                    }
+                }
+
             int formationIndex = Mathf.Max(0, Player_UI.Instance.GetResource("soldaten"));
             int columns = 3;
             int row = formationIndex / columns;
