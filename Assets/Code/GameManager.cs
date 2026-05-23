@@ -42,7 +42,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     private void Start()
     {
-        SceneSetup.EnsureInitialized();
+        EnsureRequiredManagers();
 
         if (PhotonNetwork.InRoom)
         {
@@ -52,10 +52,32 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         }
         else
         {
-            Debug.LogWarning("GameManager loaded in offline mode. Spawning local player.");
-            SpawnPlayer();
             if (gameStatusText != null) gameStatusText.text = "Game Started! (Offline Mode)";
-            BuildGameChatUI();
+            Debug.LogWarning("GameManager loaded, but client is not in a Photon room.");
+        }
+    }
+
+    private void EnsureRequiredManagers()
+    {
+        EnsureManagerExists<GridManager>();
+        EnsureManagerExists<IslandManager>();
+        EnsureManagerExists<BuildingManager>();
+        EnsureManagerExists<ResourceManager>();
+        EnsureManagerExists<PlacementManager>();
+        EnsureManagerExists<FogProjector>();
+        EnsureManagerExists<SelectionManager>();
+        EnsureManagerExists<VillagerManager>();
+        EnsureManagerExists<NotificationManager>();
+        EnsureManagerExists<AudioManager>();
+    }
+
+    private void EnsureManagerExists<T>() where T : MonoBehaviour
+    {
+        if (FindObjectOfType<T>() == null)
+        {
+            GameObject obj = new GameObject(typeof(T).Name);
+            obj.AddComponent<T>();
+            Debug.LogWarning($"[GameManager] Erstellte fehlenden Manager: {typeof(T).Name}");
         }
     }
 
@@ -77,22 +99,19 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             isTestMode = (bool)testModeValue;
         }
 
+        // Get player index
         int playerIndex = 0;
-        int playerCount = 1;
-        if (PhotonNetwork.InRoom)
+        Player[] players = PhotonNetwork.PlayerList;
+        for (int i = 0; i < players.Length; i++)
         {
-            Player[] players = PhotonNetwork.PlayerList;
-            playerCount = players.Length;
-            for (int i = 0; i < players.Length; i++)
+            if (players[i].IsLocal)
             {
-                if (players[i].IsLocal)
-                {
-                    playerIndex = i;
-                    break;
-                }
+                playerIndex = i;
+                break;
             }
         }
 
+        // Pick an island based on the player index
         Vector2 islandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
         IslandType islandType = IslandManager.Instance.GetIslandType(playerIndex);
         
@@ -105,21 +124,25 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         
         Debug.Log($"[GameManager] Spawning at Island {playerIndex}: {spawnPos}");
         
+        // Move camera for the local player
         Camera mainCam = Camera.main;
         if (mainCam != null)
         {
-            mainCam.transform.position = new Vector3(islandPos.x, islandPos.y, -10f);
+            Vector2 localIslandPos = IslandManager.Instance.GetIslandPosition(playerIndex);
+            mainCam.transform.position = new Vector3(localIslandPos.x, localIslandPos.y, -10f);
             mainCam.transform.rotation = Quaternion.identity;
         }
 
+        // Spawn warehouses for ALL players
         if (BuildingManager.Instance != null)
         {
-            for (int i = 0; i < playerCount; i++)
+            for (int i = 0; i < players.Length; i++)
             {
                 Vector2 pos = IslandManager.Instance.GetIslandPosition(i);
-                bool isLocal = !PhotonNetwork.InRoom || PhotonNetwork.PlayerList[i].IsLocal;
+                bool isLocal = players[i].IsLocal;
                 BuildingManager.Instance.SpawnMainWarehouse(pos, isLocal);
 
+                // If it's the local player, reveal the entire starting island
                 if (isLocal)
                 {
                     GameObject islandRevealer = new GameObject("StartIslandRevealer");
@@ -127,6 +150,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                     FogRevealer fr = islandRevealer.AddComponent<FogRevealer>();
                     fr.radius = 95f; // Large enough to cover the spawn island
                     fr.isLocalPlayer = true;
+                    
+                    // Also register it as fully explored
                     FogProjector.RegisterExploration(pos, 80f);
 
                     if (VillagerManager.Instance != null)
