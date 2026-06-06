@@ -57,15 +57,73 @@ public class BuildingInstance : MonoBehaviour
     private List<Villager> assignedWorkers = new List<Villager>();
     private List<Villager> operatingWorkers = new List<Villager>();
 
+    [HideInInspector] public bool isPreBuiltLodging = false;
+    [HideInInspector] public string displayNameOverride = "";
+    [HideInInspector] public int sleepCapacityOverride = 0;
+    private readonly List<Villager> sleepingVillagers = new List<Villager>();
+
+    public string GetDisplayName()
+    {
+        if (!string.IsNullOrEmpty(displayNameOverride)) return displayNameOverride;
+        return data != null ? data.buildingName : gameObject.name;
+    }
+
+    public int GetSleepCapacity()
+    {
+        if (sleepCapacityOverride > 0) return sleepCapacityOverride;
+        if (data == null) return 0;
+        if (data.sleepCapacity > 0) return data.sleepCapacity;
+        if (data.productionResourceId == "bevolkerung")
+        {
+            return data.buildingName.Contains("Groß") ? 4 : 2;
+        }
+        return 0;
+    }
+
+    public bool ProvidesSleep => GetSleepCapacity() > 0;
+
+    public int GetSleepingCount()
+    {
+        sleepingVillagers.RemoveAll(v => v == null);
+        return sleepingVillagers.Count;
+    }
+
+    public bool HasFreeSleepSlot(Villager villager)
+    {
+        if (!ProvidesSleep || !IsConstructed()) return false;
+        sleepingVillagers.RemoveAll(v => v == null);
+        if (villager != null && sleepingVillagers.Contains(villager)) return true;
+        return sleepingVillagers.Count < GetSleepCapacity();
+    }
+
+    public bool TryRegisterSleeper(Villager villager)
+    {
+        if (villager == null || !ProvidesSleep || !IsConstructed()) return false;
+        sleepingVillagers.RemoveAll(v => v == null);
+        if (sleepingVillagers.Contains(villager)) return true;
+        if (sleepingVillagers.Count >= GetSleepCapacity()) return false;
+        sleepingVillagers.Add(villager);
+        return true;
+    }
+
+    public void UnregisterSleeper(Villager villager)
+    {
+        if (villager == null) return;
+        sleepingVillagers.Remove(villager);
+    }
+
     private void Update()
     {
+        if (data == null) return;
+        if (!isLocal) return;
+
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
             TryHireOperatingWorkers();
         }
 
-        // Handle Barracks recruitment if this is a constructed barracks
-        if (isConstructed && data.isBarracks)
+        // Handle Barracks recruitment and tower recruitment if this is a constructed barracks or tower
+        if (isConstructed && (data.isBarracks || data.isDefenseTower))
         {
             UpdateBarracksRecruitment();
         }
@@ -165,27 +223,64 @@ public class BuildingInstance : MonoBehaviour
         revealer = GetComponent<FogRevealer>();
         if (revealer != null) revealer.enabled = false;
 
-        // Add a collider so the building can be clicked via Physics2D overlap.
-        if (GetComponent<Collider2D>() == null)
+        if (isPreBuiltLodging)
         {
-            var col = gameObject.AddComponent<BoxCollider2D>();
-            Vector3 s = transform.localScale;
-            col.size = new Vector2(
-                s.x > 0.001f ? data.width  / s.x : data.width,
-                s.y > 0.001f ? data.height / s.y : data.height
-            );
-            Debug.Log($"[BuildingInstance] Collider size set to {col.size} " +
-                      $"(scale={s}, w={data.width}, h={data.height})");
+            isConstructed = true;
+            if (revealer != null) revealer.enabled = true;
+            EnsureLodgingCollider();
+            return;
         }
 
-        // Request workers from manager
-        if (VillagerManager.Instance != null)
+        if (data == null)
+        {
+            Debug.LogWarning($"[BuildingInstance] {name} has no BuildingData.");
+            return;
+        }
+
+        EnsureBuildingCollider();
+
+        if (VillagerManager.Instance != null && isLocal)
             VillagerManager.Instance.RequestConstruction(this);
 
         StartCoroutine(ConstructionRoutine());
     }
 
-    public bool NeedsMoreWorkers() => workersAssigned < data.requiredWorkers;
+    private void EnsureBuildingCollider()
+    {
+        if (GetComponent<Collider2D>() != null) return;
+
+        var existing3D = GetComponent<Collider>();
+        if (existing3D != null)
+        {
+            Debug.Log("[BuildingInstance] Entferne inkompatiblen 3D-Collider vor dem Hinzufügen eines 2D-Colliders.");
+            DestroyImmediate(existing3D);
+        }
+
+        var col = gameObject.AddComponent<BoxCollider2D>();
+        Vector3 s = transform.localScale;
+        col.size = new Vector2(
+            s.x > 0.001f ? data.width / s.x : data.width,
+            s.y > 0.001f ? data.height / s.y : data.height
+        );
+    }
+
+    private void EnsureLodgingCollider()
+    {
+        if (GetComponent<Collider2D>() != null) return;
+
+        var existing3D = GetComponent<Collider>();
+        if (existing3D != null)
+        {
+            Debug.Log("[BuildingInstance] Entferne inkompatiblen 3D-Collider vor dem Hinzufügen eines 2D-Colliders.");
+            DestroyImmediate(existing3D);
+        }
+
+        var col = gameObject.AddComponent<BoxCollider2D>();
+        Vector3 s = transform.localScale;
+        col.size = new Vector2(Mathf.Max(1f, s.x), Mathf.Max(1f, s.y));
+    }
+
+    public bool NeedsMoreWorkers() => data != null && workersAssigned < data.requiredWorkers;
     public int GetAssignedWorkerCount() => workersAssigned;
     public int GetOperatingWorkerCount() => operatingWorkers.Count;
 
@@ -207,10 +302,13 @@ public class BuildingInstance : MonoBehaviour
         SetColor(Color.cyan);
         SetAlpha(0.2f);
 
-        // Wait for all workers to arrive at the site
-        while (workersArrived < data.requiredWorkers)
+        // Wait for all workers to arrive at the site, but only for local buildings
+        if (isLocal)
         {
-            yield return null;
+            while (workersArrived < data.requiredWorkers)
+            {
+                yield return null;
+            }
         }
 
         // 2. Building Phase: Normal colors, fading in
@@ -252,22 +350,26 @@ public class BuildingInstance : MonoBehaviour
     private void CompleteConstruction()
     {
         isConstructed = true;
-        if (revealer != null) revealer.enabled = true;
-        AudioManager.Instance?.PlayConstructionSound(transform.position);
-
-        // Release workers
-        foreach (var w in assignedWorkers) w.Release();
-        assignedWorkers.Clear();
-
-        // Hire operating workers
-        TryHireOperatingWorkers();
-
-        // If it's a worker hub, maybe it converts nearby villagers? 
-        if (data.productionResourceId == "bevolkerung")
+        if (revealer != null && isLocal) revealer.enabled = true;
+        
+        if (isLocal)
         {
-            Player_UI.Instance.AddMaxPopulation(data.productionAmount);
-            int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
-            Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
+            AudioManager.Instance?.PlayConstructionSound(transform.position);
+
+            // Release workers
+            foreach (var w in assignedWorkers) w.Release();
+            assignedWorkers.Clear();
+
+            // Hire operating workers
+            TryHireOperatingWorkers();
+
+            // If it's a worker hub, maybe it converts nearby villagers? 
+            if (data.productionResourceId == "bevolkerung")
+            {
+                Player_UI.Instance.AddMaxPopulation(data.productionAmount);
+                int soldierLimitBonus = Mathf.Max(1, data.productionAmount / 2);
+                Player_UI.Instance.SetMaxResource("soldaten", Player_UI.Instance.GetMaxResource("soldaten") + soldierLimitBonus);
+            }
         }
     }
 
@@ -410,6 +512,8 @@ public class BuildingInstance : MonoBehaviour
     /// <summary>Produktion pausieren / fortsetzen.</summary>
     public void ToggleProduction()
     {
+        if (!isLocal) return;
+
         IsProductionPaused = !IsProductionPaused;
         Debug.Log($"[BuildingInstance] {data.buildingName} Produktion: {(IsProductionPaused ? "PAUSIERT" : "AKTIV")}");
 
@@ -435,6 +539,8 @@ public class BuildingInstance : MonoBehaviour
     /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>
     public void Demolish()
     {
+        if (!isLocal) return;
+
         if (ResourceManager.Instance != null)
         {
             ResourceManager.Instance.AddResource("holz",  data.woodCost  / 2);
@@ -448,6 +554,7 @@ public class BuildingInstance : MonoBehaviour
 
     public bool ToggleHutType()
     {
+        if (!isLocal) return false;
         if (Player_UI.Instance == null) return false;
         
         int wheat = Player_UI.Instance.GetResource("weizen");
@@ -549,6 +656,14 @@ public class BuildingInstance : MonoBehaviour
 
     public void OrderSoldier(SoldierType sType)
     {
+        if (!isLocal) return;
+
+        if (data != null && data.isDefenseTower && sType != SoldierType.Bow)
+        {
+            NotificationManager.Instance?.Notify("tower_bow_only", "Dieser Turm kann nur Bogenschützen ausbilden.", 5f);
+            return;
+        }
+
         if (CanAffordSoldier())
         {
             SpendSoldierResources();
@@ -585,10 +700,17 @@ public class BuildingInstance : MonoBehaviour
                 {
                     // Randomly pick an enabled type
                     List<SoldierType> activeTypes = new List<SoldierType>();
-                    if (spearSelected) activeTypes.Add(SoldierType.Spear);
-                    if (shieldSelected) activeTypes.Add(SoldierType.Shield);
-                    if (swordSelected) activeTypes.Add(SoldierType.Sword);
-                    if (bowSelected) activeTypes.Add(SoldierType.Bow);
+                    if (data != null && data.isDefenseTower)
+                    {
+                        activeTypes.Add(SoldierType.Bow);
+                    }
+                    else
+                    {
+                        if (spearSelected) activeTypes.Add(SoldierType.Spear);
+                        if (shieldSelected) activeTypes.Add(SoldierType.Shield);
+                        if (swordSelected) activeTypes.Add(SoldierType.Sword);
+                        if (bowSelected) activeTypes.Add(SoldierType.Bow);
+                    }
 
                     if (activeTypes.Count > 0)
                     {
@@ -655,6 +777,19 @@ public class BuildingInstance : MonoBehaviour
                 VillagerManager.Instance.NotifyVillagerConverted(candidate);
             }
 
+                // If this barracks is actually a tower that stations archers, try to place the recruited bow inside
+                if (data != null && data.isDefenseTower && currentRecruitingType == SoldierType.Bow)
+                {
+                    ArcherTower tower = GetComponent<ArcherTower>();
+                    if (tower != null && tower.TryStationArcher())
+                    {
+                        // Recruitment consumed the villager and gained a soldier but no free Soldier GameObject is spawned.
+                        SpawnProductionParticles();
+                        Destroy(candidate.gameObject);
+                        return;
+                    }
+                }
+
             int formationIndex = Mathf.Max(0, Player_UI.Instance.GetResource("soldaten"));
             int columns = 3;
             int row = formationIndex / columns;
@@ -704,6 +839,16 @@ public class BuildingInstance : MonoBehaviour
 
     private void OnDestroy()
     {
+        List<Villager> sleepers = new List<Villager>(sleepingVillagers);
+        foreach (var sleeper in sleepers)
+        {
+            if (sleeper != null)
+            {
+                sleeper.ClearSleepHouseReference();
+            }
+        }
+        sleepingVillagers.Clear();
+
         // Release construction workers if still building
         foreach (var w in assignedWorkers)
         {

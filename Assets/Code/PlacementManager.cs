@@ -131,6 +131,11 @@ public class PlacementManager : MonoBehaviour
                 }
 
                 bool isLand = IslandManager.IsLand(pos);
+                if (isLand && !IslandManager.IsOwnIsland(pos))
+                {
+                    Debug.Log("Placement Failed: Can only build on your own island");
+                    return false;
+                }
 
                 if (currentBuilding.placementRule == PlacementRule.LandOnly && !isLand)
                 {
@@ -180,6 +185,13 @@ public class PlacementManager : MonoBehaviour
     {
         ResourceManager.Instance.SpendResources(currentBuilding.woodCost, currentBuilding.stoneCost, currentBuilding.ironCost, currentBuilding.goldCost);
         BuildingManager.Instance.SpawnBuilding(currentBuilding, pos);
+
+        if (Photon.Pun.PhotonNetwork.InRoom)
+        {
+            object[] content = new object[] { currentBuilding.buildingName, pos };
+            ExitGames.Client.Photon.SendOptions sendOptions = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+            Photon.Pun.PhotonNetwork.RaiseEvent(2, content, new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOptions);
+        }
 
         // Remove resource nodes covered by the building footprint
         float startX = -(currentBuilding.width - 1) / 2f;

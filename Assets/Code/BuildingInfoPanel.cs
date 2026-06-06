@@ -169,7 +169,7 @@ public class BuildingInfoPanel : MonoBehaviour
         if (currentBuilding == null) return;
         BuildingData d = currentBuilding.data;
 
-        txtName.text = d.buildingName.ToUpper();
+        txtName.text = currentBuilding.GetDisplayName().ToUpper();
 
         // Status
         string statusStr;
@@ -180,6 +180,14 @@ public class BuildingInfoPanel : MonoBehaviour
         else
             statusStr = "<color=#88FF88>✔ Aktiv</color>";
         txtStatus.text = statusStr;
+
+        if (currentBuilding.ProvidesSleep && (d == null || !d.isBarracks))
+        {
+            RefreshLodgingStats(d);
+            return;
+        }
+
+        if (d == null) return;
 
         // Check if building is a barracks
         if (d.isBarracks)
@@ -255,6 +263,68 @@ public class BuildingInfoPanel : MonoBehaviour
                 txtQueueStatus.text = "Warteschlange: Leer";
                 txtQueueStatus.color = labelColor;
             }
+        }
+        else if (d.isDefenseTower)
+        {
+            if (barracksContainer != null) barracksContainer.SetActive(true);
+
+            txtProduces.gameObject.SetActive(false);
+            txtConsumes.gameObject.SetActive(false);
+            txtTotalProduced.gameObject.SetActive(false);
+            txtWorkers.gameObject.SetActive(true);
+            txtSchedule.gameObject.SetActive(false);
+            btnToggleSchedule.gameObject.SetActive(false);
+            btnToggleHutType.gameObject.SetActive(false);
+
+            if (btnToggleSpear != null) btnToggleSpear.gameObject.SetActive(false);
+            if (btnToggleShield != null) btnToggleShield.gameObject.SetActive(false);
+            if (btnToggleSword != null) btnToggleSword.gameObject.SetActive(false);
+            if (btnToggleBow != null) btnToggleBow.gameObject.SetActive(true);
+
+            currentBuilding.bowSelected = true;
+            UpdateButtonToggleState(btnToggleBow, true);
+
+            UpdateButtonResourceState(btnResWood, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Wood, new Color(0.5f, 0.35f, 0.2f));
+            UpdateButtonResourceState(btnResStone, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Stone, Color.gray);
+            UpdateButtonResourceState(btnResGold, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Gold, new Color(0.85f, 0.7f, 0.1f));
+            UpdateButtonResourceState(btnResIron, currentBuilding.selectedResource == BuildingInstance.BarracksResource.Iron, new Color(0.45f, 0.55f, 0.7f));
+
+            if (btnOrderSpear != null)  btnOrderSpear.gameObject.SetActive(false);
+            if (btnOrderShield != null) btnOrderShield.gameObject.SetActive(false);
+            if (btnOrderSword != null)  btnOrderSword.gameObject.SetActive(false);
+            if (btnOrderBow != null)    btnOrderBow.gameObject.SetActive(true);
+
+            int currentCost = 0;
+            switch (currentBuilding.selectedResource)
+            {
+                case BuildingInstance.BarracksResource.Wood:
+                    currentCost = currentBuilding.woodSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Stone:
+                    currentCost = currentBuilding.stoneSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Gold:
+                    currentCost = currentBuilding.goldSoldierCost;
+                    break;
+                case BuildingInstance.BarracksResource.Iron:
+                    currentCost = currentBuilding.ironSoldierCost;
+                    break;
+            }
+
+            if (btnOrderBow != null) btnOrderBow.GetComponentInChildren<TextMeshProUGUI>().text = $"+Bogen ({currentCost})";
+
+            ArcherTower tower = currentBuilding.GetComponent<ArcherTower>();
+            int stationed = tower != null ? tower.stationed : 0;
+            int slots = tower != null ? tower.slots : d.archerSlots;
+            int queueCount = currentBuilding.recruitQueue.Count;
+
+            txtWorkers.text = $"<b>Bogenschützenplätze:</b> {stationed}/{slots}";
+            txtQueueStatus.text = $"Stationierte Bogenschützen: <b>{stationed}/{slots}</b>";
+            if (queueCount > 0)
+            {
+                txtQueueStatus.text += $"\nWarteschlange: <b>{queueCount}</b> in Ausbildung";
+            }
+            txtQueueStatus.color = valueColor;
         }
         else
         {
@@ -362,7 +432,71 @@ public class BuildingInfoPanel : MonoBehaviour
         // Pause-Button Text
         txtPauseLabel.text = currentBuilding.IsProductionPaused ? "▶  Fortsetzen" : "⏸  Pausieren";
         btnPause.gameObject.SetActive(currentBuilding.IsConstructed() &&
-            (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers || d.isBarracks));
+            (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers || d.isBarracks || d.isDefenseTower));
+    }
+
+    private void RefreshLodgingStats(BuildingData d)
+    {
+        if (barracksContainer != null) barracksContainer.SetActive(false);
+
+        txtProduces.gameObject.SetActive(true);
+        txtConsumes.gameObject.SetActive(true);
+        txtTotalProduced.gameObject.SetActive(false);
+        txtWorkers.gameObject.SetActive(true);
+        txtSchedule.gameObject.SetActive(false);
+        btnToggleSchedule.gameObject.SetActive(false);
+        btnToggleHutType.gameObject.SetActive(false);
+        btnPause.gameObject.SetActive(false);
+
+        int used = currentBuilding.GetSleepingCount();
+        int cap = currentBuilding.GetSleepCapacity();
+        string sleepColor = used >= cap ? "#FF5555" : (used > 0 ? "#FFAA44" : "#88FF88");
+        txtWorkers.text = $"<b>Schlafplätze:</b> <color={sleepColor}>{used} / {cap}</color>";
+
+        if (d == null)
+        {
+            txtProduces.text = "<b>Funktion:</b> Zentrales Hauptlager";
+            txtConsumes.text = "<b>Schlafkapazität:</b> 5 Personen (Startinsel)";
+            txtSize.text = "<b>Größe:</b> 3 × 3 Grid-Felder";
+            return;
+        }
+
+        if (d.producesVillagers)
+        {
+            txtProduces.text = "<b>Produziert:</b> Dorfbewohner";
+        }
+        else if (d.productionResourceId == "bevolkerung")
+        {
+            txtProduces.text = $"Erhöht Bevölkerungs-\nkapazität um {d.productionAmount}";
+        }
+        else
+        {
+            txtProduces.text = "<b>Produziert:</b> –";
+        }
+
+        txtConsumes.text = GetSleepCapacityDescription(d);
+        txtSize.text = $"<b>Größe:</b> {d.width} × {d.height} Grid-Felder";
+
+        if (d.producesVillagers)
+        {
+            btnToggleHutType.gameObject.SetActive(currentBuilding.IsConstructed());
+            if (currentBuilding.isBuilderHut)
+            {
+                txtHutTypeBtnLabel.text = "🏗️ Typ: Bauarbeiter-Hütte (Kosten: 1 Weizen)";
+                btnToggleHutType.GetComponent<Image>().color = new Color(0.85f, 0.45f, 0.1f, 1.0f);
+            }
+            else
+            {
+                txtHutTypeBtnLabel.text = "🏠 Typ: Wohnhaus (Kosten: 1 Weizen)";
+                btnToggleHutType.GetComponent<Image>().color = btnNeutral;
+            }
+        }
+    }
+
+    private string GetSleepCapacityDescription(BuildingData d)
+    {
+        if (d.buildingName.Contains("Groß")) return "<b>Schlafkapazität:</b> maximal 4 Personen";
+        return "<b>Schlafkapazität:</b> maximal 2 Personen";
     }
 
     // ── Progress-Balken Updaten ─────────────────────────────────────────────
@@ -372,10 +506,15 @@ public class BuildingInfoPanel : MonoBehaviour
         if (currentBuilding == null || goProgressBG == null || rtProgressFill == null) return;
 
         BuildingData d = currentBuilding.data;
+        if (d == null || currentBuilding.ProvidesSleep)
+        {
+            goProgressBG.SetActive(false);
+            return;
+        }
         
         // Show progress bar for standard production OR barracks recruitment!
         bool canProduce = (!string.IsNullOrEmpty(d.productionResourceId) || d.producesVillagers) && d.productionResourceId != "bevolkerung";
-        bool showBar = currentBuilding.IsConstructed() && (canProduce || d.isBarracks) && !currentBuilding.IsProductionPaused;
+        bool showBar = currentBuilding.IsConstructed() && (canProduce || d.isBarracks || d.isDefenseTower) && !currentBuilding.IsProductionPaused;
 
         if (showBar)
         {
@@ -384,7 +523,9 @@ public class BuildingInfoPanel : MonoBehaviour
             rtProgressFill.anchorMax = new Vector2(progress, 1f);
 
             // Reddish color for military recruitment, gold for economic production
-            rtProgressFill.GetComponent<Image>().color = d.isBarracks ? new Color(0.85f, 0.3f, 0.25f, 1f) : new Color(0.85f, 0.65f, 0.25f, 1f);
+            rtProgressFill.GetComponent<Image>().color = (d.isBarracks || d.isDefenseTower)
+                ? new Color(0.85f, 0.3f, 0.25f, 1f)
+                : new Color(0.85f, 0.65f, 0.25f, 1f);
         }
         else
         {

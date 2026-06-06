@@ -43,12 +43,49 @@ public class FogProjector : MonoBehaviour
 
     private void Start()
     {
-        accumulatorMaterial = new Material(Shader.Find("Hidden/FogAccumulator"));
+        Shader accumulatorShader = Shader.Find("Hidden/FogAccumulator");
+        if (accumulatorShader == null)
+        {
+            Debug.LogWarning("[FogProjector] Hidden/FogAccumulator shader not found. Verwende Fallback-Shader.");
+            accumulatorShader = Shader.Find("Hidden/Internal-Colored") ?? Shader.Find("Unlit/Texture") ?? Shader.Find("Sprites/Default");
+        }
+
+        if (accumulatorShader == null)
+        {
+            Debug.LogError("[FogProjector] Kein Accumulator-Shader gefunden. FogProjector wird deaktiviert.");
+            enabled = false;
+            return;
+        }
+
+        accumulatorMaterial = new Material(accumulatorShader);
         SetupFog();
     }
 
     private void SetupFog()
     {
+        if (fogMaterial == null)
+        {
+            Shader fogShader = Shader.Find("Custom/CloudFogShader");
+            Shader fallbackFog = fogShader ?? Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Texture") ?? Shader.Find("Hidden/Internal-Colored");
+            if (fallbackFog == null)
+            {
+                Debug.LogError("[FogProjector] Kein Nebel-Shader gefunden. FogProjector wird deaktiviert.");
+                enabled = false;
+                return;
+            }
+
+            if (fogShader != null)
+            {
+                fogMaterial = new Material(fogShader);
+            }
+            else
+            {
+                Debug.LogWarning("[FogProjector] Kein FogMaterial zugewiesen und Custom/CloudFogShader nicht gefunden. Verwende einen Fallback-Material.");
+                fogMaterial = new Material(fallbackFog);
+                fogMaterial.color = new Color(0.2f, 0.2f, 0.2f, 0.75f);
+            }
+        }
+
         // Create the current visibility mask (clears every frame)
         maskTexture = new RenderTexture(maskResolution, maskResolution, 24); // Added depth buffer (24 bits)
         maskTexture.filterMode = FilterMode.Bilinear;
@@ -69,7 +106,15 @@ public class FogProjector : MonoBehaviour
         maskCamera.cullingMask = 1 << 31; // Render only the mask layer
 
         // Make the main camera ignore layer 31
-        Camera.main.cullingMask &= ~(1 << 31);
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            mainCamera.cullingMask &= ~(1 << 31);
+        }
+        else
+        {
+            Debug.LogWarning("[FogProjector] Keine Hauptkamera gefunden. Layer 31 wird nicht ausgeblendet.");
+        }
 
         // Create the fog overlay quad
         fogQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -78,31 +123,53 @@ public class FogProjector : MonoBehaviour
         fogQuad.transform.localScale = new Vector3(mapSize, mapSize, 1);
         Destroy(fogQuad.GetComponent<MeshCollider>());
 
-        if (fogMaterial != null)
+        if (fogMaterial != null && fogQuad != null)
         {
-            Material instancedMat = fogQuad.GetComponent<Renderer>().material = fogMaterial;
-            instancedMat.SetTexture("_MaskTex", maskTexture);
-            instancedMat.SetTexture("_ExploredTex", exploredTexture);
+            Renderer fogRenderer = fogQuad.GetComponent<Renderer>();
+            if (fogRenderer == null)
+            {
+                Debug.LogError("[FogProjector] Kein Renderer auf FogOverlay gefunden.");
+                return;
+            }
+
+            Material instancedMat = fogRenderer.material = fogMaterial;
+            if (instancedMat == null)
+            {
+                Debug.LogError("[FogProjector] Nebelmaterial konnte nicht erstellt werden.");
+                return;
+            }
+
+            if (instancedMat.HasProperty("_MaskTex")) instancedMat.SetTexture("_MaskTex", maskTexture);
+            if (instancedMat.HasProperty("_ExploredTex")) instancedMat.SetTexture("_ExploredTex", exploredTexture);
 
             // Dynamically load and assign Fog1 and Fog2 textures from Resources
             Texture2D fog1 = Resources.Load<Texture2D>("Textures/Fog1");
             Texture2D fog2 = Resources.Load<Texture2D>("Textures/Fog2");
+            if (fog1 == null) fog1 = Resources.Load<Texture2D>("Fog1");
+            if (fog2 == null) fog2 = Resources.Load<Texture2D>("Fog2");
+
             if (fog1 != null)
             {
-                instancedMat.SetTexture("_MainTex", fog1);
+                if (instancedMat.HasProperty("_MainTex"))
+                {
+                    instancedMat.SetTexture("_MainTex", fog1);
+                }
             }
             else
             {
-                Debug.LogWarning("[FogProjector] Fog1 texture not found in Resources/Textures/");
+                Debug.LogWarning("[FogProjector] Fog1 texture nicht gefunden. Suche in Resources/Fog1 oder Resources/Textures/Fog1.");
             }
 
             if (fog2 != null)
             {
-                instancedMat.SetTexture("_DetailTex", fog2);
+                if (instancedMat.HasProperty("_DetailTex"))
+                {
+                    instancedMat.SetTexture("_DetailTex", fog2);
+                }
             }
             else
             {
-                Debug.LogWarning("[FogProjector] Fog2 texture not found in Resources/Textures/");
+                Debug.LogWarning("[FogProjector] Fog2 texture nicht gefunden. Suche in Resources/Fog2 oder Resources/Textures/Fog2.");
             }
         }
     }

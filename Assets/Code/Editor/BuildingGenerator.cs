@@ -52,6 +52,11 @@ public class BuildingGenerator : EditorWindow
         data.consumedAmount = consAmt;
         data.isBarracks = isBarracks;
 
+        if (name.Contains("Haus"))
+        {
+            data.sleepCapacity = name.Contains("Groß") ? 4 : 2;
+        }
+
         string path = $"Assets/Data/Buildings/{name.Replace(" ", "_")}.asset";
         AssetDatabase.CreateAsset(data, path);
     }

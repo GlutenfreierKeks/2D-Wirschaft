@@ -11,6 +11,7 @@ public class Villager : MonoBehaviour
     private bool isMoving = false;
     private BuildingInstance assignedBuilding;
     public BuildingInstance AssignedBuilding => assignedBuilding;
+    private BuildingInstance assignedSleepHouse;
     
     [HideInInspector]
     public bool isOperatingWorker = false;
@@ -82,6 +83,7 @@ public class Villager : MonoBehaviour
 
                 if (isWorkTime)
                 {
+                    ReleaseSleepSlot();
                     // WORK TIME: stay close, work, consume stamina if night
                     SetVisibility(true);
 
@@ -139,6 +141,7 @@ public class Villager : MonoBehaviour
 
                     if (isLeisureTime)
                     {
+                        ReleaseSleepSlot();
                         // LEISURE TIME: wander freely and recover stamina & mood slowly
                         SetVisibility(true);
                         
@@ -159,7 +162,7 @@ public class Villager : MonoBehaviour
                     }
                     else
                     {
-                        // SLEEP TIME: go to nearest house to sleep, recover stamina & mood slowly
+                        // SLEEP TIME: go to nearest house with a free bed
                         BuildingInstance sleepHouse = FindSleepHouse();
 
                         if (sleepHouse != null)
@@ -167,21 +170,21 @@ public class Villager : MonoBehaviour
                             float dist = Vector2.Distance(transform.position, sleepHouse.transform.position);
                             if (dist < 0.4f)
                             {
-                                // Inside sleeping!
+                                if (!sleepHouse.TryRegisterSleeper(this))
+                                {
+                                    ReleaseSleepSlot();
+                                    return;
+                                }
+
+                                assignedSleepHouse = sleepHouse;
                                 SetVisibility(false);
                                 stamina = Mathf.Min(100f, stamina + Time.deltaTime * 5.0f);
-                                
-                                // Large house gives a comfort boost to mood recovery!
-                                float sleepMoodRecovery = 0.12f;
-                                if (sleepHouse.data != null && sleepHouse.data.buildingName.Contains("Großes Haus"))
-                                {
-                                    sleepMoodRecovery = 0.22f; // Much faster mood recovery for premium comfort!
-                                }
+
+                                float sleepMoodRecovery = GetSleepMoodRecovery(sleepHouse);
                                 mood = Mathf.Min(100f, mood + Time.deltaTime * sleepMoodRecovery);
                             }
                             else
                             {
-                                // Walk to sleep house
                                 SetVisibility(true);
                                 targetPosition = sleepHouse.transform.position;
                                 isMoving = true;
@@ -189,11 +192,12 @@ public class Villager : MonoBehaviour
                         }
                         else
                         {
-                            // Sleep outside near building center (fade transparency)
+                            ReleaseSleepSlot();
+                            // Sleep outside when all houses are full
                             SetVisibility(true);
-                            if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 0.4f); // semi-transparent sleep
+                            if (sr != null) sr.color = new Color(0.7f, 1f, 0.7f, 0.4f);
                             stamina = Mathf.Min(100f, stamina + Time.deltaTime * 3.5f);
-                            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.08f); // sleeping outside is less comfortable
+                            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.08f);
                         }
                     }
                 }
@@ -511,18 +515,14 @@ public class Villager : MonoBehaviour
                 }
                 else
                 {
-                    BuildingInstance sleepHouse = FindSleepHouse();
+                    BuildingInstance sleepHouse = assignedSleepHouse != null ? assignedSleepHouse : FindSleepHouse();
                     if (sleepHouse != null)
                     {
                         float dist = Vector2.Distance(transform.position, sleepHouse.transform.position);
-                        if (dist < 0.4f)
+                        if (dist < 0.4f && sleepHouse.HasFreeSleepSlot(this))
                         {
                             snapshot.isSleepingInHouse = true;
-                            snapshot.housingRatePerSecond = 0.12f;
-                            if (sleepHouse.data != null && sleepHouse.data.buildingName.Contains("Großes Haus"))
-                            {
-                                snapshot.housingRatePerSecond = 0.22f;
-                            }
+                            snapshot.housingRatePerSecond = GetSleepMoodRecovery(sleepHouse);
                         }
                     }
                     else
@@ -537,24 +537,54 @@ public class Villager : MonoBehaviour
         return snapshot;
     }
 
+    private float GetSleepMoodRecovery(BuildingInstance sleepHouse)
+    {
+        if (sleepHouse == null) return 0.08f;
+        if (sleepHouse.GetSleepCapacity() >= 5) return 0.14f;
+        if (sleepHouse.data != null && sleepHouse.data.buildingName.Contains("Groß")) return 0.22f;
+        return 0.12f;
+    }
+
+    private void ReleaseSleepSlot()
+    {
+        if (assignedSleepHouse != null)
+        {
+            assignedSleepHouse.UnregisterSleeper(this);
+            assignedSleepHouse = null;
+        }
+    }
+
+    public void ClearSleepHouseReference()
+    {
+        assignedSleepHouse = null;
+    }
+
     private BuildingInstance FindSleepHouse()
     {
+        if (assignedSleepHouse != null && assignedSleepHouse.IsConstructed() && assignedSleepHouse.HasFreeSleepSlot(this))
+        {
+            return assignedSleepHouse;
+        }
+
         BuildingInstance[] buildings = FindObjectsByType<BuildingInstance>();
         BuildingInstance nearestHouse = null;
         float minDist = float.MaxValue;
-        
+
         foreach (var b in buildings)
         {
-            if (b.IsConstructed() && (b.data.productionResourceId == "bevolkerung" || b.name.Contains("Haus") || b.name.Contains("Warehouse") || b.name.Contains("MyWarehouse")))
+            if (!b.ProvidesSleep || !b.IsConstructed() || !b.HasFreeSleepSlot(this))
             {
-                float dist = Vector2.Distance(transform.position, b.transform.position);
-                if (dist < minDist)
-                {
-                    minDist = dist;
-                    nearestHouse = b;
-                }
+                continue;
+            }
+
+            float dist = Vector2.Distance(transform.position, b.transform.position);
+            if (dist < minDist)
+            {
+                minDist = dist;
+                nearestHouse = b;
             }
         }
+
         return nearestHouse;
     }
 
@@ -588,7 +618,8 @@ public class Villager : MonoBehaviour
         {
             VillagerManager.Instance.NotifyVillagerConverted(this);
         }
-        
+
+        ReleaseSleepSlot();
         Destroy(gameObject);
     }
 
@@ -623,8 +654,14 @@ public class Villager : MonoBehaviour
         {
             VillagerManager.Instance.NotifyVillagerConverted(this);
         }
-        
+
+        ReleaseSleepSlot();
         Destroy(gameObject);
+    }
+
+    private void OnDestroy()
+    {
+        ReleaseSleepSlot();
     }
 }
 
