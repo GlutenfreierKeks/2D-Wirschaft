@@ -35,3 +35,10 @@ MonoBehaviour:
   workersNeeded: 0
   sleepCapacity: 0
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}
+  isShipyard: 1
+  shipWoodCost: 10
+  shipIronCost: 5
+  shipGoldCost: 3
+  shipBuildTime: 20
+  shipCapacity: 8
+

@@ -42,6 +42,7 @@ public class SelectionManager : MonoBehaviour
         CreateObserveLineObject();
         CreateDragTexture();
         EnsureInfoPanel();
+        EnsureShipInfoPanel();
         EnsureDayNightManager();
         RefreshCommandUi();
     }
@@ -54,6 +55,16 @@ public class SelectionManager : MonoBehaviour
             GameObject panelGO = new GameObject("BuildingInfoPanel");
             infoPanel = panelGO.AddComponent<BuildingInfoPanel>();
             Debug.Log("[SelectionManager] BuildingInfoPanel auto-created.");
+        }
+    }
+
+    private void EnsureShipInfoPanel()
+    {
+        if (ShipInfoPanel.Instance == null)
+        {
+            GameObject go = new GameObject("ShipInfoPanel");
+            go.AddComponent<ShipInfoPanel>();
+            Debug.Log("[SelectionManager] ShipInfoPanel auto-created.");
         }
     }
 
@@ -257,14 +268,24 @@ public class SelectionManager : MonoBehaviour
 
     private void HandleSingleClick(Vector2 worldPos2D)
     {
+        // If waiting for a sail target, forward the click to ShipInfoPanel
+        if (ShipInfoPanel.IsWaitingForSailTarget)
+        {
+            ShipInfoPanel.Instance?.ReceiveSailTarget(worldPos2D);
+            return;
+        }
+
         Collider2D[] hits = Physics2D.OverlapPointAll(worldPos2D);
 
-        Soldier clickedSoldier = null;
+        Soldier clickedSoldier       = null;
         BuildingInstance clickedBuilding = null;
+        Ship clickedShip             = null;
+        Steg clickedSteg             = null;
 
         for (int i = 0; i < hits.Length; i++)
         {
             Collider2D hit = hits[i];
+
             Soldier soldier = hit.GetComponent<Soldier>();
             if (soldier != null && soldier.IsOwnedByLocalPlayer)
             {
@@ -272,20 +293,38 @@ public class SelectionManager : MonoBehaviour
                 break;
             }
 
-            if (clickedBuilding == null)
-            {
-                clickedBuilding = hit.GetComponent<BuildingInstance>();
-            }
+            if (clickedShip == null) clickedShip = hit.GetComponent<Ship>();
+            if (clickedBuilding == null) clickedBuilding = hit.GetComponent<BuildingInstance>();
+            if (clickedSteg == null) clickedSteg = hit.GetComponent<Steg>();
         }
 
         if (clickedSoldier != null)
         {
             AudioManager.Instance?.PlaySelectSound();
             SelectSingleSoldier(clickedSoldier);
-            if (infoPanel != null && infoPanel.IsVisible)
-            {
-                infoPanel.Hide();
-            }
+            infoPanel?.Hide();
+            ShipInfoPanel.Instance?.Hide();
+            return;
+        }
+
+        if (clickedShip != null)
+        {
+            AudioManager.Instance?.PlaySelectSound();
+            ClearSoldierSelection();
+            infoPanel?.Hide();
+            // Deselect old ship
+            foreach (var s in Ship.AllShips) s.SetSelected(false);
+            clickedShip.SetSelected(true);
+            ShipInfoPanel.Instance?.Show(clickedShip);
+            return;
+        }
+
+        if (clickedSteg != null)
+        {
+            AudioManager.Instance?.PlaySelectSound();
+            ClearSoldierSelection();
+            ShipInfoPanel.Instance?.Hide();
+            infoPanel?.ShowForSteg(clickedSteg);
             return;
         }
 
@@ -293,15 +332,14 @@ public class SelectionManager : MonoBehaviour
         {
             AudioManager.Instance?.PlaySelectSound();
             ClearSoldierSelection();
+            ShipInfoPanel.Instance?.Hide();
             infoPanel?.Show(clickedBuilding);
             return;
         }
 
         ClearSoldierSelection();
-        if (infoPanel != null && infoPanel.IsVisible)
-        {
-            infoPanel.Hide();
-        }
+        infoPanel?.Hide();
+        ShipInfoPanel.Instance?.Hide();
     }
 
     private void SelectSingleSoldier(Soldier soldier)
