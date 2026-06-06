@@ -21,8 +21,18 @@ public class Villager : MonoBehaviour
     public float mood = 80f; // Villager Mood: starts at 80%
     private float workActionCooldown = 0f;
 
+    private Ship targetShipToBoard;
+
     private SpriteRenderer sr;
     private Renderer rend;
+
+    public void AssignToBoardShip(Ship ship)
+    {
+        targetShipToBoard = ship;
+        targetPosition = ship.transform.position;
+        isMoving = true;
+    }
+
 
     private void Start()
     {
@@ -37,6 +47,37 @@ public class Villager : MonoBehaviour
 
     private void Update()
     {
+        if (targetShipToBoard != null)
+        {
+            if (targetShipToBoard == null || !targetShipToBoard.gameObject.activeInHierarchy || targetShipToBoard.FreeSlotsCount <= 0 || targetShipToBoard.State != ShipState.Idle)
+            {
+                targetShipToBoard = null;
+                Release();
+            }
+            else
+            {
+                targetPosition = targetShipToBoard.transform.position;
+                isMoving = true;
+
+                float speedMod = 1.0f;
+                if (mood > 80f) speedMod = 1.25f;
+                else if (mood < 30f) speedMod = 0.7f;
+
+                transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * speedMod * Time.deltaTime);
+
+                if (Vector2.Distance(transform.position, targetShipToBoard.transform.position) < 1.2f)
+                {
+                    if (targetShipToBoard.LoadVillager(this))
+                    {
+                        targetShipToBoard = null;
+                        isMoving = false;
+                        return;
+                    }
+                }
+                return;
+            }
+        }
+
         // Erhöhte Sterberate für alle bei schlechtem Mood
         if (VillagerManager.Instance != null)
         {
@@ -449,6 +490,8 @@ public class Villager : MonoBehaviour
         isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
+        targetShipToBoard = null;
+
         
         // ONLY reset to Villager if they are NOT a Worker!
         // A construction worker should stay a construction worker so they can build more things.

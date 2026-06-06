@@ -42,6 +42,20 @@ public class BuildingData : ScriptableObject
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
 
+    [Header("Shipyard")]
+    [Tooltip("If set, this building/pier acts as a shipyard where ships can be built.")]
+    public bool isShipyard = false;
+    [Tooltip("Wood cost to build one ship.")]
+    public int shipWoodCost = 10;
+    [Tooltip("Iron cost to build one ship.")]
+    public int shipIronCost = 5;
+    [Tooltip("Gold cost to build one ship.")]
+    public int shipGoldCost = 3;
+    [Tooltip("Time in seconds to build a ship.")]
+    public float shipBuildTime = 20f;
+    [Tooltip("Max passengers per ship.")]
+    public int shipCapacity = 8;
+
     [Header("Defense Tower")]
     [Tooltip("If set, this building acts as a defensive archer tower and can station trained bow soldiers.")]
     public bool isDefenseTower = false;

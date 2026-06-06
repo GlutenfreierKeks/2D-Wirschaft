@@ -64,6 +64,15 @@ public class BuildingInfoPanel : MonoBehaviour
     private GameObject    goProgressBG;
     private RectTransform rtProgressFill;
 
+    // ── Shipyard (Steg) UI ────────────────────────────────────────────────────
+    private GameObject    shipyardContainer;
+    private Button        btnBuildShip;
+    private TextMeshProUGUI txtShipBuildCost;
+    private TextMeshProUGUI txtShipStatus;
+    private GameObject    goShipProgressBG;
+    private RectTransform rtShipProgressFill;
+    private Steg          currentSteg;
+
     // ── Animation & Positionierung ───────────────────────────────────────────
     private float targetPosX = 480f;    // Vollständig außerhalb des Bildschirms rechts
     private float currentPosX = 480f;
@@ -111,22 +120,25 @@ public class BuildingInfoPanel : MonoBehaviour
         if (!isPanelActive && currentPosX >= 470f)
         {
             currentBuilding = null;
+            currentSteg = null;
             panelRoot.SetActive(false);
             return;
         }
 
         // Stats updaten falls ein Gebäude aktiv gewählt ist
-        if (currentBuilding != null && isPanelActive)
+        if (isPanelActive)
         {
             refreshTimer -= Time.deltaTime;
             if (refreshTimer <= 0f)
             {
                 refreshTimer = RefreshInterval;
-                RefreshStats();
+                if (currentBuilding != null) RefreshStats();
+                else if (currentSteg != null) RefreshStegStats();
             }
 
             // Progress-Balken kontinuierlich füllen
-            UpdateProgressBar();
+            if (currentBuilding != null) UpdateProgressBar();
+            if (currentSteg != null) UpdateShipProgressBar();
         }
 
         // Escape-Taste schließt das Panel über das neue Input System
@@ -141,6 +153,7 @@ public class BuildingInfoPanel : MonoBehaviour
     public void Show(BuildingInstance building)
     {
         currentBuilding = building;
+        currentSteg = null;
         isPanelActive = true;
         panelRoot.SetActive(true);
         
@@ -154,6 +167,18 @@ public class BuildingInfoPanel : MonoBehaviour
         refreshTimer = 0f;  // sofort refreshen
     }
 
+    /// <summary>Show the panel for a Steg (pier) – shows shipyard UI.</summary>
+    public void ShowForSteg(Steg steg)
+    {
+        currentBuilding = null;
+        currentSteg = steg;
+        isPanelActive = true;
+        panelRoot.SetActive(true);
+        if (currentPosX >= 470f) currentPosX = 480f;
+        targetPosX = -30f;
+        refreshTimer = 0f;
+    }
+
     public void Hide()
     {
         targetPosX = 480f; // Slide out nach rechts
@@ -164,9 +189,84 @@ public class BuildingInfoPanel : MonoBehaviour
 
     // ── Stats aktualisieren ──────────────────────────────────────────────────
 
+    // ── Steg / Shipyard refresh ───────────────────────────────────────────────
+
+    private void RefreshStegStats()
+    {
+        if (currentSteg == null) return;
+
+        // Hide all standard UI, show only shipyard section
+        txtStatus.text = "⚓ Steg (Schiffswerft)";
+        txtProduces.gameObject.SetActive(false);
+        txtConsumes.gameObject.SetActive(false);
+        txtTotalProduced.gameObject.SetActive(false);
+        txtWorkers.gameObject.SetActive(false);
+        txtSchedule.gameObject.SetActive(false);
+        btnToggleSchedule.gameObject.SetActive(false);
+        btnToggleHutType.gameObject.SetActive(false);
+        btnPause.gameObject.SetActive(false);
+        btnDemolish.gameObject.SetActive(false);
+        if (barracksContainer != null) barracksContainer.SetActive(false);
+        goProgressBG.SetActive(false);
+        txtSize.gameObject.SetActive(false);
+        txtName.text = "STEG";
+
+        if (shipyardContainer != null) shipyardContainer.SetActive(true);
+
+        // Cost text
+        if (txtShipBuildCost != null)
+            txtShipBuildCost.text = $"<b>Kosten:</b> {Steg.ShipWoodCost} Holz  ·  {Steg.ShipIronCost} Eisen  ·  {Steg.ShipGoldCost} Gold\n<b>Bauzeit:</b> {Steg.ShipBuildTime:F0}s  ·  Kapazität: {Steg.ShipCapacity}";
+
+        // Status / ship state
+        if (txtShipStatus != null)
+        {
+            if (currentSteg.IsBuildingShip)
+                txtShipStatus.text = $"⚙ Im Bau... {currentSteg.ShipBuildProgress * 100f:F0}%";
+            else if (currentSteg.DockedShip != null)
+                txtShipStatus.text = $"✔ Schiff gebaut – Klicke darauf zum Steuern";
+            else
+                txtShipStatus.text = "Kein Schiff vorhanden";
+        }
+
+        // Build button state
+        if (btnBuildShip != null)
+        {
+            bool canBuild = currentSteg.CanBuildShip();
+            btnBuildShip.interactable = canBuild;
+            var lbl = btnBuildShip.GetComponentInChildren<TextMeshProUGUI>();
+            if (lbl != null)
+            {
+                if (currentSteg.IsBuildingShip)
+                    lbl.text = "⚙ Baut...";
+                else if (currentSteg.DockedShip != null)
+                    lbl.text = "🚢 Schiff vorhanden";
+                else
+                    lbl.text = $"🚢 Schiff bauen ({Steg.ShipWoodCost}🪵 {Steg.ShipIronCost}⛏ {Steg.ShipGoldCost}🥇)";
+            }
+        }
+    }
+
+    private void UpdateShipProgressBar()
+    {
+        if (currentSteg == null || goShipProgressBG == null || rtShipProgressFill == null) return;
+        if (currentSteg.IsBuildingShip)
+        {
+            goShipProgressBG.SetActive(true);
+            rtShipProgressFill.anchorMax = new Vector2(currentSteg.ShipBuildProgress, 1f);
+        }
+        else
+        {
+            goShipProgressBG.SetActive(false);
+        }
+    }
+
+    // ── Standard building refresh ─────────────────────────────────────────────
+
     private void RefreshStats()
     {
         if (currentBuilding == null) return;
+        // Hide shipyard UI
+        if (shipyardContainer != null) shipyardContainer.SetActive(false);
         BuildingData d = currentBuilding.data;
 
         txtName.text = currentBuilding.GetDisplayName().ToUpper();
@@ -638,6 +738,9 @@ public class BuildingInfoPanel : MonoBehaviour
         // ── Barracks UI ──────────────────────────────────────────────────────
         BuildBarracksUI(inner.transform);
 
+        // ── Shipyard UI (Steg) ────────────────────────────────────────────────
+        BuildShipyardUI(inner.transform);
+
         // ── Spacer ───────────────────────────────────────────────────────────
         var spacer = new GameObject("Spacer", typeof(RectTransform));
         spacer.transform.SetParent(inner.transform, false);
@@ -885,6 +988,64 @@ public class BuildingInfoPanel : MonoBehaviour
         txtQueueStatus = MakeTMP("QueueStatus", barracksContainer.transform,
             "Warteschlange: Leer", 13f, FontStyles.Italic, valueColor);
         AddLE(txtQueueStatus.gameObject, minH: 22f);
+    }
+
+    private void BuildShipyardUI(Transform parent)
+    {
+        shipyardContainer = new GameObject("ShipyardContainer", typeof(RectTransform));
+        shipyardContainer.transform.SetParent(parent, false);
+
+        var vl = shipyardContainer.AddComponent<VerticalLayoutGroup>();
+        vl.spacing = 10f;
+        vl.padding = new RectOffset(0, 0, 4, 4);
+        vl.childForceExpandWidth  = true;
+        vl.childForceExpandHeight = false;
+        vl.childAlignment = TextAnchor.UpperLeft;
+        shipyardContainer.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+        MakeDivider(shipyardContainer.transform);
+
+        var title = MakeTMP("ShipyardTitle", shipyardContainer.transform,
+            "<b>⚓ Schiffswerft</b>", 15f, FontStyles.Normal, valueColor);
+        AddLE(title.gameObject, minH: 22f);
+
+        txtShipBuildCost = MakeTMP("ShipCost", shipyardContainer.transform, "", 13f, FontStyles.Normal, labelColor);
+        AddLE(txtShipBuildCost.gameObject, minH: 36f);
+
+        txtShipStatus = MakeTMP("ShipStatus", shipyardContainer.transform, "", 13f, FontStyles.Italic, valueColor);
+        AddLE(txtShipStatus.gameObject, minH: 22f);
+
+        // Ship build progress bar
+        goShipProgressBG = MakeImage("ShipProgressBG", shipyardContainer.transform, new Color(0.10f, 0.16f, 0.24f, 1f));
+        AddLE(goShipProgressBG, minH: 14f);
+        var shipFillGO = MakeImage("ShipProgressFill", goShipProgressBG.transform, new Color(0.20f, 0.55f, 0.90f, 1f));
+        rtShipProgressFill = shipFillGO.GetComponent<RectTransform>();
+        rtShipProgressFill.anchorMin = Vector2.zero;
+        rtShipProgressFill.anchorMax = new Vector2(0f, 1f);
+        rtShipProgressFill.pivot     = new Vector2(0f, 0.5f);
+        rtShipProgressFill.offsetMin = Vector2.zero;
+        rtShipProgressFill.offsetMax = Vector2.zero;
+        goShipProgressBG.SetActive(false);
+
+        btnBuildShip = MakeButton("BuildShipBtn", shipyardContainer.transform,
+            $"🚢 Schiff bauen ({Steg.ShipWoodCost}🪵 {Steg.ShipIronCost}⛏ {Steg.ShipGoldCost}🥇)",
+            new Color(0.15f, 0.35f, 0.60f, 1f), 360f, 44f, 14f);
+        AddLE(btnBuildShip.gameObject, minW: 360f, minH: 44f);
+        btnBuildShip.onClick.AddListener(() =>
+        {
+            if (currentSteg != null && currentSteg.CanBuildShip())
+            {
+                currentSteg.StartBuildShip();
+                RefreshStegStats();
+            }
+            else if (currentSteg != null && !currentSteg.CanBuildShip())
+            {
+                NotificationManager.Instance?.Notify("ship_no_res",
+                    $"Nicht genug Ressourcen! Benötigt: {Steg.ShipWoodCost} Holz, {Steg.ShipIronCost} Eisen, {Steg.ShipGoldCost} Gold", 5f);
+            }
+        });
+
+        shipyardContainer.SetActive(false);
     }
 
     /// <summary>Creates a horizontal row suited for barracks button groups.</summary>

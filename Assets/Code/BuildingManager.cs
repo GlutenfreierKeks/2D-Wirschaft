@@ -295,6 +295,22 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             tower.team = isLocal ? Team.Player : Team.Enemy;
         }
 
+        // If this building is a Steg/Pier/Shipyard, attach Steg component
+        if (data != null && (data.placementRule == PlacementRule.Pier || data.isShipyard || data.buildingName == "Steg"))
+        {
+            Steg stegComp = building.GetComponent<Steg>();
+            if (stegComp == null) stegComp = building.AddComponent<Steg>();
+            stegComp.Initialize(position);
+
+            Collider2D col = building.GetComponent<Collider2D>();
+            if (col == null)
+            {
+                var box = building.AddComponent<BoxCollider2D>();
+                box.size = new Vector2(data.width, data.height);
+                box.isTrigger = true;
+            }
+        }
+
         // Apply red tint to enemy buildings
         if (!isLocal)
         {
