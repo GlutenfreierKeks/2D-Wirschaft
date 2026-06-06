@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class Villager : MonoBehaviour
 {
@@ -9,6 +10,8 @@ public class Villager : MonoBehaviour
     public float moveSpeed = 1.5f;
     private Vector2 targetPosition;
     private bool isMoving = false;
+    private readonly List<Vector2> currentPath = new List<Vector2>();
+    private int currentPathIndex = 0;
     private BuildingInstance assignedBuilding;
     public BuildingInstance AssignedBuilding => assignedBuilding;
     private BuildingInstance assignedSleepHouse;
@@ -67,11 +70,29 @@ public class Villager : MonoBehaviour
             if (mood > 80f) speedMod = 1.25f;
             else if (mood < 30f) speedMod = 0.7f;
 
-            transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * speedMod * Time.deltaTime);
-            
-            if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
+            if (currentPath.Count > 0 && currentPathIndex < currentPath.Count)
             {
-                OnReachedTarget();
+                Vector2 waypoint = currentPath[currentPathIndex];
+                Vector2 next = Vector2.MoveTowards(transform.position, waypoint, moveSpeed * speedMod * Time.deltaTime);
+                transform.position = new Vector3(next.x, next.y, transform.position.z);
+
+                if (Vector2.Distance(transform.position, waypoint) < 0.1f)
+                {
+                    currentPathIndex++;
+                }
+            }
+            else
+            {
+                Vector2 next = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * speedMod * Time.deltaTime);
+                transform.position = new Vector3(next.x, next.y, transform.position.z);
+            }
+
+            if (currentPath.Count == 0 || currentPathIndex >= currentPath.Count)
+            {
+                if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
+                {
+                    OnReachedTarget();
+                }
             }
         }
         else
@@ -187,6 +208,7 @@ public class Villager : MonoBehaviour
                             {
                                 SetVisibility(true);
                                 targetPosition = sleepHouse.transform.position;
+                                SetPathTo(targetPosition);
                                 isMoving = true;
                             }
                         }
@@ -226,6 +248,7 @@ public class Villager : MonoBehaviour
     {
         assignedBuilding = building;
         targetPosition = (Vector2)building.transform.position + offset;
+        SetPathTo(targetPosition);
         isMoving = true;
         Debug.Log($"[Villager] Assigned to {building.data.buildingName}. New Target: {targetPosition}");
     }
@@ -304,16 +327,17 @@ public class Villager : MonoBehaviour
         for (int attempt = 0; attempt < 15; attempt++)
         {
             Vector2 candidate = currentPos + Random.insideUnitCircle * 5f;
-            // Snap to grid so IsLand() lookup works correctly
             candidate = new Vector2(Mathf.Round(candidate.x), Mathf.Round(candidate.y));
             if (IslandManager.IsLand(candidate))
             {
                 targetPosition = candidate;
+                SetPathTo(targetPosition);
                 isMoving = true;
                 return;
             }
         }
         // No valid land cell found nearby – stay in place
+        currentPath.Clear();
         isMoving = false;
     }
 
@@ -323,13 +347,77 @@ public class Villager : MonoBehaviour
         if (target != null)
         {
             targetPosition = target.transform.position;
+            SetPathTo(targetPosition);
             isMoving = true;
-            assignedBuilding = target; 
+            assignedBuilding = target;
         }
         else
         {
             Debug.Log("Kein Job oder Kaserne gefunden!");
         }
+    }
+
+    private void SetPathTo(Vector2 destination)
+    {
+        Vector2 startGrid = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
+        Vector2 destGrid = new Vector2(Mathf.Round(destination.x), Mathf.Round(destination.y));
+        
+        // Snap destination to nearest passable point
+        Vector2 snappedDest = SnapToNearestPassable(destGrid);
+        
+        List<Vector2> path = BuildingManager.FindPath(startGrid, snappedDest);
+
+        currentPath.Clear();
+        currentPathIndex = 0;
+
+        if (path.Count > 0)
+        {
+            currentPath.AddRange(path);
+            targetPosition = snappedDest;
+            isMoving = true;
+        }
+        else
+        {
+            currentPath.Clear();
+            isMoving = false;
+        }
+    }
+
+    private Vector2 SnapToNearestPassable(Vector2 target)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
+        if (BuildingManager.IsWalkable(snapped))
+        {
+            return snapped;
+        }
+
+        Queue<Vector2> queue = new Queue<Vector2>();
+        HashSet<Vector2> visited = new HashSet<Vector2>();
+        queue.Enqueue(snapped);
+        visited.Add(snapped);
+
+        Vector2[] directions = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
+        while (queue.Count > 0 && visited.Count < 2500)
+        {
+            Vector2 current = queue.Dequeue();
+            for (int i = 0; i < directions.Length; i++)
+            {
+                Vector2 next = current + directions[i];
+                if (!visited.Add(next))
+                {
+                    continue;
+                }
+
+                if (BuildingManager.IsWalkable(next))
+                {
+                    return next;
+                }
+
+                queue.Enqueue(next);
+            }
+        }
+
+        return snapped;
     }
 
     private BuildingInstance FindNearestOpportunity()

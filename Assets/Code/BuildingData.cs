@@ -9,7 +9,9 @@ public class BuildingData : ScriptableObject
     public ResourceType requiredResourceType = ResourceType.None;
     
     [Header("Size in Grid Cells")]
+    [Tooltip("Normale Gebaude: Breite x Hoehe. Schiffe: die laengere Seite gilt automatisch als Schiffslaenge, die kuerzere als Schiffbreite.")]
     public int width = 1;
+    [Tooltip("Bei Schiffen zeigt die Grundausrichtung nach Sueden. Die Platzierungslogik dreht das Schiff automatisch passend zum Pier.")]
     public int height = 1;
 
     [Header("Costs")]

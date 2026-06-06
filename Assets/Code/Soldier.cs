@@ -221,8 +221,8 @@ public class Soldier : MonoBehaviour
     {
         attackMoveEnabled = true;
         hasPatrolOrder = true;
-        patrolPointA = SnapToNearestLand(pointA);
-        patrolPointB = SnapToNearestLand(pointB);
+        patrolPointA = SnapToNearestPassable(pointA);
+        patrolPointB = SnapToNearestPassable(pointB);
         patrolTowardsB = true;
         UpdatePatrolRenderer();
         SetPathTo(patrolPointB);
@@ -597,8 +597,8 @@ public class Soldier : MonoBehaviour
     private void SetPathTo(Vector2 destination)
     {
         Vector2 start = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
-        Vector2 snappedDestination = SnapToNearestLand(destination);
-        List<Vector2> newPath = FindPath(start, snappedDestination);
+        Vector2 snappedDestination = SnapToNearestPassable(destination);
+        List<Vector2> newPath = BuildingManager.FindPath(start, snappedDestination);
 
         currentPath.Clear();
         currentPathIndex = 0;
@@ -613,10 +613,10 @@ public class Soldier : MonoBehaviour
         hasMoveOrder = true;
     }
 
-    private static Vector2 SnapToNearestLand(Vector2 target)
+    private static Vector2 SnapToNearestPassable(Vector2 target)
     {
         Vector2 snapped = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
-        if (IslandManager.IsLand(snapped))
+        if (BuildingManager.IsWalkable(snapped))
         {
             return snapped;
         }
@@ -638,7 +638,7 @@ public class Soldier : MonoBehaviour
                     continue;
                 }
 
-                if (IslandManager.IsLand(next))
+                if (BuildingManager.IsWalkable(next))
                 {
                     return next;
                 }

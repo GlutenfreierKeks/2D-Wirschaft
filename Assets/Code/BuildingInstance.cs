@@ -6,6 +6,8 @@ public class BuildingInstance : MonoBehaviour
 {
     public BuildingData data;
     public bool isLocal;
+    [HideInInspector] public int footprintWidthOverride;
+    [HideInInspector] public int footprintHeightOverride;
     
     private bool isConstructed = false;
     private float constructionProgress = 0f;
@@ -258,9 +260,11 @@ public class BuildingInstance : MonoBehaviour
 
         var col = gameObject.AddComponent<BoxCollider2D>();
         Vector3 s = transform.localScale;
+        int footprintWidth = footprintWidthOverride > 0 ? footprintWidthOverride : data.width;
+        int footprintHeight = footprintHeightOverride > 0 ? footprintHeightOverride : data.height;
         col.size = new Vector2(
-            s.x > 0.001f ? data.width / s.x : data.width,
-            s.y > 0.001f ? data.height / s.y : data.height
+            s.x > 0.001f ? footprintWidth / s.x : footprintWidth,
+            s.y > 0.001f ? footprintHeight / s.y : footprintHeight
         );
     }
 
