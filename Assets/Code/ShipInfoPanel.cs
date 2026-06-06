@@ -167,11 +167,11 @@ public class ShipInfoPanel : MonoBehaviour
     private void OnLoadWorkers()
     {
         if (currentShip == null) return;
-        int n = currentShip.LoadNearbyWorkers(6f);
-        if (n == 0)
-            NotificationManager.Instance?.Notify("ship_none", "Keine Bauarbeiter in Reichweite (6 Felder).", 4f);
+        currentShip.LoadNearbyWorkers(40f);
         RefreshStats();
     }
+
+
 
     private void OnSailTo()
     {
@@ -257,7 +257,7 @@ public class ShipInfoPanel : MonoBehaviour
         btnLoadSoldiers.onClick.AddListener(OnLoadSoldiers);
         AddLE(btnLoadSoldiers.gameObject, minW: 340f, minH: 44f);
 
-        btnLoadWorkers = MakeButton("LoadWorkersBtn", inner.transform, "🔨 Bauarbeiter einladen (6 Felder)", btnGreen, 340f, 44f, 14f);
+        btnLoadWorkers = MakeButton("LoadWorkersBtn", inner.transform, "🔨 1 Bauarbeiter rufen", btnGreen, 340f, 44f, 14f);
         btnLoadWorkers.onClick.AddListener(OnLoadWorkers);
         AddLE(btnLoadWorkers.gameObject, minW: 340f, minH: 44f);
 
