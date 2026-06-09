@@ -291,6 +291,13 @@ public class SelectionManager : MonoBehaviour
 
         if (clickedBuilding != null)
         {
+            // Schiffe haben ihre eigene UI (ShipCargoUI), kein BuildingInfoPanel öffnen
+            if (clickedBuilding.GetComponent<Ship>() != null)
+            {
+                if (infoPanel != null && infoPanel.IsVisible) infoPanel.Hide();
+                return;
+            }
+
             AudioManager.Instance?.PlaySelectSound();
             ClearSoldierSelection();
             infoPanel?.Show(clickedBuilding);

@@ -402,6 +402,14 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             steg.Initialize(new Vector3(position.x, position.y, -0.21f));
         }
 
+        if (data.placementRule == PlacementRule.Ship)
+        {
+            Ship ship = building.GetComponent<Ship>();
+            if (ship == null) ship = building.AddComponent<Ship>();
+            ship.isLocal = isLocal;
+            if (data.shipData != null) ship.shipData = data.shipData;
+        }
+
         FogRevealer revealer = building.GetComponent<FogRevealer>();
         if (revealer == null) revealer = building.AddComponent<FogRevealer>();
         revealer.isLocalPlayer = isLocal;
@@ -479,10 +487,24 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             DestroyImmediate(meshCollider);
         }
 
+        // Add Warehouse component (for island ownership tracking)
+        Warehouse wh = warehouse.AddComponent<Warehouse>();
+        wh.isLocal = isLocal;
+        wh.isMainWarehouse = true;
+        wh.storageCapacity = 50;
+
         BuildingInstance lodging = warehouse.AddComponent<BuildingInstance>();
         lodging.isLocal = isLocal;
         lodging.isPreBuiltLodging = true;
         lodging.displayNameOverride = "Hauptlager";
         lodging.sleepCapacityOverride = 5;
+        
+        Debug.Log($"[BuildingManager] Spawned main warehouse at {position}, isLocal={isLocal}");
+        
+        // Force registration with WarehouseManager (in case Start() hasn't run yet)
+        if (WarehouseManager.Instance != null)
+        {
+            WarehouseManager.Instance.RegisterWarehouse(wh);
+        }
     }
 }

@@ -153,6 +153,30 @@ public class Soldier : MonoBehaviour
             attackTarget = FindPreferredEnemy();
         }
 
+        // Check for enemy warehouses in range
+        Warehouse enemyWarehouse = FindEnemyWarehouseInRange(attackRange);
+
+        if (enemyWarehouse != null)
+        {
+            float distance = Vector2.Distance(transform.position, enemyWarehouse.transform.position);
+            if (distance <= attackRange)
+            {
+                if (Time.time >= lastAttackTime + attackCooldown)
+                {
+                    AttackWarehouse(enemyWarehouse);
+                    lastAttackTime = Time.time;
+                }
+
+                return;
+            }
+            else if (distance <= attackRange + AggroPadding)
+            {
+                // Move towards warehouse
+                MoveTowards(enemyWarehouse.transform.position);
+                return;
+            }
+        }
+
         if (attackTarget != null)
         {
             if (!hasReportedEnemyContact && team == Team.Player)
@@ -487,6 +511,71 @@ public class Soldier : MonoBehaviour
             }
         }
 
+        // Also check for enemy warehouses to attack
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        foreach (var warehouse in warehouses)
+        {
+            if (warehouse == null) continue;
+            
+            // Check if warehouse belongs to enemy
+            bool isEnemyWarehouse = false;
+            if (team == Team.Player && !warehouse.isLocal)
+            {
+                isEnemyWarehouse = true;
+            }
+            else if (team == Team.Enemy && warehouse.isLocal)
+            {
+                isEnemyWarehouse = true;
+            }
+            
+            if (!isEnemyWarehouse) continue;
+            
+            float distance = Vector2.Distance(transform.position, warehouse.transform.position);
+            if (distance <= searchRange && distance < closestDistance)
+            {
+                closestDistance = distance;
+                // Don't set closest as soldier, but attack the warehouse instead
+                // We'll handle warehouse attacking in Attack method
+            }
+        }
+
+        return closest;
+    }
+
+    /// <summary>
+    /// Check if there are enemy warehouses in attack range.
+    /// </summary>
+    private Warehouse FindEnemyWarehouseInRange(float range)
+    {
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        Warehouse closest = null;
+        float closestDist = float.MaxValue;
+
+        foreach (var warehouse in warehouses)
+        {
+            if (warehouse == null) continue;
+            
+            // Check if warehouse belongs to enemy
+            bool isEnemyWarehouse = false;
+            if (team == Team.Player && !warehouse.isLocal)
+            {
+                isEnemyWarehouse = true;
+            }
+            else if (team == Team.Enemy && warehouse.isLocal)
+            {
+                isEnemyWarehouse = true;
+            }
+            
+            if (!isEnemyWarehouse) continue;
+            
+            float distance = Vector2.Distance(transform.position, warehouse.transform.position);
+            if (distance <= range && distance < closestDist)
+            {
+                closestDist = distance;
+                closest = warehouse;
+            }
+        }
+
         return closest;
     }
 
@@ -565,6 +654,26 @@ public class Soldier : MonoBehaviour
         }
 
         enemySoldier.TakeDamage(damage);
+    }
+
+    private void AttackWarehouse(Warehouse warehouse)
+    {
+        if (warehouse == null) return;
+
+        Debug.Log($"[Soldier] Attacking warehouse! Damage: {damage}");
+        
+        // Calculate damage to warehouse
+        int damageToDeal = Mathf.RoundToInt(damage);
+        int attackerId = team == Team.Enemy ? 0 : (PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : 0);
+        
+        warehouse.TakeDamage(damageToDeal, attackerId);
+
+        // Visual feedback
+        if (team == Team.Player)
+        {
+            NotificationManager.Instance?.Notify("warehouse_under_attack", 
+                "Dein Lagerhaus wird angegriffen!", 3f);
+        }
     }
 
     private void Die()

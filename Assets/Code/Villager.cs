@@ -16,6 +16,9 @@ public class Villager : MonoBehaviour
     public BuildingInstance AssignedBuilding => assignedBuilding;
     private BuildingInstance assignedSleepHouse;
     
+    [Header("Ship Assignment")]
+    public Ship assignedShip;  // Reference to ship if assigned as crew
+    
     [HideInInspector]
     public bool isOperatingWorker = false;
     [HideInInspector]
@@ -645,6 +648,47 @@ public class Villager : MonoBehaviour
     public void ClearSleepHouseReference()
     {
         assignedSleepHouse = null;
+    }
+    
+    // ── Ship Assignment (for Crew) ─────────────────────────────────────────────
+    
+    public void AssignToShip(Ship ship)
+    {
+        if (ship == null) return;
+        
+        // Release from any current assignment
+        Release();
+        
+        assignedShip = ship;
+        
+        // Visual feedback - different color for ship crew
+        if (sr != null) sr.color = new Color(0.6f, 0.8f, 1f, 1f); // Light blue for ship crew
+        else if (rend != null) rend.material.color = new Color(0.6f, 0.8f, 1f, 1f);
+        
+        Debug.Log($"[Villager] Assigned as crew to ship {ship.GetShipName()}");
+    }
+    
+    public void ReleaseFromShip()
+    {
+        if (assignedShip != null)
+        {
+            Debug.Log($"[Villager] Released from ship {assignedShip.GetShipName()}");
+            assignedShip = null;
+        }
+        
+        // Reset to normal color
+        if (sr != null) sr.color = (role == Role.Worker) ? Color.orange : Color.white;
+        else if (rend != null) rend.material.color = (role == Role.Worker) ? Color.orange : Color.white;
+    }
+    
+    public bool IsOnShip()
+    {
+        return assignedShip != null;
+    }
+    
+    public Ship GetAssignedShip()
+    {
+        return assignedShip;
     }
 
     private BuildingInstance FindSleepHouse()

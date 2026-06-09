@@ -41,6 +41,13 @@ public class BuildingData : ScriptableObject
     [Tooltip("0 = kein Schlafplatz. Kleines Haus: 2, Großes Haus: 4, Hauptlager: 5")]
     public int sleepCapacity = 0;
 
+    [Header("Ship Settings")]
+    public ShipData shipData;
+
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
+    
+    [Header("Island Ownership")]
+    [Tooltip("Wenn aktiv, kann dieses Gebäude auf anderen Inseln gebaut werden (z.B. Lagerhaus). Andere Gebäude nur auf eigener Insel.")]
+    public bool canBuildOnOtherIslands = false;
 }

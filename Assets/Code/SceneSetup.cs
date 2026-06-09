@@ -14,6 +14,7 @@ public class SceneSetup : MonoBehaviour
         EnsureManager<VillagerManager>("VillagerManager");
         EnsureManager<NotificationManager>("NotificationManager");
         EnsureManager<AudioManager>("AudioManager");
+        EnsureManager<WarehouseManager>("WarehouseManager");
         
         Debug.Log("[SceneSetup] All managers initialized.");
     }

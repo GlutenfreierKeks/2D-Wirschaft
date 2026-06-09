@@ -175,11 +175,285 @@ public class PlacementManager : MonoBehaviour
         return foundValid ? bestValid : bestAny;
     }
 
+private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occupiedHeight = 0)
+    {
+        // Lagerhäuser können überall gebaut werden
+        if (currentBuilding.canBuildOnOtherIslands)
+        {
+            return true;
+        }
+
+        // Für Piers (Stege): Position ist im Wasser, prüfe ob anliegende Insel ein eigenes Lagerhaus hat
+        if (currentBuilding.placementRule == PlacementRule.Pier)
+        {
+            return CheckPierIslandOwnership(center);
+        }
+
+        // Für Schiffe: Prüfe ob neben einem Steg platziert der zu einer Insel mit eigenem Lagerhaus gehört
+        if (currentBuilding.placementRule == PlacementRule.Ship)
+        {
+            return CheckShipIslandOwnership(center, occupiedWidth, occupiedHeight);
+        }
+
+        // Für alle anderen Gebäude: Prüfe ob auf eigener Insel
+        Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
+        
+        // Finde die nächste eigene Insel (Island mit eigenem Lagerhaus)
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        
+        foreach (var wh in warehouses)
+        {
+            if (wh != null && wh.isLocal)
+            {
+                Vector2Int whGrid = new Vector2Int(
+                    Mathf.RoundToInt(wh.transform.position.x),
+                    Mathf.RoundToInt(wh.transform.position.y)
+                );
+                
+                // Prüfe ob das Ziel auf der gleichen Insel ist wie das Lagerhaus
+                if (IsSameIsland(gridPos, whGrid))
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Kein eigenes Lagerhaus auf dieser Insel gefunden
+        NotificationManager.Instance?.Notify("island_no_warehouse", 
+            "Du brauchst zuerst ein Lagerhaus auf dieser Insel!", 3f);
+        return false;
+    }
+
+    /// <summary>
+    /// Für Schiffe: Prüft ob das Schiff neben einem Steg platziert wird der zu einer Insel mit eigenem Lagerhaus gehört.
+    /// Vereinfachte Logik: Finde einen benachbarten Steg und prüfe ob die Kette zum Land mit eigenem Lagerhaus führt.
+    /// </summary>
+    private bool CheckShipIslandOwnership(Vector2 center, int occupiedWidth, int occupiedHeight)
+    {
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        
+        // Sammle alle Steg-Positionen und prüfe welche zu Inseln mit Lagerhaus gehören
+        List<Vector2Int> allStegPositions = BuildingManager.GetStegPositions();
+        if (allStegPositions.Count == 0)
+        {
+            Debug.Log("Placement Failed: No piers exist yet");
+            return false;
+        }
+        
+        // Finde alle Stege die zu einer Insel mit eigenem Lagerhaus gehören
+        HashSet<Vector2Int> validStegPositions = new HashSet<Vector2Int>();
+        
+        // Sammle lokale Lagerhaus-Positionen
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        List<Vector2Int> localWarehousePositions = new List<Vector2Int>();
+        foreach (var wh in warehouses)
+        {
+            if (wh != null && wh.isLocal)
+            {
+                localWarehousePositions.Add(new Vector2Int(
+                    Mathf.RoundToInt(wh.transform.position.x),
+                    Mathf.RoundToInt(wh.transform.position.y)
+                ));
+            }
+        }
+        
+        if (localWarehousePositions.Count == 0)
+        {
+            Debug.Log("Placement Failed: No local warehouse found");
+            NotificationManager.Instance?.Notify("island_no_warehouse", 
+                "Du brauchst zuerst ein Lagerhaus auf dieser Insel!", 3f);
+            return false;
+        }
+        
+        // Für jeden Steg: prüfe ob er zu Land gehört das ein Lagerhaus hat
+        foreach (Vector2Int stegPos in allStegPositions)
+        {
+            // Finde Land das neben diesem Steg ist
+            foreach (var dir in directions)
+            {
+                Vector2Int landPos = stegPos + dir;
+                if (IslandManager.IsLand(landPos))
+                {
+                    // Ist dieses Land auf einer Insel mit eigenem Lagerhaus?
+                    foreach (Vector2Int whPos in localWarehousePositions)
+                    {
+                        if (IsSameIsland(landPos, whPos))
+                        {
+                            validStegPositions.Add(stegPos);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (validStegPositions.Count == 0)
+        {
+            Debug.Log("Placement Failed: No pier found belonging to island with warehouse");
+            return false;
+        }
+        
+        // Prüfe ob das Schiff neben einem gültigen Steg platziert wird
+        float startX = -(occupiedWidth - 1) / 2f;
+        float startY = -(occupiedHeight - 1) / 2f;
+        
+        for (int x = 0; x < occupiedWidth; x++)
+        {
+            for (int y = 0; y < occupiedHeight; y++)
+            {
+                Vector2 cellPos = center + new Vector2(startX + x, startY + y);
+                Vector2Int gridCell = new Vector2Int(Mathf.RoundToInt(cellPos.x), Mathf.RoundToInt(cellPos.y));
+                
+                foreach (var dir in directions)
+                {
+                    Vector2Int adjacent = gridCell + dir;
+                    if (validStegPositions.Contains(adjacent))
+                    {
+                        // Schiff ist neben einem gültigen Steg!
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        Debug.Log("Placement Failed: Ship not adjacent to any valid pier");
+        NotificationManager.Instance?.Notify("ship_no_pier", 
+            "Schiff muss neben einem Steg platziert werden!", 3f);
+        return false;
+    }
+
+    /// <summary>
+    /// Für Piers: Prüft ob die anliegende Insel ein eigenes Lagerhaus hat.
+    /// </summary>
+    private bool CheckPierIslandOwnership(Vector2 center)
+    {
+        Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
+        
+        // Ein Pier muss an Land oder another Pier angrenzen - prüfe alle 4 Richtungen
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        
+        foreach (var dir in directions)
+        {
+            Vector2Int adjacent = gridPos + dir;
+            
+            // Ist das angrenzende Feld Land?
+            if (IslandManager.IsLand(adjacent))
+            {
+                // Prüfe ob auf dieser Insel ein eigenes Lagerhaus steht
+                Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+                foreach (var wh in warehouses)
+                {
+                    if (wh != null && wh.isLocal)
+                    {
+                        Vector2Int whGrid = new Vector2Int(
+                            Mathf.RoundToInt(wh.transform.position.x),
+                            Mathf.RoundToInt(wh.transform.position.y)
+                        );
+                        
+                        if (IsSameIsland(adjacent, whGrid))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Auch als Pier an eigenem Pier angrenzend prüfen
+        foreach (var dir in directions)
+        {
+            Vector2Int adjacent = gridPos + dir;
+            if (BuildingManager.IsStegAt(adjacent))
+            {
+                // Dieser Pier ist an einem existierenden Pier - prüfe ob der Steg zu einer Insel mit eigenem Lagerhaus gehört
+                // Da Stege nur an Land oder anderen Stegen platziert werden, folgt die Kette zum Land
+                foreach (var dir2 in directions)
+                {
+                    Vector2Int landCheck = adjacent + dir2;
+                    if (IslandManager.IsLand(landCheck))
+                    {
+                        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+                        foreach (var wh in warehouses)
+                        {
+                            if (wh != null && wh.isLocal)
+                            {
+                                Vector2Int whGrid = new Vector2Int(
+                                    Mathf.RoundToInt(wh.transform.position.x),
+                                    Mathf.RoundToInt(wh.transform.position.y)
+                                );
+                                
+                                if (IsSameIsland(landCheck, whGrid))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    private bool IsSameIsland(Vector2Int pos1, Vector2Int pos2)
+    {
+        // Beide müssen Land sein
+        if (!IslandManager.IsLand(pos1) || !IslandManager.IsLand(pos2))
+        {
+            return false;
+        }
+
+        // Verwende Flood-Fill um zu prüfen ob beide Positionen zur gleichen Insel gehören
+        // Starte von pos1 und prüfe ob pos2 erreichbar ist
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        queue.Enqueue(pos1);
+        visited.Add(pos1);
+        
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        int maxIterations = 10000; // Schutz gegen Endlosschleife
+        int iterations = 0;
+        
+        while (queue.Count > 0 && iterations < maxIterations)
+        {
+            iterations++;
+            Vector2Int current = queue.Dequeue();
+            
+            // Haben wir pos2 erreicht?
+            if (current == pos2)
+            {
+                return true;
+            }
+            
+            // Alle Nachbarn prüfen
+            foreach (var dir in directions)
+            {
+                Vector2Int next = current + dir;
+                if (!visited.Contains(next) && IslandManager.IsLand(next))
+                {
+                    visited.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+        }
+        
+        // pos2 nicht von pos1 aus erreichbar = verschiedene Inseln
+        return false;
+    }
+
     private bool CheckPlacementValidity(Vector2 center, int rotationDegrees, int occupiedWidth, int occupiedHeight)
     {
         if (!FogProjector.IsExplored(center))
         {
             Debug.Log("Placement Failed: Area not explored");
+            return false;
+        }
+
+        // Island ownership check
+        if (!CheckIslandOwnership(center, occupiedWidth, occupiedHeight))
+        {
+            Debug.Log("Placement Failed: Cannot build on this island without a warehouse");
             return false;
         }
 
@@ -269,53 +543,101 @@ public class PlacementManager : MonoBehaviour
         return true;
     }
 
-    private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occupiedWidth, int occupiedHeight)
+private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occupiedWidth, int occupiedHeight)
     {
         if (currentBuilding.width < 1 || currentBuilding.height < 1)
         {
             return false;
         }
 
-        Vector2Int outward = GetShipOutwardDirection(rotationDegrees);
-        Vector2Int along = GetShipLengthDirection(rotationDegrees);
-        int shipLength = Mathf.Max(currentBuilding.width, currentBuilding.height);
-
-        List<Vector2Int> sideCells = GetPierSideCells(center, occupiedWidth, occupiedHeight, outward);
-        if (sideCells.Count != shipLength)
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        
+        // Sammle alle gültigen Steg-Positionen (zu Inseln mit Lagerhaus gehörend)
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        List<Vector2Int> localWarehousePositions = new List<Vector2Int>();
+        foreach (var wh in warehouses)
         {
-            Debug.Log("Placement Failed: Ship side does not match configured ship length");
-            return false;
-        }
-
-        sideCells = SortCellsAlongDirection(sideCells, along);
-        Vector2Int expectedStep = along;
-
-        for (int i = 0; i < sideCells.Count; i++)
-        {
-            Vector2Int pierCell = sideCells[i] - outward;
-            if (!BuildingManager.IsStegAt(pierCell))
+            if (wh != null && wh.isLocal)
             {
-                Debug.Log("Placement Failed: Ship must be placed directly next to a pier");
-                return false;
+                localWarehousePositions.Add(new Vector2Int(
+                    Mathf.RoundToInt(wh.transform.position.x),
+                    Mathf.RoundToInt(wh.transform.position.y)
+                ));
             }
-
-            if (i > 0)
+        }
+        
+        List<Vector2Int> allStegPositions = BuildingManager.GetStegPositions();
+        HashSet<Vector2Int> validStegPositions = new HashSet<Vector2Int>();
+        
+        foreach (Vector2Int stegPos in allStegPositions)
+        {
+            foreach (var dir in directions)
             {
-                Vector2Int previousPier = sideCells[i - 1] - outward;
-                if (pierCell - previousPier != expectedStep)
+                Vector2Int landPos = stegPos + dir;
+                if (IslandManager.IsLand(landPos))
                 {
-                    Debug.Log("Placement Failed: Pier must run straight across the full ship length");
-                    return false;
+                    foreach (Vector2Int whPos in localWarehousePositions)
+                    {
+                        if (IsSameIsland(landPos, whPos))
+                        {
+                            validStegPositions.Add(stegPos);
+                            break;
+                        }
+                    }
                 }
             }
         }
 
-        Vector2Int beforeSegment = sideCells[0] - outward - along;
-        Vector2Int afterSegment = sideCells[sideCells.Count - 1] - outward + along;
-        if (BuildingManager.IsStegAt(beforeSegment) || BuildingManager.IsStegAt(afterSegment))
+        // Prüfe ob mindestens eine Zelle des Schiffs neben einem gültigen Steg ist
+        float startX = -(occupiedWidth - 1) / 2f;
+        float startY = -(occupiedHeight - 1) / 2f;
+        
+        bool hasValidPierAdjacent = false;
+        
+        for (int x = 0; x < occupiedWidth; x++)
         {
-            Debug.Log("Placement Failed: Ship needs a pier segment with the same exact length");
+            for (int y = 0; y < occupiedHeight; y++)
+            {
+                Vector2 cellPos = center + new Vector2(startX + x, startY + y);
+                Vector2Int gridCell = new Vector2Int(Mathf.RoundToInt(cellPos.x), Mathf.RoundToInt(cellPos.y));
+                
+                foreach (var dir in directions)
+                {
+                    Vector2Int adjacent = gridCell + dir;
+                    if (validStegPositions.Contains(adjacent))
+                    {
+                        hasValidPierAdjacent = true;
+                        break;
+                    }
+                }
+                
+                if (hasValidPierAdjacent) break;
+            }
+            
+            if (hasValidPierAdjacent) break;
+        }
+        
+        if (!hasValidPierAdjacent)
+        {
+            Debug.Log("Placement Failed: Ship not adjacent to valid pier (with warehouse island)");
             return false;
+        }
+
+        // Prüfe ob alle Zellen des Schiffs auf Wasser sind
+        for (int x = 0; x < occupiedWidth; x++)
+        {
+            for (int y = 0; y < occupiedHeight; y++)
+            {
+                Vector2 cellPos = center + new Vector2(startX + x, startY + y);
+                Vector2Int gridCell = new Vector2Int(Mathf.RoundToInt(cellPos.x), Mathf.RoundToInt(cellPos.y));
+                
+                // Schiff muss auf Wasser sein (nicht auf Land)
+                if (IslandManager.IsLand(gridCell))
+                {
+                    Debug.Log("Placement Failed: Ship cannot be placed on land");
+                    return false;
+                }
+            }
         }
 
         return true;
@@ -350,7 +672,7 @@ public class PlacementManager : MonoBehaviour
         return result;
     }
 
-    private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
+private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
     {
         int shipLength = Mathf.Max(currentBuilding.width, currentBuilding.height);
         int shipWidth = Mathf.Min(currentBuilding.width, currentBuilding.height);
@@ -362,12 +684,55 @@ public class PlacementManager : MonoBehaviour
         }
 
         Vector2Int mouseGrid = new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.y));
-        int searchRadius = shipLength + shipWidth + 3;
+        int searchRadius = shipLength + shipWidth + 5; // Erhöht für bessere Suche
         HashSet<string> seenKeys = new HashSet<string>();
-        Vector2Int[] alongDirections = { Vector2Int.right, Vector2Int.up };
+        Vector2Int[] alongDirections = { Vector2Int.right, Vector2Int.up, Vector2Int.down, Vector2Int.left };
+        Vector2Int[] outwardOptions = new Vector2Int[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+
+        // Sammle gültige Steg-Positionen (zu Inseln mit Lagerhaus)
+        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
+        List<Vector2Int> localWarehousePositions = new List<Vector2Int>();
+        foreach (var wh in warehouses)
+        {
+            if (wh != null && wh.isLocal)
+            {
+                localWarehousePositions.Add(new Vector2Int(
+                    Mathf.RoundToInt(wh.transform.position.x),
+                    Mathf.RoundToInt(wh.transform.position.y)
+                ));
+            }
+        }
+        
+        HashSet<Vector2Int> validStegPositions = new HashSet<Vector2Int>();
+        Vector2Int[] checkDirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        
+        foreach (Vector2Int stegPos in pierCells)
+        {
+            foreach (var dir in checkDirs)
+            {
+                Vector2Int landPos = stegPos + dir;
+                if (IslandManager.IsLand(landPos))
+                {
+                    foreach (Vector2Int whPos in localWarehousePositions)
+                    {
+                        if (IsSameIsland(landPos, whPos))
+                        {
+                            validStegPositions.Add(stegPos);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         foreach (Vector2Int pierCell in pierCells)
         {
+            // Nur gültige Stege verwenden
+            if (!validStegPositions.Contains(pierCell))
+            {
+                continue;
+            }
+            
             if (Mathf.Abs(pierCell.x - mouseGrid.x) > searchRadius || Mathf.Abs(pierCell.y - mouseGrid.y) > searchRadius)
             {
                 continue;
@@ -380,11 +745,16 @@ public class PlacementManager : MonoBehaviour
                     continue;
                 }
 
-                Vector2Int outwardA = new Vector2Int(-along.y, along.x);
-                Vector2Int outwardB = -outwardA;
-
-                TryAddShipCandidate(candidates, seenKeys, pierCell, along, outwardA, shipLength, shipWidth);
-                TryAddShipCandidate(candidates, seenKeys, pierCell, along, outwardB, shipLength, shipWidth);
+                // Beide Richtungen ausprobieren (links und rechts vom Pier)
+                foreach (Vector2Int outward in outwardOptions)
+                {
+                    if (outward == along || outward == -along)
+                    {
+                        continue; // Nur seitliche Richtungen
+                    }
+                    
+                    TryAddShipCandidate(candidates, seenKeys, pierCell, along, outward, shipLength, shipWidth);
+                }
             }
         }
 
