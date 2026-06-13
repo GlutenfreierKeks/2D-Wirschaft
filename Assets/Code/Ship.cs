@@ -440,6 +440,14 @@ public class Ship : MonoBehaviour
         {
             if (slot.IsEmpty)
             {
+                Villager freeVillager = FindFreeVillager();
+                if (freeVillager == null)
+                {
+                    NotificationManager.Instance?.Notify("no_free_villager",
+                        "Kein freier Dorfbewohner verfügbar!", 4f);
+                    return false;
+                }
+                freeVillager.gameObject.SetActive(false);
                 slot.content = ShipSlot.SlotContent.Builder;
                 slot.amount = 1;
                 OnCargoChanged?.Invoke();
@@ -447,6 +455,27 @@ public class Ship : MonoBehaviour
             }
         }
         return false;
+    }
+
+    private Villager FindFreeVillager()
+    {
+        if (VillagerManager.Instance == null) return null;
+        Villager best = null;
+        float bestDist = float.MaxValue;
+        foreach (var v in VillagerManager.Instance.ActiveVillagers)
+        {
+            if (v == null || !v.gameObject.activeSelf) continue;
+            if (v.role == Villager.Role.Worker) continue;
+            if (v.assignedShip != null) continue;
+            if (v.AssignedBuilding != null) continue;
+            float d = Vector3.Distance(transform.position, v.transform.position);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = v;
+            }
+        }
+        return best;
     }
 
     public bool TryLoadSoldier(SoldierType type)

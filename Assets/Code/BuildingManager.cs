@@ -387,11 +387,20 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         if (naturalW <= 0f) naturalW = 1f;
         if (naturalH <= 0f) naturalH = 1f;
 
-        building.transform.localScale = new Vector3(
-            occupiedWidth / naturalW,
-            occupiedHeight / naturalH,
-            1f
-        );
+        int rot = Mathf.RoundToInt(Mathf.Repeat(rotationDegrees, 360f));
+        float scaleX, scaleY;
+        if (rot == 90 || rot == 270)
+        {
+            scaleX = occupiedHeight / naturalW;
+            scaleY = occupiedWidth / naturalH;
+        }
+        else
+        {
+            scaleX = occupiedWidth / naturalW;
+            scaleY = occupiedHeight / naturalH;
+        }
+
+        building.transform.localScale = new Vector3(scaleX, scaleY, 1f);
 
         // Add building instance logic
         BuildingInstance instance = building.AddComponent<BuildingInstance>();

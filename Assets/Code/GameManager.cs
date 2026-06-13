@@ -499,35 +499,43 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     private void SpawnInitialSoldiers()
     {
-        if (!PhotonNetwork.IsConnected && !PhotonNetwork.InRoom)
+        Vector3 spawnPos;
+        Warehouse wh = FindObjectOfType<Warehouse>();
+        if (wh != null)
         {
-            // Only spawn in offline/singleplayer
-            Warehouse wh = FindObjectOfType<Warehouse>();
-            if (wh == null) return;
-
-            Vector3 spawnPos = wh.transform.position + new Vector3(2f, 0f, 0f);
-            SoldierType[] types = { SoldierType.Spear, SoldierType.Shield, SoldierType.Sword, SoldierType.Bow };
-
-            foreach (var type in types)
-            {
-                for (int i = 0; i < 2; i++)
-                {
-                    GameObject solObj = new GameObject($"Init_{type}_{i}");
-                    Vector3 offset = new Vector3(i * 1.2f, (int)type * 1.2f, 0f);
-                    solObj.transform.position = spawnPos + offset;
-
-                    var sr = solObj.AddComponent<SpriteRenderer>();
-                    sr.sortingOrder = 21;
-                    solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
-
-                    var s = solObj.AddComponent<Soldier>();
-                    s.soldierType = type;
-                    s.team = Team.Player;
-                    s.moveSpeed = 1.5f;
-                }
-            }
-
-            Debug.Log("[GameManager] 8 Start-Soldaten gespawnt (2 pro Typ).");
+            spawnPos = wh.transform.position + new Vector3(2f, 0f, 0f);
         }
+        else if (IslandManager.Instance != null)
+        {
+            Vector2 islandPos = IslandManager.Instance.GetIslandPosition(0);
+            spawnPos = new Vector3(islandPos.x + 2f, islandPos.y, 0f);
+        }
+        else
+        {
+            return;
+        }
+
+        SoldierType[] types = { SoldierType.Spear, SoldierType.Shield, SoldierType.Sword, SoldierType.Bow };
+
+        foreach (var type in types)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                GameObject solObj = new GameObject($"Init_{type}_{i}");
+                Vector3 offset = new Vector3(i * 1.2f, (int)type * 1.2f, 0f);
+                solObj.transform.position = spawnPos + offset;
+
+                var sr = solObj.AddComponent<SpriteRenderer>();
+                sr.sortingOrder = 21;
+                solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+
+                var s = solObj.AddComponent<Soldier>();
+                s.soldierType = type;
+                s.team = Team.Player;
+                s.moveSpeed = 1.5f;
+            }
+        }
+
+        Debug.Log("[GameManager] 8 Start-Soldaten gespawnt (2 pro Typ).");
     }
 }
