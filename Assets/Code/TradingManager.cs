@@ -9,7 +9,7 @@ public class TradingManager : MonoBehaviourPunCallbacks, IOnEventCallback
     public static TradingManager Instance;
 
     private const string OffersPropertyKey = "TradeOffers";
-    private const byte GoldTransferEventCode = 2; // For sending gold to the seller
+    private const byte GoldTransferEventCode = 99; // For sending gold to the seller
 
     public delegate void OnOffersUpdatedDelegate();
     public event OnOffersUpdatedDelegate OnOffersUpdated;
