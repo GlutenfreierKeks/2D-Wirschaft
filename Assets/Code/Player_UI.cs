@@ -444,6 +444,7 @@ public class Player_UI : MonoBehaviour
         {
             CreateMenuButton(mainMenuContainer.transform, cat.displayName, () => OpenSubMenu(cat.displayName));
         }
+        CreateMenuButton(mainMenuContainer.transform, "Markt", () => { if (TradingUI.Instance != null) TradingUI.Instance.TogglePanel(); });
         CreateMenuButton(mainMenuContainer.transform, "Statistik", ToggleStatisticsScreen);
 
         // ── Sub Menu Blocker (Full Screen zum Schließen bei Klick daneben) ──
@@ -790,12 +791,30 @@ public class Player_UI : MonoBehaviour
         }
     }
 
-    private Sprite GetIcon(string id)
+    public Sprite GetIcon(string id)
     {
-        if (startingResources == null) return null;
-        foreach (var res in startingResources)
+        if (startingResources != null)
         {
-            if (res.id == id) return res.icon;
+            foreach (var res in startingResources)
+            {
+                if (res.id == id && res.icon != null) return res.icon;
+            }
+        }
+        
+        string path = null;
+        if (id == "holz") path = "Wood_Overlay";
+        else if (id == "stein") path = "Stone_Overlay";
+        else if (id == "eisen") path = "Iron_Overlay";
+        else if (id == "gold") path = "Gold_Overlay";
+        else if (id == "weizen") path = "Wheat_Overlay";
+        else if (id == "fleisch") path = "Meat_Overlay";
+        else if (id == "fruechte" || id == "wüstenfrucht") path = "Fruit_Overlay";
+        else if (id == "dorfbewohner") path = "Textures/dorfbewohner";
+        else if (id == "arbeiter") path = "Textures/schwertkämpfer";
+        
+        if (path != null)
+        {
+            return LoadSpriteFromResources(path);
         }
         return null;
     }

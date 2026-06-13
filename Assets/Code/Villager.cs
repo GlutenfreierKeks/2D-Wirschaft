@@ -239,12 +239,11 @@ public class Villager : MonoBehaviour
             }
         }
 
-        // Soft floor: the lower the mood, the harder it is to sink further.
-        // A slight positive resistance force applies at very low levels (< 35%) to act as a stabilizer.
-        if (mood < 35f)
-        {
-            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.015f * (35f - mood));
-        }
+        // Linear mood stabilizer (regression to 50% baseline):
+        // The higher the mood, the easier it sinks (negative force).
+        // The lower the mood, the easier it rises (positive force).
+        float moodStabilizerForce = (50f - mood) * 0.003f;
+        mood = Mathf.Clamp(mood + moodStabilizerForce * Time.deltaTime, 0f, 100f);
     }
 
     public void AssignToBuild(BuildingInstance building, Vector2 offset)
