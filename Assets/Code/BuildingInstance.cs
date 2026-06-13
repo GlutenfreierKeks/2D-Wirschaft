@@ -8,6 +8,14 @@ public class BuildingInstance : MonoBehaviour
     public bool isLocal;
     [HideInInspector] public int footprintWidthOverride;
     [HideInInspector] public int footprintHeightOverride;
+
+    [Header("Health")]
+    public int maxHP = 100;
+    public int currentHP = 100;
+    private GameObject healthBar;
+    private const float HealthBarWidth = 0.8f;
+    private const float HealthBarHeight = 0.08f;
+    private const float HealthBarY = -0.5f;
     
     private bool isConstructed = false;
     private float constructionProgress = 0f;
@@ -118,6 +126,8 @@ public class BuildingInstance : MonoBehaviour
     {
         if (data == null) return;
         if (!isLocal) return;
+
+        UpdateHealthBar();
 
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
@@ -239,6 +249,10 @@ public class BuildingInstance : MonoBehaviour
             return;
         }
 
+        maxHP = data.maxHP;
+        currentHP = data.maxHP;
+        CreateHealthBar();
+
         EnsureBuildingCollider();
 
         if (VillagerManager.Instance != null && isLocal)
@@ -355,6 +369,18 @@ public class BuildingInstance : MonoBehaviour
     {
         isConstructed = true;
         if (revealer != null && isLocal) revealer.enabled = true;
+        
+        // Lagerhaus-Typ: Enthülle die ganze Insel
+        if (isLocal && data != null && data.isWarehouseType)
+        {
+            Vector2Int start = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+            var islandCells = BuildingManager.FloodFillIsland(start);
+            foreach (var cell in islandCells)
+            {
+                FogProjector.RegisterExploration(new Vector2(cell.x, cell.y), 1f);
+            }
+            Debug.Log($"[BuildingInstance] Insel enthüllt ({islandCells.Count} Zellen) durch {name}");
+        }
         
         if (isLocal)
         {
@@ -538,6 +564,85 @@ public class BuildingInstance : MonoBehaviour
             // Sofort versuchen neue Arbeiter zuzuweisen
             TryHireOperatingWorkers();
         }
+    }
+
+    // ── Health System ────────────────────────────────────────────────────
+
+    private void CreateHealthBar()
+    {
+        Transform existing = transform.Find("_HealthBar");
+        if (existing != null) return;
+
+        healthBar = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        healthBar.name = "_HealthBar";
+        healthBar.transform.SetParent(transform, false);
+        healthBar.transform.localPosition = new Vector3(0f, HealthBarY, -0.2f);
+        healthBar.transform.localScale = new Vector3(HealthBarWidth, HealthBarHeight, 1f);
+
+        var rend = healthBar.GetComponent<Renderer>();
+        rend.material = new Material(Shader.Find("Sprites/Default"));
+        rend.material.color = Color.green;
+
+        Destroy(healthBar.GetComponent<Collider>());
+        healthBar.SetActive(false);
+    }
+
+    private void UpdateHealthBar()
+    {
+        if (healthBar == null) return;
+
+        if (currentHP >= maxHP)
+        {
+            healthBar.SetActive(false);
+            return;
+        }
+
+        healthBar.SetActive(true);
+        float ratio = Mathf.Clamp01((float)currentHP / maxHP);
+        healthBar.transform.localScale = new Vector3(HealthBarWidth * ratio, HealthBarHeight, 1f);
+        healthBar.transform.localPosition = new Vector3(-HealthBarWidth * (1f - ratio) * 0.5f, HealthBarY, -0.2f);
+
+        var rend = healthBar.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            rend.material.color = ratio > 0.5f ? Color.green
+                : ratio > 0.25f ? Color.yellow
+                : Color.red;
+        }
+    }
+
+    public void TakeDamage(int amount)
+    {
+        currentHP -= amount;
+        if (currentHP <= 0)
+        {
+            currentHP = 0;
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        // Game Over check: letztes Lagerhaus zerstört?
+        if (data != null && (data.isWarehouseType || data.canBuildOnOtherIslands))
+        {
+            bool anyLeft = false;
+            foreach (var wh in FindObjectsOfType<Warehouse>())
+                if (wh != null && wh.isLocal) { anyLeft = true; break; }
+            if (!anyLeft)
+            {
+                foreach (var bi in FindObjectsOfType<BuildingInstance>())
+                    if (bi != null && bi.isLocal && bi.data != null && bi.data.isWarehouseType) { anyLeft = true; break; }
+            }
+            if (!anyLeft)
+            {
+                NotificationManager.Instance?.Notify("game_over",
+                    "ALLE LAGERHÄUSER ZERSTÖRT! DU HAST VERLOREN!", 30f);
+                Debug.LogError("[GAME OVER] Kein Lagerhaus mehr vorhanden!");
+            }
+        }
+
+        Destroy(gameObject);
     }
 
     /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>

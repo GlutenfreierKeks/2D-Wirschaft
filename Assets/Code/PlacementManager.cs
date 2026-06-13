@@ -177,9 +177,16 @@ public class PlacementManager : MonoBehaviour
 
 private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occupiedHeight = 0)
     {
-        // Lagerhäuser können überall gebaut werden
-        if (currentBuilding.canBuildOnOtherIslands)
+        // Lagerhäuser und Lagerhaus-Typ Gebäude können überall gebaut werden
+        if (currentBuilding.canBuildOnOtherIslands || currentBuilding.isWarehouseType)
         {
+            // Prüfe ob mindestens 1 Arbeiter auf der Insel ist
+            if (!HasWorkerOnIsland(center))
+            {
+                NotificationManager.Instance?.Notify("island_no_worker",
+                    "Du brauchst mindestens 1 Arbeiter auf dieser Insel!", 3f);
+                return false;
+            }
             return true;
         }
 
@@ -198,10 +205,8 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
         // Für alle anderen Gebäude: Prüfe ob auf eigener Insel
         Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
         
-        // Finde die nächste eigene Insel (Island mit eigenem Lagerhaus)
-        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
-        
-        foreach (var wh in warehouses)
+        // Finde die nächste eigene Insel (Lagerhaus oder Lagerhaus-Typ Gebäude)
+        foreach (var wh in FindObjectsOfType<Warehouse>())
         {
             if (wh != null && wh.isLocal)
             {
@@ -209,16 +214,25 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
                     Mathf.RoundToInt(wh.transform.position.x),
                     Mathf.RoundToInt(wh.transform.position.y)
                 );
-                
-                // Prüfe ob das Ziel auf der gleichen Insel ist wie das Lagerhaus
                 if (IsSameIsland(gridPos, whGrid))
-                {
                     return true;
-                }
             }
         }
 
-        // Kein eigenes Lagerhaus auf dieser Insel gefunden
+        // Auch Lagerhaus-Typ Gebäude als Ankerpunkte
+        foreach (var bi in FindObjectsOfType<BuildingInstance>())
+        {
+            if (bi != null && bi.isLocal && bi.data != null && bi.data.isWarehouseType)
+            {
+                Vector2Int biGrid = new Vector2Int(
+                    Mathf.RoundToInt(bi.transform.position.x),
+                    Mathf.RoundToInt(bi.transform.position.y)
+                );
+                if (IsSameIsland(gridPos, biGrid))
+                    return true;
+            }
+        }
+
         NotificationManager.Instance?.Notify("island_no_warehouse", 
             "Du brauchst zuerst ein Lagerhaus auf dieser Insel!", 3f);
         return false;
@@ -340,22 +354,8 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
             if (IslandManager.IsLand(adjacent))
             {
                 // Prüfe ob auf dieser Insel ein eigenes Lagerhaus steht
-                Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
-                foreach (var wh in warehouses)
-                {
-                    if (wh != null && wh.isLocal)
-                    {
-                        Vector2Int whGrid = new Vector2Int(
-                            Mathf.RoundToInt(wh.transform.position.x),
-                            Mathf.RoundToInt(wh.transform.position.y)
-                        );
-                        
-                        if (IsSameIsland(adjacent, whGrid))
-                        {
-                            return true;
-                        }
-                    }
-                }
+                if (IsWarehouseOnIsland(adjacent))
+                    return true;
             }
         }
         
@@ -372,27 +372,57 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
                     Vector2Int landCheck = adjacent + dir2;
                     if (IslandManager.IsLand(landCheck))
                     {
-                        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
-                        foreach (var wh in warehouses)
-                        {
-                            if (wh != null && wh.isLocal)
-                            {
-                                Vector2Int whGrid = new Vector2Int(
-                                    Mathf.RoundToInt(wh.transform.position.x),
-                                    Mathf.RoundToInt(wh.transform.position.y)
-                                );
-                                
-                                if (IsSameIsland(landCheck, whGrid))
-                                {
-                                    return true;
-                                }
-                            }
-                        }
+                        if (IsWarehouseOnIsland(landCheck))
+                            return true;
                     }
                 }
             }
         }
         
+        return false;
+    }
+
+    private bool IsWarehouseOnIsland(Vector2Int islandPos)
+    {
+        foreach (var wh in FindObjectsOfType<Warehouse>())
+        {
+            if (wh != null && wh.isLocal)
+            {
+                Vector2Int whGrid = new Vector2Int(
+                    Mathf.RoundToInt(wh.transform.position.x),
+                    Mathf.RoundToInt(wh.transform.position.y)
+                );
+                if (IsSameIsland(islandPos, whGrid))
+                    return true;
+            }
+        }
+        foreach (var bi in FindObjectsOfType<BuildingInstance>())
+        {
+            if (bi != null && bi.isLocal && bi.data != null && bi.data.isWarehouseType)
+            {
+                Vector2Int biGrid = new Vector2Int(
+                    Mathf.RoundToInt(bi.transform.position.x),
+                    Mathf.RoundToInt(bi.transform.position.y)
+                );
+                if (IsSameIsland(islandPos, biGrid))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private bool HasWorkerOnIsland(Vector2 center)
+    {
+        Villager[] villagers = FindObjectsOfType<Villager>();
+        foreach (var v in villagers)
+        {
+            if (v == null || !v.isActiveAndEnabled) continue;
+            if (v.role != Villager.Role.Worker) continue;
+            Vector2Int vGrid = new Vector2Int(Mathf.RoundToInt(v.transform.position.x), Mathf.RoundToInt(v.transform.position.y));
+            Vector2Int centerGrid = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
+            if (IsSameIsland(vGrid, centerGrid))
+                return true;
+        }
         return false;
     }
 

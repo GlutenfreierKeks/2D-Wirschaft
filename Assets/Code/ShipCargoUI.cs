@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Ship Cargo UI Panel - im Stil des BuildingInfoPanel (rechts eingeschoben).
-/// Zeigt Schiffs-Fracht und nächstes Lagerhaus mit Klick-Transfer.
+/// Zeigt Schiffs-Slots und 3 Lade-Buttons: Soldaten, Bauarbeiter, Material.
 /// </summary>
 public class ShipCargoUI : MonoBehaviour
 {
@@ -17,10 +17,8 @@ public class ShipCargoUI : MonoBehaviour
     private readonly Color borderColor = new Color(0.72f, 0.52f, 0.18f, 1.00f);
     private readonly Color labelColor  = new Color(0.90f, 0.78f, 0.52f, 0.85f);
     private readonly Color valueColor  = new Color(1.00f, 0.95f, 0.75f, 1.00f);
-    private readonly Color btnDanger   = new Color(0.65f, 0.10f, 0.08f, 1.00f);
     private readonly Color btnNeutral  = new Color(0.25f, 0.42f, 0.18f, 1.00f);
     private readonly Color slotColor   = new Color(0.22f, 0.15f, 0.08f, 1f);
-    private readonly Color highlightColor = new Color(0.5f, 0.8f, 1f, 1f);
 
     // ── Panel-Objekte ────────────────────────────────────────────────────
     private GameObject panelRoot;
@@ -28,11 +26,14 @@ public class ShipCargoUI : MonoBehaviour
     private TextMeshProUGUI txtName;
     private TextMeshProUGUI txtCrew;
     private TextMeshProUGUI txtCapacity;
-    private Button btnClose;
-    private Button btnSail;
-    private Transform shipCargoContainer;
-    private Transform warehouseContainer;
+    private Transform slotContainer;
     private GameObject itemSlotPrefab;
+
+    // ── Sub-UI ───────────────────────────────────────────────────────────
+    private GameObject subUIRoot;
+    private TextMeshProUGUI subUITitle;
+    private Transform subUIContent;
+    private Button subUIClose;
 
     // ── Animation ────────────────────────────────────────────────────────
     private float targetPosX = 480f;
@@ -42,9 +43,7 @@ public class ShipCargoUI : MonoBehaviour
 
     // ── State ────────────────────────────────────────────────────────────
     private Ship currentShip;
-    private Warehouse currentWarehouse;
-    private List<GameObject> shipItemSlots = new List<GameObject>();
-    private List<GameObject> warehouseItemSlots = new List<GameObject>();
+    private List<GameObject> slotObjects = new List<GameObject>();
 
     // ────────────────────────────────────────────────────────────────────
     private void Awake()
@@ -77,7 +76,6 @@ public class ShipCargoUI : MonoBehaviour
         if (!isPanelActive && currentPosX >= 470f)
         {
             currentShip = null;
-            currentWarehouse = null;
             panelRoot.SetActive(false);
             return;
         }
@@ -106,15 +104,13 @@ public class ShipCargoUI : MonoBehaviour
 
         currentShip = ship;
 
-        // Auto-crewing falls noch kein Matrose zugewiesen
         if (!ship.HasCrew())
         {
             ship.AssignFirstAvailableVillager();
         }
 
-        currentWarehouse = FindNearestWarehouse(ship.transform.position);
-
         isPanelActive = true;
+        subUIRoot?.SetActive(false);
         panelRoot.SetActive(true);
 
         if (currentPosX >= 470f) currentPosX = 480f;
@@ -123,14 +119,14 @@ public class ShipCargoUI : MonoBehaviour
         if (txtName != null) txtName.text = ship.GetShipName().ToUpper();
         UpdateCrewStatus();
         UpdateCapacityDisplay();
-        Debug.Log($"[ShipCargoUI] ShowShipUI: warehouse={(currentWarehouse != null ? currentWarehouse.name : "NULL")}, cargoCount={ship.GetCargoCount()}, freeSpace={ship.GetFreeCargoSpace()}");
-        UpdateAllSlots();
+        RefreshSlots();
     }
 
     public void HideShipUI()
     {
         targetPosX = 480f;
         isPanelActive = false;
+        subUIRoot?.SetActive(false);
     }
 
     public bool IsVisible => isPanelActive;
@@ -151,7 +147,6 @@ public class ShipCargoUI : MonoBehaviour
             cGO.AddComponent<GraphicRaycaster>();
         }
 
-        // ── Äußerer Rahmen ───────────────────────────────────────────────
         panelRoot = MakeImage("ShipCargoPanel", canvas.transform, borderColor);
         rootRT = panelRoot.GetComponent<RectTransform>();
         rootRT.anchorMin = new Vector2(1f, 0.5f);
@@ -163,7 +158,6 @@ public class ShipCargoUI : MonoBehaviour
         outline.effectColor = new Color(0, 0, 0, 0.6f);
         outline.effectDistance = new Vector2(4f, -4f);
 
-        // ── Innerer Hintergrund ──────────────────────────────────────────
         var inner = MakeImage("InnerBG", panelRoot.transform, bgColor);
         var innerRT = inner.GetComponent<RectTransform>();
         innerRT.anchorMin = Vector2.zero; innerRT.anchorMax = Vector2.one;
@@ -176,18 +170,18 @@ public class ShipCargoUI : MonoBehaviour
         vl.childForceExpandWidth = true;
         vl.childForceExpandHeight = false;
 
-        // ── Header ───────────────────────────────────────────────────────
+        // Header
         var headerRow = MakeLayoutRow("HeaderRow", inner.transform, 0f, 40f);
         txtName = MakeTMP("ShipName", headerRow.transform, "", 20f, FontStyles.Bold, valueColor, TextAlignmentOptions.Left);
         var nameLE = txtName.gameObject.AddComponent<LayoutElement>();
         nameLE.flexibleWidth = 1f;
 
-        btnClose = MakeButton("CloseBtn", headerRow.transform, "✕", btnDanger, 34f, 34f, 16f);
+        var btnClose = MakeButton("CloseBtn", headerRow.transform, "✕", new Color(0.65f, 0.10f, 0.08f, 1f), 34f, 34f, 16f);
         btnClose.onClick.AddListener(HideShipUI);
 
         MakeDivider(inner.transform);
 
-        // ── Crew & Capacity ──────────────────────────────────────────────
+        // Crew & Capacity
         txtCrew = MakeTMP("CrewStatus", inner.transform, "", 15f, FontStyles.Normal, labelColor);
         AddLE(txtCrew.gameObject, minH: 24f);
 
@@ -196,92 +190,62 @@ public class ShipCargoUI : MonoBehaviour
 
         MakeDivider(inner.transform);
 
-        // ── Cargo-Bereich (Schiff links / Lagerhaus rechts) ──────────────
-        var cargoRow = new GameObject("CargoRow", typeof(RectTransform));
-        cargoRow.transform.SetParent(inner.transform, false);
-        var cargoHL = cargoRow.AddComponent<HorizontalLayoutGroup>();
-        cargoHL.spacing = 10f;
-        cargoHL.childAlignment = TextAnchor.UpperLeft;
-        cargoHL.childForceExpandWidth = true;
-        cargoHL.childForceExpandHeight = false;
-        cargoHL.padding = new RectOffset(4, 4, 4, 4);
-        AddLE(cargoRow, minH: 180f, flexW: 1f, flexH: 1f);
+        // Slot container (GridLayoutGroup)
+        var slotRow = new GameObject("SlotRow", typeof(RectTransform));
+        slotRow.transform.SetParent(inner.transform, false);
+        var slotVL = slotRow.AddComponent<VerticalLayoutGroup>();
+        slotVL.spacing = 4f;
+        slotVL.childAlignment = TextAnchor.UpperLeft;
+        slotVL.childForceExpandWidth = true;
+        slotVL.childForceExpandHeight = false;
+        AddLE(slotRow, minH: 140f, flexW: 1f, flexH: 1f);
 
-        // Linke Spalte: Schiff
-        var shipCol = new GameObject("ShipColumn", typeof(RectTransform));
-        shipCol.transform.SetParent(cargoRow.transform, false);
-        var shipVL = shipCol.AddComponent<VerticalLayoutGroup>();
-        shipVL.spacing = 4f;
-        shipVL.childAlignment = TextAnchor.UpperLeft;
-        shipVL.childForceExpandWidth = true;
-        shipVL.childForceExpandHeight = false;
-        var shipColLE = shipCol.AddComponent<LayoutElement>();
-        shipColLE.flexibleWidth = 1f;
+        var slotContGO = new GameObject("Slots", typeof(RectTransform));
+        slotContGO.transform.SetParent(slotRow.transform, false);
+        var slotGrid = slotContGO.AddComponent<GridLayoutGroup>();
+        slotGrid.cellSize = new Vector2(60f, 60f);
+        slotGrid.spacing = new Vector2(4f, 4f);
+        slotGrid.constraint = GridLayoutGroup.Constraint.Flexible;
+        slotGrid.childAlignment = TextAnchor.UpperLeft;
+        slotGrid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        slotGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        var slotLE = slotContGO.AddComponent<LayoutElement>();
+        slotLE.flexibleWidth = 1f;
+        slotLE.flexibleHeight = 1f;
+        slotLE.minHeight = 64f;
+        slotContainer = slotContGO.transform;
 
-        var shipLabel = MakeTMP("ShipLabel", shipCol.transform, "Schiffs-Fracht", 13f, FontStyles.Bold, labelColor);
-        AddLE(shipLabel.gameObject, minH: 20f);
-
-        var shipContGO = new GameObject("ShipSlots", typeof(RectTransform));
-        shipContGO.transform.SetParent(shipCol.transform, false);
-        var shipContHL = shipContGO.AddComponent<GridLayoutGroup>();
-        shipContHL.cellSize = new Vector2(60f, 60f);
-        shipContHL.spacing = new Vector2(4f, 4f);
-        shipContHL.constraint = GridLayoutGroup.Constraint.Flexible;
-        shipContHL.childAlignment = TextAnchor.UpperLeft;
-        shipContHL.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        shipContHL.startAxis = GridLayoutGroup.Axis.Horizontal;
-        var shipContLE = shipContGO.AddComponent<LayoutElement>();
-        shipContLE.flexibleWidth = 1f;
-        shipContLE.flexibleHeight = 1f;
-        shipContLE.minHeight = 64f;
-        shipCargoContainer = shipContGO.transform;
-
-        // Rechte Spalte: Lagerhaus
-        var whCol = new GameObject("WarehouseColumn", typeof(RectTransform));
-        whCol.transform.SetParent(cargoRow.transform, false);
-        var whVL = whCol.AddComponent<VerticalLayoutGroup>();
-        whVL.spacing = 4f;
-        whVL.childAlignment = TextAnchor.UpperLeft;
-        whVL.childForceExpandWidth = true;
-        whVL.childForceExpandHeight = false;
-        var whColLE = whCol.AddComponent<LayoutElement>();
-        whColLE.flexibleWidth = 1f;
-
-        var whLabel = MakeTMP("WarehouseLabel", whCol.transform, "Lagerhaus", 13f, FontStyles.Bold, labelColor);
-        AddLE(whLabel.gameObject, minH: 20f);
-
-        var whContGO = new GameObject("WarehouseSlots", typeof(RectTransform));
-        whContGO.transform.SetParent(whCol.transform, false);
-        var whContHL = whContGO.AddComponent<GridLayoutGroup>();
-        whContHL.cellSize = new Vector2(60f, 60f);
-        whContHL.spacing = new Vector2(4f, 4f);
-        whContHL.constraint = GridLayoutGroup.Constraint.Flexible;
-        whContHL.childAlignment = TextAnchor.UpperLeft;
-        whContHL.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        whContHL.startAxis = GridLayoutGroup.Axis.Horizontal;
-        var whContLE = whContGO.AddComponent<LayoutElement>();
-        whContLE.flexibleWidth = 1f;
-        whContLE.flexibleHeight = 1f;
-        whContLE.minHeight = 64f;
-        warehouseContainer = whContGO.transform;
-
-        // ── Spacer ───────────────────────────────────────────────────────
+        // Spacer
         var spacer = new GameObject("Spacer", typeof(RectTransform));
         spacer.transform.SetParent(inner.transform, false);
         spacer.AddComponent<LayoutElement>().flexibleHeight = 1f;
 
         MakeDivider(inner.transform);
 
-        // ── Buttons ──────────────────────────────────────────────────────
-        var btnRow = MakeLayoutRow("BtnRow", inner.transform, 10f, 48f);
+        // Action Buttons Row
+        var btnRow = MakeLayoutRow("BtnRow", inner.transform, 8f, 44f);
 
-        btnSail = MakeButton("SailBtn", btnRow.transform, "Segeln", btnNeutral, 170f, 44f, 15f);
+        var btnSoldiers = MakeButton("SoldiersBtn", btnRow.transform, "Soldaten", btnNeutral, 140f, 40f, 13f);
+        btnSoldiers.onClick.AddListener(OnLoadSoldiersClicked);
+
+        var btnBuilders = MakeButton("BuildersBtn", btnRow.transform, "Bauarbeiter", btnNeutral, 140f, 40f, 13f);
+        btnBuilders.onClick.AddListener(OnLoadBuildersClicked);
+
+        var btnMaterials = MakeButton("MaterialsBtn", btnRow.transform, "Material", btnNeutral, 140f, 40f, 13f);
+        btnMaterials.onClick.AddListener(OnLoadMaterialsClicked);
+
+        MakeDivider(inner.transform);
+
+        // Sail + Unload buttons
+        var actionRow = MakeLayoutRow("ActionRow", inner.transform, 8f, 44f);
+
+        var btnSail = MakeButton("SailBtn", actionRow.transform, "Segeln", btnNeutral, 140f, 40f, 14f);
         btnSail.onClick.AddListener(OnSailButtonClicked);
 
-        var btnUnload = MakeButton("UnloadBtn", btnRow.transform, "Alles entladen", btnNeutral, 170f, 44f, 14f);
-        btnUnload.onClick.AddListener(OnUnloadAllClicked);
+        var btnUnload = MakeButton("UnloadBtn", actionRow.transform, "Entladen", btnNeutral, 140f, 40f, 13f);
+        btnUnload.onClick.AddListener(OnUnloadClicked);
 
-        // ── Item-Slot Prefab ─────────────────────────────────────────────
+        // Item-Slot Prefab
         itemSlotPrefab = new GameObject("ItemSlotTemplate");
         itemSlotPrefab.transform.SetParent(panelRoot.transform, false);
         itemSlotPrefab.SetActive(false);
@@ -289,17 +253,421 @@ public class ShipCargoUI : MonoBehaviour
         slotRT.sizeDelta = new Vector2(60f, 60f);
         var slotImg = itemSlotPrefab.AddComponent<Image>();
         slotImg.color = slotColor;
-        var slotOutline = itemSlotPrefab.AddComponent<Outline>();
-        slotOutline.effectColor = borderColor;
-        slotOutline.effectDistance = new Vector2(2f, -2f);
-        var slotLE = itemSlotPrefab.AddComponent<LayoutElement>();
-        slotLE.preferredWidth = 60;
-        slotLE.preferredHeight = 60;
+        var slotOutline2 = itemSlotPrefab.AddComponent<Outline>();
+        slotOutline2.effectColor = borderColor;
+        slotOutline2.effectDistance = new Vector2(2f, -2f);
+        var slotLE2 = itemSlotPrefab.AddComponent<LayoutElement>();
+        slotLE2.preferredWidth = 60;
+        slotLE2.preferredHeight = 60;
+
+        // Sub-UI (overlay)
+        BuildSubUI(canvas.transform);
 
         Debug.Log("[ShipCargoUI] Panel erstellt.");
     }
 
+    private void BuildSubUI(Transform canvasParent)
+    {
+        subUIRoot = MakeImage("SubUI_Overlay", canvasParent, new Color(0, 0, 0, 0.5f));
+        var subRT = subUIRoot.GetComponent<RectTransform>();
+        subRT.anchorMin = Vector2.zero; subRT.anchorMax = Vector2.one;
+        subRT.sizeDelta = Vector2.zero;
+        subUIRoot.SetActive(false);
+
+        var subFrame = MakeImage("SubUI_Frame", subUIRoot.transform, bgColor);
+        var frameRT = subFrame.GetComponent<RectTransform>();
+        frameRT.anchorMin = new Vector2(0.5f, 0.5f);
+        frameRT.anchorMax = new Vector2(0.5f, 0.5f);
+        frameRT.pivot = new Vector2(0.5f, 0.5f);
+        frameRT.sizeDelta = new Vector2(400f, 300f);
+
+        var frameVL = subFrame.AddComponent<VerticalLayoutGroup>();
+        frameVL.padding = new RectOffset(16, 16, 16, 16);
+        frameVL.spacing = 10f;
+        frameVL.childAlignment = TextAnchor.UpperCenter;
+        frameVL.childForceExpandWidth = true;
+
+        var headerRow = MakeLayoutRow("SubHeader", subFrame.transform, 0f, 36f);
+        subUITitle = MakeTMP("SubTitle", headerRow.transform, "", 18f, FontStyles.Bold, valueColor, TextAlignmentOptions.Left);
+        AddLE(subUITitle.gameObject, flexW: 1f);
+        subUIClose = MakeButton("SubClose", headerRow.transform, "✕", new Color(0.65f, 0.10f, 0.08f, 1f), 30f, 30f, 14f);
+        subUIClose.onClick.AddListener(() => subUIRoot.SetActive(false));
+
+        MakeDivider(subFrame.transform);
+
+        subUIContent = new GameObject("SubContent", typeof(RectTransform)).transform;
+        subUIContent.SetParent(subFrame.transform, false);
+        var contentVL = subUIContent.gameObject.AddComponent<VerticalLayoutGroup>();
+        contentVL.spacing = 6f;
+        contentVL.childAlignment = TextAnchor.UpperCenter;
+        contentVL.childForceExpandWidth = true;
+        contentVL.childForceExpandHeight = false;
+        AddLE(subUIContent.gameObject, flexW: 1f, flexH: 1f);
+    }
+
+    // ── Slots ────────────────────────────────────────────────────────────
+
+    private void RefreshSlots()
+    {
+        foreach (var s in slotObjects) Destroy(s);
+        slotObjects.Clear();
+
+        if (currentShip == null || slotContainer == null) return;
+
+        foreach (var slot in currentShip.slots)
+        {
+            CreateSlotUI(slot);
+        }
+    }
+
+    private void CreateSlotUI(ShipSlot slot)
+    {
+        if (itemSlotPrefab == null) return;
+
+        var obj = Instantiate(itemSlotPrefab, slotContainer);
+        obj.SetActive(true);
+
+        if (slot.IsEmpty)
+        {
+            obj.name = "EmptySlot";
+            obj.GetComponent<Image>().color = new Color(0.15f, 0.1f, 0.05f, 0.6f);
+            var dash = MakeTMP("Dash", obj.transform, "-", 18f, FontStyles.Normal, new Color(0.5f, 0.5f, 0.5f, 0.5f), TextAlignmentOptions.Center);
+            var dRT = dash.GetComponent<RectTransform>();
+            dRT.anchorMin = Vector2.zero; dRT.anchorMax = Vector2.one;
+            dRT.sizeDelta = Vector2.zero;
+        }
+        else
+        {
+            string label = "";
+            Color labelColor = valueColor;
+            Sprite iconSprite = null;
+
+            if (slot.content == ShipSlot.SlotContent.Material)
+            {
+                obj.name = $"Mat_{slot.resourceId}";
+                label = slot.amount.ToString();
+                iconSprite = LoadOverlaySprite(slot.resourceId);
+            }
+            else if (slot.content == ShipSlot.SlotContent.Builder)
+            {
+                obj.name = "Builder";
+                label = "👷";
+                labelColor = Color.yellow;
+                iconSprite = LoadBuilderSprite();
+            }
+            else if (slot.content == ShipSlot.SlotContent.Soldier)
+            {
+                obj.name = $"Soldier_{slot.soldierType}";
+                label = slot.soldierType.ToString().Substring(0, 2);
+                labelColor = Color.red;
+                iconSprite = LoadSoldierSprite(slot.soldierType);
+            }
+
+            if (iconSprite != null)
+            {
+                var iconGO = new GameObject("SlotIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                iconGO.transform.SetParent(obj.transform, false);
+                var iconImg = iconGO.GetComponent<Image>();
+                iconImg.sprite = iconSprite;
+                iconImg.preserveAspect = true;
+                var iRT = iconGO.GetComponent<RectTransform>();
+                iRT.anchorMin = new Vector2(0f, 0.3f);
+                iRT.anchorMax = new Vector2(1f, 1f);
+                iRT.offsetMin = Vector2.zero;
+                iRT.offsetMax = Vector2.zero;
+            }
+
+            var txt = MakeTMP("Content", obj.transform, label, 14f, FontStyles.Bold, labelColor, TextAlignmentOptions.Center);
+            var tRT = txt.GetComponent<RectTransform>();
+            tRT.anchorMin = Vector2.zero; tRT.anchorMax = Vector2.one;
+            tRT.sizeDelta = Vector2.zero;
+
+            var btn = obj.AddComponent<Button>();
+            btn.targetGraphic = obj.GetComponent<Image>();
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(0.5f, 0.8f, 1f, 1f);
+            btn.colors = colors;
+        }
+
+        slotObjects.Add(obj);
+    }
+
+    // ── Sub-UI: Soldaten ─────────────────────────────────────────────────
+
+    private void OnLoadSoldiersClicked()
+    {
+        if (currentShip == null || !currentShip.HasFreeSlot()) return;
+        ShowSubUI("Soldaten einladen", (content) =>
+        {
+            foreach (SoldierType type in System.Enum.GetValues(typeof(SoldierType)))
+            {
+                var row = MakeLayoutRow($"Row_{type}", content, 6f, 36f);
+                var lbl = MakeTMP("Label", row.transform, type.ToString(), 14f, FontStyles.Normal, valueColor, TextAlignmentOptions.Left);
+                AddLE(lbl.gameObject, flexW: 1f);
+                var btn = MakeButton("LoadBtn", row.transform, "Laden", btnNeutral, 100f, 32f, 12f);
+                var capturedType = type;
+                btn.onClick.AddListener(() =>
+                {
+                    if (currentShip != null && currentShip.TryLoadSoldier(capturedType))
+                    {
+                        RefreshSlots();
+                        UpdateCapacityDisplay();
+                        subUIRoot.SetActive(false);
+                    }
+                });
+            }
+        });
+    }
+
+    // ── Sub-UI: Bauarbeiter ──────────────────────────────────────────────
+
+    private void OnLoadBuildersClicked()
+    {
+        if (currentShip == null || !currentShip.HasFreeSlot()) return;
+        ShowSubUI("Bauarbeiter einladen", (content) =>
+        {
+            var lbl = MakeTMP("Info", content, "Baumeister ins Schiff setzen?", 14f, FontStyles.Normal, valueColor, TextAlignmentOptions.Center);
+            AddLE(lbl.gameObject, minH: 40f);
+            var btn = MakeButton("LoadBtn", content, "1 Bauarbeiter einladen", btnNeutral, 250f, 36f, 13f);
+            btn.onClick.AddListener(() =>
+            {
+                if (currentShip != null && currentShip.TryLoadBuilder())
+                {
+                    RefreshSlots();
+                    UpdateCapacityDisplay();
+                    subUIRoot.SetActive(false);
+                }
+            });
+        });
+    }
+
+    // ── Sub-UI: Material ─────────────────────────────────────────────────
+
+    private void OnLoadMaterialsClicked()
+    {
+        if (currentShip == null || !currentShip.HasFreeSlot()) return;
+        ShowSubUI("Material einladen", (content) =>
+        {
+            string[] resources = { "holz", "stein", "eisen", "gold", "weizen", "fruechte", "wüstenfrucht", "fleisch" };
+            foreach (var res in resources)
+            {
+                var row = MakeLayoutRow($"Row_{res}", content, 4f, 34f);
+
+                Sprite resIcon = LoadOverlaySprite(res);
+                if (resIcon != null)
+                {
+                    var iconGO = new GameObject("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                    iconGO.transform.SetParent(row.transform, false);
+                    var iconImg = iconGO.GetComponent<Image>();
+                    iconImg.sprite = resIcon;
+                    iconImg.preserveAspect = true;
+                    var iconLE = iconGO.AddComponent<LayoutElement>();
+                    iconLE.preferredWidth = 24f;
+                    iconLE.preferredHeight = 24f;
+                }
+
+                var lbl = MakeTMP("Label", row.transform, res, 13f, FontStyles.Normal, valueColor, TextAlignmentOptions.Left);
+                AddLE(lbl.gameObject, flexW: 1f);
+
+                int playerAmount = Player_UI.Instance != null ? Player_UI.Instance.GetResource(res) : 0;
+                var amt = MakeTMP("Amt", row.transform, $"({playerAmount})", 12f, FontStyles.Normal, labelColor, TextAlignmentOptions.Right);
+                AddLE(amt.gameObject, minW: 40f);
+
+                var input = MakeInputField("Amount", row.transform, "1", 50f, 28f);
+
+                var btn = MakeButton("LoadBtn", row.transform, "Laden", btnNeutral, 60f, 28f, 11f);
+                var capturedRes = res;
+                btn.onClick.AddListener(() =>
+                {
+                    int amount = 1;
+                    if (!string.IsNullOrEmpty(input.text))
+                        int.TryParse(input.text, out amount);
+                    if (amount < 1) amount = 1;
+
+                    if (currentShip != null && ResourceManager.Instance != null)
+                    {
+                        int freeSlots = currentShip.GetFreeSlotCount();
+                        int toLoad = Mathf.Min(amount, freeSlots);
+
+                        if (ResourceManager.Instance.HasResource(capturedRes, toLoad) && toLoad > 0)
+                        {
+                            ResourceManager.Instance.SpendResource(capturedRes, toLoad);
+                            currentShip.TryLoadMaterial(capturedRes, toLoad);
+                            RefreshSlots();
+                            UpdateCapacityDisplay();
+                            subUIRoot.SetActive(false);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    // ── Sub-UI Helper ────────────────────────────────────────────────────
+
+    private void ShowSubUI(string title, System.Action<Transform> buildContent)
+    {
+        if (subUIRoot == null) return;
+        subUITitle.text = title;
+
+        // Clear old content
+        foreach (Transform child in subUIContent)
+            Destroy(child.gameObject);
+
+        buildContent(subUIContent);
+        subUIRoot.SetActive(true);
+    }
+
+    // ── Button Handler ───────────────────────────────────────────────────
+
+    private void OnSailButtonClicked()
+    {
+        if (currentShip == null) return;
+        if (!currentShip.HasCrew())
+        {
+            NotificationManager.Instance?.Notify("ship_no_crew",
+                "Ein Schiff braucht einen Dorfbewohner!", 5f);
+            return;
+        }
+        HideShipUI();
+
+        ShipSailingMode sailing = ShipSailingMode.Instance;
+        if (sailing == null)
+        {
+            GameObject go = new GameObject("ShipSailingMode");
+            sailing = go.AddComponent<ShipSailingMode>();
+        }
+        sailing.EnableSailingMode(currentShip);
+    }
+
+    private void OnUnloadClicked()
+    {
+        if (currentShip == null) return;
+        currentShip.UnloadAllToIsland();
+        RefreshSlots();
+        UpdateCapacityDisplay();
+    }
+
+    // ── Updates ──────────────────────────────────────────────────────────
+
+    private void UpdateCrewStatus()
+    {
+        if (currentShip == null || txtCrew == null) return;
+        txtCrew.text = currentShip.HasCrew()
+            ? "<color=#88FF88>Besatzung: ✓</color>"
+            : "<color=#FF6644>Besatzung: ✗ (benötigt Dorfbewohner!)</color>";
+    }
+
+    private void UpdateCapacityDisplay()
+    {
+        if (currentShip == null || txtCapacity == null) return;
+        int used = currentShip.GetUsedSlotCount();
+        int total = currentShip.GetSlotCount();
+        txtCapacity.text = $"Slots: {used}/{total}";
+    }
+
     // ── Helper (identisch zu BuildingInfoPanel) ──────────────────────────
+
+    private static string GetOverlayName(string resourceId)
+    {
+        switch (resourceId)
+        {
+            case "holz": return "Wood_Overlay";
+            case "stein": return "Stone_Overlay";
+            case "eisen": return "Iron_Overlay";
+            case "gold": return "Gold_Overlay";
+            case "weizen": return "Wheat_Overlay";
+            case "fruechte": case "wüstenfrucht": return "Fruit_Overlay";
+            case "fleisch": return "Meat_Overlay";
+            default: return null;
+        }
+    }
+
+    private TMP_InputField MakeInputField(string name, Transform parent, string placeholder, float w, float h)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        go.transform.SetParent(parent, false);
+        go.GetComponent<Image>().color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+        var le = go.AddComponent<LayoutElement>();
+        le.preferredWidth = w;
+        le.preferredHeight = h;
+
+        var inputField = go.AddComponent<TMP_InputField>();
+        var rt = go.GetComponent<RectTransform>();
+
+        var viewport = new GameObject("Viewport", typeof(RectTransform));
+        viewport.transform.SetParent(rt, false);
+        var vpRT = viewport.GetComponent<RectTransform>();
+        vpRT.anchorMin = Vector2.zero;
+        vpRT.anchorMax = Vector2.one;
+        vpRT.offsetMin = new Vector2(6, 4);
+        vpRT.offsetMax = new Vector2(-6, -4);
+
+        var textGO = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        textGO.transform.SetParent(vpRT, false);
+        var textRT = textGO.GetComponent<RectTransform>();
+        textRT.anchorMin = Vector2.zero; textRT.anchorMax = Vector2.one;
+        textRT.sizeDelta = Vector2.zero;
+        var tmp = textGO.GetComponent<TextMeshProUGUI>();
+        tmp.text = "";
+        tmp.fontSize = 13f;
+        tmp.color = valueColor;
+        tmp.alignment = TextAlignmentOptions.Left;
+
+        var placeholderGO = new GameObject("Placeholder", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        placeholderGO.transform.SetParent(vpRT, false);
+        var pRT = placeholderGO.GetComponent<RectTransform>();
+        pRT.anchorMin = Vector2.zero; pRT.anchorMax = Vector2.one;
+        pRT.sizeDelta = Vector2.zero;
+        var pTMP = placeholderGO.GetComponent<TextMeshProUGUI>();
+        pTMP.text = placeholder;
+        pTMP.fontSize = 12f;
+        pTMP.color = new Color(0.68f, 0.68f, 0.68f, 1f);
+        pTMP.alignment = TextAlignmentOptions.Left;
+
+        inputField.textViewport = vpRT;
+        inputField.textComponent = tmp;
+        inputField.placeholder = pTMP;
+        inputField.characterLimit = 4;
+        inputField.contentType = TMP_InputField.ContentType.IntegerNumber;
+
+        return inputField;
+    }
+
+    private static Sprite LoadOverlaySprite(string resourceId)
+    {
+        string name = GetOverlayName(resourceId);
+        if (name == null) return null;
+        Texture2D tex = Resources.Load<Texture2D>(name);
+        if (tex != null)
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return null;
+    }
+
+    private static Sprite LoadBuilderSprite()
+    {
+        Texture2D tex = Resources.Load<Texture2D>("Textures/dorfbewohner");
+        if (tex != null)
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return null;
+    }
+
+    private static Sprite LoadSoldierSprite(SoldierType type)
+    {
+        string path = null;
+        switch (type)
+        {
+            case SoldierType.Spear: path = "Textures/speersoldat"; break;
+            case SoldierType.Shield: path = "Textures/schildsoldat"; break;
+            case SoldierType.Sword: path = "Textures/schwertkämpfer"; break;
+            case SoldierType.Bow: path = "Textures/bogensoldat"; break;
+        }
+        if (path == null) return null;
+        Texture2D tex = Resources.Load<Texture2D>(path);
+        if (tex != null)
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return null;
+    }
 
     private static GameObject MakeImage(string name, Transform parent, Color color)
     {
@@ -327,29 +695,22 @@ public class ShipCargoUI : MonoBehaviour
     {
         var go = MakeImage(name, parent, bg);
         var btn = go.AddComponent<Button>();
-
         var cols = btn.colors;
-        cols.highlightedColor = new Color(
-            Mathf.Min(bg.r * 1.3f, 1f), Mathf.Min(bg.g * 1.3f, 1f), Mathf.Min(bg.b * 1.3f, 1f));
+        cols.highlightedColor = new Color(Mathf.Min(bg.r * 1.3f, 1f), Mathf.Min(bg.g * 1.3f, 1f), Mathf.Min(bg.b * 1.3f, 1f));
         cols.pressedColor = new Color(bg.r * 0.7f, bg.g * 0.7f, bg.b * 0.7f);
         btn.colors = cols;
         btn.targetGraphic = go.GetComponent<Image>();
-
         var outline = go.AddComponent<Outline>();
         outline.effectColor = borderColor;
         outline.effectDistance = new Vector2(2f, -2f);
-
-        var txt = MakeTMP("Label", go.transform, label, fontSize, FontStyles.Bold, valueColor,
-            TextAlignmentOptions.Center);
+        var txt = MakeTMP("Label", go.transform, label, fontSize, FontStyles.Bold, valueColor, TextAlignmentOptions.Center);
         var txtRT = txt.GetComponent<RectTransform>();
         txtRT.anchorMin = Vector2.zero; txtRT.anchorMax = Vector2.one;
         txtRT.sizeDelta = Vector2.zero;
         txt.raycastTarget = false;
-
         var le = go.AddComponent<LayoutElement>();
         le.preferredWidth = w;
         le.preferredHeight = h;
-
         return btn;
     }
 
@@ -382,258 +743,5 @@ public class ShipCargoUI : MonoBehaviour
         if (minH >= 0) le.minHeight = minH;
         if (flexW >= 0) le.flexibleWidth = flexW;
         if (flexH >= 0) le.flexibleHeight = flexH;
-    }
-
-    // ── Cargo-Slots ──────────────────────────────────────────────────────
-
-    private void UpdateAllSlots()
-    {
-        ClearSlots();
-        PopulateShipSlots();
-        PopulateWarehouseSlots();
-    }
-
-    private void ClearSlots()
-    {
-        foreach (var s in shipItemSlots) Destroy(s);
-        shipItemSlots.Clear();
-        foreach (var s in warehouseItemSlots) Destroy(s);
-        warehouseItemSlots.Clear();
-    }
-
-    private void PopulateShipSlots()
-    {
-        if (currentShip == null || shipCargoContainer == null)
-        {
-            Debug.LogWarning($"[ShipCargoUI] PopulateShipSlots skipped: ship={(currentShip != null)} container={(shipCargoContainer != null)}");
-            return;
-        }
-        var cargo = currentShip.GetAllCargo();
-        Debug.Log($"[ShipCargoUI] Ship cargo raw: {cargo.Count} items");
-        var grouped = new Dictionary<string, int>();
-        foreach (var item in cargo)
-        {
-            if (!grouped.ContainsKey(item)) grouped[item] = 0;
-            grouped[item]++;
-        }
-        Debug.Log($"[ShipCargoUI] Ship grouped: {grouped.Count} types");
-        foreach (var kvp in grouped)
-            CreateItemSlot(shipCargoContainer, kvp.Key, kvp.Value, true);
-
-        int empty = currentShip.GetFreeCargoSpace();
-        Debug.Log($"[ShipCargoUI] Empty ship slots: {empty}");
-        for (int i = 0; i < Mathf.Min(empty, 8); i++)
-            CreateEmptySlot(shipCargoContainer);
-    }
-
-    private void PopulateWarehouseSlots()
-    {
-        if (currentWarehouse == null || warehouseContainer == null)
-        {
-            Debug.LogWarning($"[ShipCargoUI] PopulateWarehouseSlots skipped: warehouse={(currentWarehouse != null)} container={(warehouseContainer != null)}");
-            return;
-        }
-
-        var resources = currentWarehouse.GetAllResources();
-        Debug.Log($"[ShipCargoUI] Warehouse resources: {resources.Count} types");
-        foreach (var kvp in resources)
-            CreateItemSlot(warehouseContainer, kvp.Key, kvp.Value, false);
-
-        int empty = currentWarehouse.GetFreeStorageSpace();
-        Debug.Log($"[ShipCargoUI] Warehouse empty slots: {empty}");
-        for (int i = 0; i < Mathf.Min(empty, 8); i++)
-            CreateEmptySlot(warehouseContainer);
-    }
-
-    private void CreateItemSlot(Transform parent, string resourceId, int amount, bool fromShip)
-    {
-        if (itemSlotPrefab == null)
-        {
-            Debug.LogWarning("[ShipCargoUI] itemSlotPrefab is NULL — skipping slot creation");
-            return;
-        }
-
-        var slotObj = Instantiate(itemSlotPrefab, parent);
-        slotObj.SetActive(true);
-        slotObj.name = $"Slot_{resourceId}";
-
-        // Icon
-        var iconGO = new GameObject("Icon", typeof(RectTransform));
-        iconGO.transform.SetParent(slotObj.transform, false);
-        var iconImg = iconGO.AddComponent<Image>();
-        var iconRT = iconGO.GetComponent<RectTransform>();
-        iconRT.anchorMin = Vector2.zero; iconRT.anchorMax = Vector2.one;
-        iconRT.offsetMin = new Vector2(4, 4); iconRT.offsetMax = new Vector2(-4, -4);
-
-        Sprite icon = Resources.Load<Sprite>($"{char.ToUpper(resourceId[0]) + resourceId.Substring(1)}_Icon");
-        if (icon == null) icon = Resources.Load<Sprite>($"{resourceId}_Icon");
-        if (icon != null) iconImg.sprite = icon;
-
-        // Amount (unten rechts auf dem Slot)
-        var amtGO = new GameObject("Amount", typeof(RectTransform));
-        amtGO.transform.SetParent(slotObj.transform, false);
-        var amtText = amtGO.AddComponent<TextMeshProUGUI>();
-        amtText.text = amount.ToString();
-        amtText.fontSize = 13f;
-        amtText.fontStyle = FontStyles.Bold;
-        amtText.color = valueColor;
-        amtText.alignment = TextAlignmentOptions.BottomRight;
-        var amtRT = amtGO.GetComponent<RectTransform>();
-        amtRT.anchorMin = Vector2.zero; amtRT.anchorMax = Vector2.one;
-        amtRT.offsetMin = new Vector2(2, 2); amtRT.offsetMax = new Vector2(-4, -4);
-
-        // CargoItemSlot component
-        var cargoSlot = slotObj.AddComponent<CargoItemSlot>();
-        cargoSlot.Initialize(resourceId, amount, fromShip);
-
-        // Button for click
-        var btn = slotObj.AddComponent<Button>();
-        var colors = btn.colors;
-        colors.highlightedColor = highlightColor;
-        colors.pressedColor = new Color(0.3f, 0.2f, 0.1f);
-        btn.colors = colors;
-        btn.targetGraphic = slotObj.GetComponent<Image>();
-        btn.onClick.AddListener(() => OnSlotClicked(resourceId, fromShip));
-
-        if (fromShip) shipItemSlots.Add(slotObj);
-        else warehouseItemSlots.Add(slotObj);
-    }
-
-    private void CreateEmptySlot(Transform parent)
-    {
-        if (itemSlotPrefab == null) return;
-
-        var slotObj = Instantiate(itemSlotPrefab, parent);
-        slotObj.SetActive(true);
-        slotObj.name = "EmptySlot";
-        slotObj.GetComponent<Image>().color = new Color(0.15f, 0.1f, 0.05f, 0.6f);
-
-        var amtGO = new GameObject("Dash", typeof(RectTransform));
-        amtGO.transform.SetParent(slotObj.transform, false);
-        var amtText = amtGO.AddComponent<TextMeshProUGUI>();
-        amtText.text = "-";
-        amtText.fontSize = 18f;
-        amtText.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-        amtText.alignment = TextAlignmentOptions.Center;
-        var amtRT = amtGO.GetComponent<RectTransform>();
-        amtRT.anchorMin = Vector2.zero; amtRT.anchorMax = Vector2.one;
-        amtRT.sizeDelta = Vector2.zero;
-
-        if (parent == shipCargoContainer) shipItemSlots.Add(slotObj);
-        else warehouseItemSlots.Add(slotObj);
-    }
-
-    private void OnSlotClicked(string resourceId, bool fromShip)
-    {
-        if (currentShip == null) return;
-
-        if (fromShip)
-        {
-            if (currentWarehouse != null && currentWarehouse.CanStoreMore())
-            {
-                currentShip.RemoveCargo(resourceId);
-                currentWarehouse.ReceiveResource(resourceId, 1);
-            }
-        }
-        else
-        {
-            if (currentWarehouse != null && currentWarehouse.HasResource(resourceId, 1))
-            {
-                if (currentShip.CanAddCargo())
-                {
-                    currentWarehouse.SpendResource(resourceId, 1);
-                    currentShip.AddCargo(resourceId);
-                }
-            }
-        }
-
-        UpdateAllSlots();
-        UpdateCapacityDisplay();
-    }
-
-    // ── Updates ──────────────────────────────────────────────────────────
-
-    private void UpdateCrewStatus()
-    {
-        if (currentShip == null || txtCrew == null) return;
-        bool hasCrew = currentShip.HasCrew();
-        txtCrew.text = hasCrew
-            ? "<color=#88FF88>Besatzung: ✓</color>"
-            : "<color=#FF6644>Besatzung: ✗ (benötigt Dorfbewohner!)</color>";
-
-        if (btnSail != null) btnSail.interactable = hasCrew;
-    }
-
-    private void UpdateCapacityDisplay()
-    {
-        if (currentShip == null || txtCapacity == null) return;
-        int current = currentShip.GetCargoCount();
-        int capacity = currentShip.GetCargoCapacity();
-        txtCapacity.text = $"Ladung: {current}/{capacity}";
-    }
-
-    // ── Buttons ──────────────────────────────────────────────────────────
-
-    private void OnSailButtonClicked()
-    {
-        if (currentShip == null) return;
-        if (!currentShip.HasCrew())
-        {
-            NotificationManager.Instance?.Notify("ship_no_crew",
-                "Ein Schiff braucht einen Dorfbewohner!", 5f);
-            return;
-        }
-        HideShipUI();
-
-        ShipSailingMode sailing = ShipSailingMode.Instance;
-        if (sailing == null)
-        {
-            GameObject go = new GameObject("ShipSailingMode");
-            sailing = go.AddComponent<ShipSailingMode>();
-        }
-        sailing.EnableSailingMode(currentShip);
-    }
-
-    private void OnUnloadAllClicked()
-    {
-        if (currentShip == null || currentWarehouse == null) return;
-        currentShip.UnloadToWarehouse(currentWarehouse);
-        UpdateAllSlots();
-        UpdateCapacityDisplay();
-    }
-
-    // ── Utility ──────────────────────────────────────────────────────────
-
-    private Warehouse FindNearestWarehouse(Vector3 position)
-    {
-        Warehouse[] whs = FindObjectsOfType<Warehouse>();
-        Warehouse nearest = null;
-        float minDist = float.MaxValue;
-        foreach (var wh in whs)
-        {
-            if (wh.isLocal)
-            {
-                float dist = Vector3.Distance(position, wh.transform.position);
-                if (dist < minDist) { minDist = dist; nearest = wh; }
-            }
-        }
-        return nearest;
-    }
-}
-
-/// <summary>
-/// Einzelner Cargo-Slot (Datenhalter für resourceId, amount, fromShip)
-/// </summary>
-public class CargoItemSlot : MonoBehaviour
-{
-    public string resourceId { get; private set; }
-    public int amount { get; private set; }
-    public bool fromShip { get; private set; }
-
-    public void Initialize(string resourceId, int amount, bool fromShip)
-    {
-        this.resourceId = resourceId;
-        this.amount = amount;
-        this.fromShip = fromShip;
     }
 }

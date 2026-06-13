@@ -74,6 +74,7 @@ public class Soldier : MonoBehaviour
     private bool hasMoveOrder;
     private bool attackMoveEnabled;
     private Soldier attackTarget;
+    private BuildingInstance attackBuildingTarget;
 
     private bool hasPatrolOrder;
     private Vector2 patrolPointA;
@@ -153,26 +154,27 @@ public class Soldier : MonoBehaviour
             attackTarget = FindPreferredEnemy();
         }
 
-        // Check for enemy warehouses in range
-        Warehouse enemyWarehouse = FindEnemyWarehouseInRange(attackRange);
-
-        if (enemyWarehouse != null)
+        // Check for enemy buildings in range
+        if (attackBuildingTarget == null || !attackBuildingTarget.gameObject.activeInHierarchy)
         {
-            float distance = Vector2.Distance(transform.position, enemyWarehouse.transform.position);
+            attackBuildingTarget = FindEnemyBuildingInRange(attackRange);
+        }
+
+        if (attackBuildingTarget != null)
+        {
+            float distance = Vector2.Distance(transform.position, attackBuildingTarget.transform.position);
             if (distance <= attackRange)
             {
                 if (Time.time >= lastAttackTime + attackCooldown)
                 {
-                    AttackWarehouse(enemyWarehouse);
+                    AttackBuilding(attackBuildingTarget);
                     lastAttackTime = Time.time;
                 }
-
                 return;
             }
             else if (distance <= attackRange + AggroPadding)
             {
-                // Move towards warehouse
-                MoveTowards(enemyWarehouse.transform.position);
+                MoveTowards(attackBuildingTarget.transform.position);
                 return;
             }
         }
@@ -193,7 +195,6 @@ public class Soldier : MonoBehaviour
                     Attack(attackTarget);
                     lastAttackTime = Time.time;
                 }
-
                 return;
             }
 
@@ -205,6 +206,7 @@ public class Soldier : MonoBehaviour
         }
 
         attackTarget = null;
+        attackBuildingTarget = null;
         hasReportedEnemyContact = false;
         FollowOrders();
     }
@@ -230,6 +232,7 @@ public class Soldier : MonoBehaviour
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = false;
         attackTarget = null;
+        attackBuildingTarget = null;
         SetPathTo(destination);
     }
 
@@ -238,6 +241,8 @@ public class Soldier : MonoBehaviour
         hasPatrolOrder = false;
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = true;
+        attackTarget = null;
+        attackBuildingTarget = null;
         SetPathTo(destination);
     }
 
@@ -478,14 +483,20 @@ public class Soldier : MonoBehaviour
 
     private void CleanupTarget()
     {
-        if (attackTarget == null)
+        if (attackTarget != null)
         {
-            return;
+            if (!attackTarget.gameObject.activeInHierarchy || attackTarget.currentHealth <= 0f)
+            {
+                attackTarget = null;
+            }
         }
 
-        if (!attackTarget.gameObject.activeInHierarchy || attackTarget.currentHealth <= 0f)
+        if (attackBuildingTarget != null)
         {
-            attackTarget = null;
+            if (!attackBuildingTarget.gameObject.activeInHierarchy || attackBuildingTarget.currentHP <= 0)
+            {
+                attackBuildingTarget = null;
+            }
         }
     }
 
@@ -511,68 +522,33 @@ public class Soldier : MonoBehaviour
             }
         }
 
-        // Also check for enemy warehouses to attack
-        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
-        foreach (var warehouse in warehouses)
-        {
-            if (warehouse == null) continue;
-            
-            // Check if warehouse belongs to enemy
-            bool isEnemyWarehouse = false;
-            if (team == Team.Player && !warehouse.isLocal)
-            {
-                isEnemyWarehouse = true;
-            }
-            else if (team == Team.Enemy && warehouse.isLocal)
-            {
-                isEnemyWarehouse = true;
-            }
-            
-            if (!isEnemyWarehouse) continue;
-            
-            float distance = Vector2.Distance(transform.position, warehouse.transform.position);
-            if (distance <= searchRange && distance < closestDistance)
-            {
-                closestDistance = distance;
-                // Don't set closest as soldier, but attack the warehouse instead
-                // We'll handle warehouse attacking in Attack method
-            }
-        }
-
         return closest;
     }
 
-    /// <summary>
-    /// Check if there are enemy warehouses in attack range.
-    /// </summary>
-    private Warehouse FindEnemyWarehouseInRange(float range)
+    /// <summary>Finde feindliche Gebäude in Reichweite.</summary>
+    private BuildingInstance FindEnemyBuildingInRange(float range)
     {
-        Warehouse[] warehouses = Object.FindObjectsOfType<Warehouse>();
-        Warehouse closest = null;
+        BuildingInstance[] buildings = FindObjectsOfType<BuildingInstance>();
+        BuildingInstance closest = null;
         float closestDist = float.MaxValue;
 
-        foreach (var warehouse in warehouses)
+        foreach (var b in buildings)
         {
-            if (warehouse == null) continue;
-            
-            // Check if warehouse belongs to enemy
-            bool isEnemyWarehouse = false;
-            if (team == Team.Player && !warehouse.isLocal)
-            {
-                isEnemyWarehouse = true;
-            }
-            else if (team == Team.Enemy && warehouse.isLocal)
-            {
-                isEnemyWarehouse = true;
-            }
-            
-            if (!isEnemyWarehouse) continue;
-            
-            float distance = Vector2.Distance(transform.position, warehouse.transform.position);
+            if (b == null || !b.gameObject.activeInHierarchy) continue;
+
+            bool isEnemy = false;
+            if (team == Team.Player && !b.isLocal)
+                isEnemy = true;
+            else if (team == Team.Enemy && b.isLocal)
+                isEnemy = true;
+
+            if (!isEnemy) continue;
+
+            float distance = Vector2.Distance(transform.position, b.transform.position);
             if (distance <= range && distance < closestDist)
             {
                 closestDist = distance;
-                closest = warehouse;
+                closest = b;
             }
         }
 
@@ -656,23 +632,19 @@ public class Soldier : MonoBehaviour
         enemySoldier.TakeDamage(damage);
     }
 
-    private void AttackWarehouse(Warehouse warehouse)
+    private void AttackBuilding(BuildingInstance building)
     {
-        if (warehouse == null) return;
+        if (building == null) return;
 
-        Debug.Log($"[Soldier] Attacking warehouse! Damage: {damage}");
-        
-        // Calculate damage to warehouse
+        Debug.Log($"[Soldier] Attacking building {building.name}! Damage: {damage}");
+
         int damageToDeal = Mathf.RoundToInt(damage);
-        int attackerId = team == Team.Enemy ? 0 : (PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : 0);
-        
-        warehouse.TakeDamage(damageToDeal, attackerId);
+        building.TakeDamage(damageToDeal);
 
-        // Visual feedback
         if (team == Team.Player)
         {
-            NotificationManager.Instance?.Notify("warehouse_under_attack", 
-                "Dein Lagerhaus wird angegriffen!", 3f);
+            NotificationManager.Instance?.Notify("building_under_attack",
+                "Dein Gebäude wird angegriffen!", 3f);
         }
     }
 

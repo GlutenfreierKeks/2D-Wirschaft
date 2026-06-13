@@ -44,6 +44,14 @@ public class BuildingData : ScriptableObject
     [Header("Ship Settings")]
     public ShipData shipData;
 
+    [Header("Health")]
+    [Tooltip("Start-Lebenspunkte (Standard 100, Lagerhaus 2000)")]
+    public int maxHP = 100;
+
+    [Header("Warehouse Type")]
+    [Tooltip("Wenn aktiv, ist dies ein Lagerhaus-Typ. Nur auf fremden Inseln baubar. Ermöglicht weiteres Bauen auf dieser Insel.")]
+    public bool isWarehouseType = false;
+
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
     

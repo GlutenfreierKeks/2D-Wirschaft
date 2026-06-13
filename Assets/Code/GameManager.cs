@@ -22,10 +22,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private RectTransform chatPanelRoot;
     private GameObject chatLogArea;
     private GameObject chatInputArea;
-    private TextMeshProUGUI chatMinimizeButtonText;
-    private bool chatIsMinimized;
-    private readonly Vector2 chatExpandedAnchorMax = new Vector2(0.36f, 0.24f);
-    private const float chatMinimizedAnchorMaxY = 0.06f;
+    private GameObject chatToggleIcon;
 
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI gameStatusText;
@@ -55,6 +52,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             if (gameStatusText != null) gameStatusText.text = "Game Started! (Offline Mode)";
             Debug.LogWarning("GameManager loaded, but client is not in a Photon room.");
         }
+
+        SpawnInitialSoldiers();
     }
 
     private void EnsureRequiredManagers()
@@ -181,7 +180,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         RectTransform root = CreateRect("GameChatPanel", canvas.transform);
         chatPanelRoot = root;
         root.anchorMin = new Vector2(0.04f, 0.02f);
-        root.anchorMax = chatExpandedAnchorMax;
+        root.anchorMax = new Vector2(0.36f, 0.24f);
         root.pivot = new Vector2(0f, 0f);
         root.anchoredPosition = Vector2.zero;
         root.offsetMin = Vector2.zero;
@@ -263,7 +262,10 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         buttonText.alignment = TextAlignmentOptions.Center;
 
         AddChatMessage("Spiel-Chat bereit. Wenn du den Gast siehst, bist du in derselben Lobby.");
-        CreateChatMinimizeButton(root);
+        CreateChatCloseButton(root);
+
+        chatPanelRoot.gameObject.SetActive(false);
+        CreateChatToggleIcon(canvas.transform);
     }
 
     private void OnChatInputEndEdit(string value)
@@ -316,60 +318,91 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         }
     }
 
-    private void CreateChatMinimizeButton(RectTransform parent)
+    private void CreateChatCloseButton(RectTransform parent)
     {
-        RectTransform btnRect = CreateRect("GameChatMinimizeButton", parent);
+        RectTransform btnRect = CreateRect("GameChatCloseButton", parent);
         btnRect.anchorMin = new Vector2(1f, 1f);
         btnRect.anchorMax = new Vector2(1f, 1f);
         btnRect.pivot = new Vector2(1f, 1f);
         btnRect.anchoredPosition = new Vector2(-10f, -8f);
-        btnRect.sizeDelta = new Vector2(32f, 28f);
+        btnRect.sizeDelta = new Vector2(28f, 28f);
 
         Image btnImage = btnRect.gameObject.AddComponent<Image>();
         btnImage.color = new Color(0.16f, 0.20f, 0.26f, 0.95f);
         btnImage.raycastTarget = true;
 
-        Button minimizeButton = btnRect.gameObject.AddComponent<Button>();
-        minimizeButton.targetGraphic = btnImage;
-        minimizeButton.onClick.AddListener(ToggleChatMinimized);
+        Button closeBtn = btnRect.gameObject.AddComponent<Button>();
+        closeBtn.targetGraphic = btnImage;
+        closeBtn.onClick.AddListener(CloseChatPanel);
 
-        chatMinimizeButtonText = CreateCenteredButtonText(btnRect.transform, "−");
-        chatMinimizeButtonText.fontSize = 20f;
-        chatMinimizeButtonText.color = new Color(0.90f, 0.84f, 0.60f, 1f);
-        chatMinimizeButtonText.raycastTarget = false;
+        TextMeshProUGUI txt = CreateCenteredButtonText(btnRect.transform, "X");
+        txt.fontSize = 16f;
+        txt.color = new Color(0.90f, 0.84f, 0.60f, 1f);
+        txt.raycastTarget = false;
 
         btnRect.SetAsLastSibling();
     }
 
-    private void ToggleChatMinimized()
+    private void CreateChatToggleIcon(Transform canvasTransform)
     {
-        chatIsMinimized = !chatIsMinimized;
+        RectTransform iconRect = CreateRect("ChatToggleIcon", canvasTransform);
+        iconRect.anchorMin = new Vector2(0.04f, 0.02f);
+        iconRect.anchorMax = new Vector2(0.04f, 0.02f);
+        iconRect.pivot = new Vector2(0f, 0f);
+        iconRect.anchoredPosition = Vector2.zero;
+        iconRect.sizeDelta = new Vector2(56f, 56f);
 
-        if (chatLogArea != null) chatLogArea.SetActive(!chatIsMinimized);
-        if (chatInputArea != null) chatInputArea.SetActive(!chatIsMinimized);
+        Image iconImage = iconRect.gameObject.AddComponent<Image>();
+        iconImage.raycastTarget = true;
 
-        if (chatPanelRoot != null)
+        Texture2D chatTex = Resources.Load<Texture2D>("chat-icon");
+        Sprite chatSprite = chatTex != null ? Sprite.Create(chatTex, new Rect(0, 0, chatTex.width, chatTex.height), new Vector2(0.5f, 0.5f)) : null;
+        if (chatSprite != null)
         {
-            Vector2 anchorMax = chatPanelRoot.anchorMax;
-            anchorMax.y = chatIsMinimized ? chatMinimizedAnchorMaxY : chatExpandedAnchorMax.y;
-            chatPanelRoot.anchorMax = anchorMax;
+            iconImage.sprite = chatSprite;
+            iconImage.preserveAspect = true;
+        }
+        else
+        {
+            iconImage.color = new Color(0.16f, 0.20f, 0.26f, 0.95f);
+            TextMeshProUGUI fallback = CreateCenteredButtonText(iconRect, "Chat");
+            fallback.fontSize = 12f;
         }
 
-        if (chatMinimizeButtonText != null)
+        Button toggleBtn = iconRect.gameObject.AddComponent<Button>();
+        toggleBtn.targetGraphic = iconImage;
+        toggleBtn.onClick.AddListener(ToggleChatPanel);
+
+        chatToggleIcon = iconRect.gameObject;
+    }
+
+    private void ToggleChatPanel()
+    {
+        if (chatPanelRoot == null || chatToggleIcon == null) return;
+        bool show = !chatPanelRoot.gameObject.activeSelf;
+        chatPanelRoot.gameObject.SetActive(show);
+        chatToggleIcon.SetActive(!show);
+
+        if (show && chatInputField != null)
         {
-            chatMinimizeButtonText.text = chatIsMinimized ? "+" : "−";
+            chatInputField.ActivateInputField();
         }
+    }
+
+    private void CloseChatPanel()
+    {
+        if (chatPanelRoot != null) chatPanelRoot.gameObject.SetActive(false);
+        if (chatToggleIcon != null) chatToggleIcon.SetActive(true);
     }
 
     private void Update()
     {
-        if (chatPanelRoot == null) return;
+        if (chatPanelRoot == null || chatToggleIcon == null) return;
         if (Keyboard.current == null || !Keyboard.current.tKey.wasPressedThisFrame) return;
-        if (chatInputField != null && chatInputField.isFocused) return;
 
-        ToggleChatMinimized();
+        ToggleChatPanel();
 
-        if (!chatIsMinimized && chatInputField != null)
+        if (chatPanelRoot.gameObject.activeSelf && chatInputField != null)
         {
             chatInputField.ActivateInputField();
         }
@@ -462,5 +495,39 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         Debug.Log($"Disconnected from Photon. Cause: {cause}");
         UnityEngine.SceneManagement.SceneManager.LoadScene(SceneNames.StartMenuScene);
+    }
+
+    private void SpawnInitialSoldiers()
+    {
+        if (!PhotonNetwork.IsConnected && !PhotonNetwork.InRoom)
+        {
+            // Only spawn in offline/singleplayer
+            Warehouse wh = FindObjectOfType<Warehouse>();
+            if (wh == null) return;
+
+            Vector3 spawnPos = wh.transform.position + new Vector3(2f, 0f, 0f);
+            SoldierType[] types = { SoldierType.Spear, SoldierType.Shield, SoldierType.Sword, SoldierType.Bow };
+
+            foreach (var type in types)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    GameObject solObj = new GameObject($"Init_{type}_{i}");
+                    Vector3 offset = new Vector3(i * 1.2f, (int)type * 1.2f, 0f);
+                    solObj.transform.position = spawnPos + offset;
+
+                    var sr = solObj.AddComponent<SpriteRenderer>();
+                    sr.sortingOrder = 21;
+                    solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+
+                    var s = solObj.AddComponent<Soldier>();
+                    s.soldierType = type;
+                    s.team = Team.Player;
+                    s.moveSpeed = 1.5f;
+                }
+            }
+
+            Debug.Log("[GameManager] 8 Start-Soldaten gespawnt (2 pro Typ).");
+        }
     }
 }

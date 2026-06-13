@@ -11,26 +11,7 @@ public class mauszeiger : MonoBehaviour
 
     private void Start()
     {
-        if (cursorTexture == null)
-        {
-            Debug.LogWarning("Du hast noch kein Mauszeiger-Bild im Inspector zugewiesen!");
-            return;
-        }
-
-        Texture2D cursorToUse = cursorTexture;
-        int maxCursorSize = 96;
-        if ((cursorTexture.width > maxCursorSize || cursorTexture.height > maxCursorSize) && cursorTexture.isReadable)
-        {
-            int scaledWidth = Mathf.Min(maxCursorSize, cursorTexture.width);
-            int scaledHeight = Mathf.Min(maxCursorSize, cursorTexture.height);
-            cursorToUse = ScaleTexture(cursorTexture, scaledWidth, scaledHeight);
-            float scaleX = (float)scaledWidth / cursorTexture.width;
-            float scaleY = (float)scaledHeight / cursorTexture.height;
-            hotSpot = new Vector2(hotSpot.x * scaleX, hotSpot.y * scaleY);
-        }
-
-        Cursor.SetCursor(cursorToUse, hotSpot, CursorMode.Auto);
-        Cursor.SetCursor(cursorToUse, hotSpot, CursorMode.ForceSoftware);
+        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
     }
 
     private Texture2D ScaleTexture(Texture2D source, int targetWidth, int targetHeight)

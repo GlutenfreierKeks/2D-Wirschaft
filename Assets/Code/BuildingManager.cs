@@ -54,6 +54,14 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
     [Header("Steg Prefab")]
     public GameObject stegPrefab;
 
+    [Header("Ship Settings")]
+    [Tooltip("Standard Schiff-Stufe für neue Schiffe")]
+    public int defaultShipLevel = 1;
+    [Tooltip("Segel-Reichweite")]
+    public float maxSailDistance = 100f;
+    [Tooltip("Pfadfindungs-Suchradius für Schiffe")]
+    public int shipPathSearchRadius = 50;
+
     // aktive Stege
     private static HashSet<Steg> stegs = new HashSet<Steg>();
 
@@ -506,5 +514,97 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         {
             WarehouseManager.Instance.RegisterWarehouse(wh);
         }
+    }
+
+    // ── Ship Water Pathfinding ───────────────────────────────────────────
+
+    public static List<Vector2> FindWaterPath(Vector2 start, Vector2 destination, int maxIterations = 5000)
+    {
+        Vector2Int startGrid = new Vector2Int(Mathf.RoundToInt(start.x), Mathf.RoundToInt(start.y));
+        Vector2Int destGrid = new Vector2Int(Mathf.RoundToInt(destination.x), Mathf.RoundToInt(destination.y));
+        var empty = new List<Vector2>();
+
+        if (startGrid == destGrid)
+        {
+            empty.Add(destination);
+            return empty;
+        }
+
+        var frontier = new PriorityQueue();
+        frontier.Enqueue(startGrid, 0f);
+        var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+        var costSoFar = new Dictionary<Vector2Int, float> { [startGrid] = 0f };
+        Vector2Int[] dirs = { new Vector2Int(1,0), new Vector2Int(-1,0), new Vector2Int(0,1), new Vector2Int(0,-1) };
+        int iterations = 0;
+
+        while (frontier.Count > 0 && iterations++ < maxIterations)
+        {
+            Vector2Int current = frontier.Dequeue();
+            if (current == destGrid)
+                return ReconstructWaterPath(cameFrom, destGrid);
+
+            foreach (var d in dirs)
+            {
+                Vector2Int next = current + d;
+                if (IslandManager.IsLand(next)) continue; // Ships can't go over land
+                if (next.x < -200 || next.x > 200 || next.y < -200 || next.y > 200) continue;
+
+                float newCost = costSoFar[current] + 1f;
+                if (costSoFar.TryGetValue(next, out float existingCost) && newCost >= existingCost)
+                    continue;
+
+                costSoFar[next] = newCost;
+                cameFrom[next] = current;
+                frontier.Enqueue(next, newCost + Manhattan(next, destGrid));
+            }
+        }
+
+        return empty;
+    }
+
+    private static List<Vector2> ReconstructWaterPath(Dictionary<Vector2Int, Vector2Int> cameFrom, Vector2Int destination)
+    {
+        var path = new List<Vector2> { new Vector2(destination.x, destination.y) };
+        Vector2Int current = destination;
+        while (cameFrom.TryGetValue(current, out Vector2Int prev))
+        {
+            current = prev;
+            path.Add(new Vector2(current.x, current.y));
+        }
+        path.Reverse();
+        if (path.Count > 0) path.RemoveAt(0);
+        return path;
+    }
+
+    private static float Manhattan(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    }
+
+    // ── Island Flood-Fill (für Fog-Enthüllung) ───────────────────────────
+
+    public static HashSet<Vector2Int> FloodFillIsland(Vector2Int start, int maxCells = 10000)
+    {
+        var island = new HashSet<Vector2Int>();
+        var queue = new Queue<Vector2Int>();
+        queue.Enqueue(start);
+        island.Add(start);
+        Vector2Int[] dirs = { new Vector2Int(1,0), new Vector2Int(-1,0), new Vector2Int(0,1), new Vector2Int(0,-1) };
+
+        while (queue.Count > 0 && island.Count < maxCells)
+        {
+            Vector2Int current = queue.Dequeue();
+            foreach (var d in dirs)
+            {
+                Vector2Int next = current + d;
+                if (!island.Contains(next) && IslandManager.IsLand(next))
+                {
+                    island.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+        }
+
+        return island;
     }
 }

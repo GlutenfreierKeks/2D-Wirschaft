@@ -295,7 +295,7 @@ public class Warehouse : MonoBehaviour
         
         // Transfer from warehouse to ship
         SpendResource(resourceId, toLoad);
-        ship.AddCargo(resourceId, toLoad);
+        ship.TryLoadMaterial(resourceId, toLoad);
         
         return true;
     }

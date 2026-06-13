@@ -9,8 +9,7 @@ public class Ship : MonoBehaviour
     public bool isLocal = true;
     
     [Header("Cargo System")]
-    [SerializeField] private List<string> cargoItems = new List<string>();  // Resource IDs stored
-    public int cargoCapacity = 10;
+    public List<ShipSlot> slots = new List<ShipSlot>();
     
     [Header("Movement")]
     public float moveSpeed = 2f;
@@ -20,6 +19,8 @@ public class Ship : MonoBehaviour
     private bool isSelected = false;
     private float targetAngle = 0f;
     private float currentAngle = 0f;
+    private List<Vector2> waterPath = new List<Vector2>();
+    private int waterPathIndex = 0;
     
     [Header("Crew")]
     public Villager assignedCrew;  // The villager sailing this ship
@@ -43,13 +44,22 @@ public class Ship : MonoBehaviour
         
         if (shipData != null)
         {
-            cargoCapacity = shipData.cargoCapacity;
             moveSpeed = shipData.moveSpeed;
             rotationSpeed = shipData.rotationSpeed;
         }
         
+        InitializeSlots();
+        
         // Aktuelle Rotation vom BuildingManager übernehmen (nicht überschreiben)
         currentAngle = transform.rotation.eulerAngles.z;
+    }
+
+    private void InitializeSlots()
+    {
+        slots.Clear();
+        int count = shipData != null ? shipData.GetSlotCount() : 8;
+        for (int i = 0; i < count; i++)
+            slots.Add(new ShipSlot());
     }
     
     private void Start()
@@ -74,11 +84,12 @@ public class Ship : MonoBehaviour
 
     private void UpdateVisualState()
     {
-        // Visual feedback when cargo changes - show cargo level via slight color change
         if (spriteRenderer != null)
         {
-            float cargoRatio = (float)cargoItems.Count / cargoCapacity;
-            spriteRenderer.color = Color.Lerp(originalColor, selectedColor, cargoRatio * 0.3f);
+            int used = slots.Count(s => !s.IsEmpty);
+            int total = slots.Count;
+            float ratio = total > 0 ? (float)used / total : 0f;
+            spriteRenderer.color = Color.Lerp(originalColor, selectedColor, ratio * 0.3f);
         }
     }
     
@@ -116,45 +127,52 @@ public class Ship : MonoBehaviour
     private void HandleMovement()
     {
         if (!isMoving) return;
-        
-        Vector3 direction = targetPosition - transform.position;
-        direction.z = 0;
-        
-        if (direction.magnitude < 0.1f)
+
+        Vector3 target;
+        if (waterPathIndex < waterPath.Count)
         {
-            StopMovement();
-            return;
+            target = new Vector3(waterPath[waterPathIndex].x, waterPath[waterPathIndex].y, transform.position.z);
+        }
+        else
+        {
+            target = targetPosition;
         }
         
-        // Calculate target angle (ship points UP, so use -90 offset)
+        Vector3 direction = target - transform.position;
+        direction.z = 0;
+        
+        if (direction.magnitude < 0.3f)
+        {
+            if (waterPathIndex < waterPath.Count)
+            {
+                waterPathIndex++;
+                return;
+            }
+            else
+            {
+                StopMovement();
+                return;
+            }
+        }
+        
         targetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
         
-        // Smooth rotation towards target
         float angleDiff = Mathf.DeltaAngle(currentAngle, targetAngle);
         float rotationStep = rotationSpeed * Time.deltaTime;
         
         if (Mathf.Abs(angleDiff) < rotationStep)
-        {
             currentAngle = targetAngle;
-        }
         else
-        {
             currentAngle += Mathf.Sign(angleDiff) * rotationStep;
-        }
         
         transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
+        transform.position += transform.up * moveSpeed * Time.deltaTime;
         
-        // Move in the direction the ship is facing (up for this game)
-        Vector3 moveDirection = transform.up;  // Ship faces UP
-        transform.position += moveDirection * moveSpeed * Time.deltaTime;
-        
-        // Reveal fog while moving
         RevealFogAlongPath();
     }
     
     public void MoveTo(Vector3 destination)
     {
-        // Auto-assign crew if none assigned
         if (!HasCrew())
         {
             AssignFirstAvailableVillager();
@@ -167,18 +185,56 @@ public class Ship : MonoBehaviour
             return;
         }
         
-        // Check if destination is on water
         Vector2Int destGrid = new Vector2Int(Mathf.RoundToInt(destination.x), Mathf.RoundToInt(destination.y));
+        
         if (IslandManager.IsLand(destGrid))
         {
-            Debug.Log("[Ship] Cannot move to land - ships can only sail on water!");
-            return;
+            destination = FindNearestWater(destination);
         }
         
         targetPosition = new Vector3(destination.x, destination.y, transform.position.z);
+        
+        waterPath = BuildingManager.FindWaterPath(transform.position, destination);
+        waterPathIndex = 0;
         isMoving = true;
         
-        Debug.Log($"[Ship] Moving to {destination}");
+        Debug.Log($"[Ship] Moving to {destination}, path length: {waterPath.Count}");
+    }
+    
+
+    private Vector3 FindNearestWater(Vector3 landPos)
+    {
+        Vector2Int center = new Vector2Int(Mathf.RoundToInt(landPos.x), Mathf.RoundToInt(landPos.y));
+        int searchRadius = 20;
+
+        for (int r = 1; r <= searchRadius; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r) continue;
+                    Vector2Int test = new Vector2Int(center.x + dx, center.y + dy);
+                    if (BuildingManager.IsWalkable(test))
+                    {
+                        Vector3 nearest = new Vector3(test.x, test.y, landPos.z);
+                        if (IslandManager.IsLand(test))
+                        {
+                            // Check adjacent water
+                            Vector2Int[] dirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+                            foreach (var d in dirs)
+                            {
+                                Vector2Int water = test + d;
+                                if (!IslandManager.IsLand(water))
+                                    return new Vector3(water.x, water.y, landPos.z);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return landPos;
     }
 
     public void AssignFirstAvailableVillager()
@@ -269,8 +325,8 @@ public class Ship : MonoBehaviour
         }
     }
     
-    // ── Cargo System ─────────────────────────────────────────────────────────
-    
+    // ── Cargo System (New Slot-Based) ─────────────────────────────────────
+
     public bool HasCrew()
     {
         return assignedCrew != null;
@@ -293,181 +349,228 @@ public class Ship : MonoBehaviour
             assignedCrew = null;
         }
     }
-    
-    public int GetCargoCount()
+
+    // ── Slot Management ──────────────────────────────────────────────────
+
+    public int GetSlotCount() => slots.Count;
+
+    public int GetUsedSlotCount() => slots.Count(s => !s.IsEmpty);
+
+    public int GetFreeSlotCount() => slots.Count(s => s.IsEmpty);
+
+    public bool HasFreeSlot() => GetFreeSlotCount() > 0;
+
+    public int GetCargoCount() => slots.Count(s => s.content == ShipSlot.SlotContent.Material);
+
+    public int GetCargoCapacity() => slots.Count;
+
+    public int GetFreeCargoSpace() => GetFreeSlotCount();
+
+    public bool CanAddCargo() => HasFreeSlot();
+
+    public List<ShipSlot> GetAllSlots() => new List<ShipSlot>(slots);
+
+    public Dictionary<string, int> GetAllCargoGrouped()
     {
-        return cargoItems.Count;
-    }
-    
-    public int GetCargoCapacity()
-    {
-        return cargoCapacity;
-    }
-    
-    public int GetFreeCargoSpace()
-    {
-        return cargoCapacity - cargoItems.Count;
-    }
-    
-    public bool CanAddCargo()
-    {
-        return cargoItems.Count < cargoCapacity;
-    }
-    
-    public bool AddCargo(string resourceId)
-    {
-        if (!CanAddCargo())
+        var grouped = new Dictionary<string, int>();
+        foreach (var slot in slots)
         {
-            Debug.Log("[Ship] Cargo full!");
-            return false;
-        }
-        
-        cargoItems.Add(resourceId);
-        OnCargoChanged?.Invoke();
-        return true;
-    }
-    
-    public bool AddCargo(string resourceId, int amount)
-    {
-        bool success = true;
-        for (int i = 0; i < amount; i++)
-        {
-            if (!AddCargo(resourceId))
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
             {
-                success = false;
-                break;
+                if (!grouped.ContainsKey(slot.resourceId)) grouped[slot.resourceId] = 0;
+                grouped[slot.resourceId] += slot.amount;
             }
         }
-        return success;
+        return grouped;
     }
-    
-    public bool RemoveCargo(string resourceId)
-    {
-        if (cargoItems.Remove(resourceId))
-        {
-            OnCargoChanged?.Invoke();
-            return true;
-        }
-        return false;
-    }
-    
-    public bool RemoveCargo(string resourceId, int amount)
-    {
-        int removed = 0;
-        for (int i = 0; i < amount; i++)
-        {
-            if (cargoItems.Remove(resourceId))
-            {
-                removed++;
-            }
-            else
-            {
-                break;
-            }
-        }
-        
-        if (removed > 0)
-        {
-            OnCargoChanged?.Invoke();
-            return true;
-        }
-        return false;
-    }
-    
+
     public List<string> GetAllCargo()
     {
-        return new List<string>(cargoItems);
+        var list = new List<string>();
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
+            {
+                for (int i = 0; i < slot.amount; i++)
+                    list.Add(slot.resourceId);
+            }
+        }
+        return list;
     }
-    
-    public int GetCargoCount(string resourceId)
+
+    // ── Loading ──────────────────────────────────────────────────────────
+
+    public bool TryLoadMaterial(string resourceId, int amount)
     {
-        return cargoItems.Count(x => x == resourceId);
+        int remaining = amount;
+
+        // Erst vorhandene Slots mit gleichem Material auffüllen (max 16)
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && slot.resourceId == resourceId && slot.amount < 16)
+            {
+                int canAdd = Mathf.Min(remaining, 16 - slot.amount);
+                slot.amount += canAdd;
+                remaining -= canAdd;
+                if (remaining <= 0) { OnCargoChanged?.Invoke(); return true; }
+            }
+        }
+
+        // Dann leere Slots belegen
+        foreach (var slot in slots)
+        {
+            if (slot.IsEmpty)
+            {
+                int toLoad = Mathf.Min(remaining, 16);
+                slot.content = ShipSlot.SlotContent.Material;
+                slot.resourceId = resourceId;
+                slot.amount = toLoad;
+                remaining -= toLoad;
+                if (remaining <= 0) { OnCargoChanged?.Invoke(); return true; }
+            }
+        }
+
+        OnCargoChanged?.Invoke();
+        return remaining < amount;
     }
-    
-    public void ClearCargo()
+
+    public bool TryLoadBuilder()
     {
-        cargoItems.Clear();
+        foreach (var slot in slots)
+        {
+            if (slot.IsEmpty)
+            {
+                slot.content = ShipSlot.SlotContent.Builder;
+                slot.amount = 1;
+                OnCargoChanged?.Invoke();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool TryLoadSoldier(SoldierType type)
+    {
+        foreach (var slot in slots)
+        {
+            if (slot.IsEmpty)
+            {
+                slot.content = ShipSlot.SlotContent.Soldier;
+                slot.soldierType = type;
+                slot.amount = 1;
+                OnCargoChanged?.Invoke();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ── Unloading ────────────────────────────────────────────────────────
+
+    public void UnloadAllToIsland()
+    {
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material)
+            {
+                var warehouse = FindNearestLocalWarehouse();
+                if (warehouse != null)
+                    warehouse.ReceiveResource(slot.resourceId, slot.amount);
+            }
+            else if (slot.content == ShipSlot.SlotContent.Builder)
+            {
+                if (VillagerManager.Instance != null)
+                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Worker);
+            }
+            else if (slot.content == ShipSlot.SlotContent.Soldier)
+            {
+                // Soldaten spawnen
+                GameObject solObj = new GameObject($"Unloaded_Soldier_{slot.soldierType}");
+                solObj.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                var sr = solObj.AddComponent<SpriteRenderer>();
+                sr.sortingOrder = 21;
+                solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+                var s = solObj.AddComponent<Soldier>();
+                s.soldierType = slot.soldierType;
+                s.team = Team.Player;
+                s.moveSpeed = 1.5f;
+            }
+            slot.Clear();
+        }
         OnCargoChanged?.Invoke();
     }
-    
-    public bool IsMoving()
+
+    public void RemoveSlotItem(int slotIndex)
     {
-        return isMoving;
+        if (slotIndex >= 0 && slotIndex < slots.Count)
+        {
+            slots[slotIndex].Clear();
+            OnCargoChanged?.Invoke();
+        }
     }
-    
-    public Vector3 GetTargetPosition()
-    {
-        return targetPosition;
-    }
-    
-    public bool IsSelected()
-    {
-        return isSelected;
-    }
-    
-    // ── Ownership & Info ──────────────────────────────────────────────────────
-    
-    public string GetShipName()
-    {
-        return shipData != null ? shipData.shipName : gameObject.name;
-    }
-    
-    public ShipType GetShipType()
-    {
-        return shipData != null ? shipData.shipType : ShipType.Trade;
-    }
-    
-    public bool IsTradeShip()
-    {
-        return GetShipType() == ShipType.Trade;
-    }
-    
-    public bool IsMilitaryShip()
-    {
-        return GetShipType() == ShipType.Military;
-    }
-    
-    // ── Unload cargo to warehouse ──────────────────────────────────────────────
-    
+
+    // ── Warehouse Interop (alt, für Kompatibilität) ──────────────────────
+
     public void UnloadToWarehouse(Warehouse warehouse)
     {
         if (warehouse == null) return;
-        
-        foreach (string item in cargoItems.ToList())
+        foreach (var slot in slots)
         {
-            warehouse.ReceiveResource(item, 1);
-            cargoItems.Remove(item);
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
+            {
+                warehouse.ReceiveResource(slot.resourceId, slot.amount);
+                slot.Clear();
+            }
         }
-        
         OnCargoChanged?.Invoke();
     }
-    
-    // ── Load cargo from warehouse ─────────────────────────────────────────────
-    
+
     public void LoadFromWarehouse(Warehouse warehouse, string resourceId, int amount)
     {
         if (warehouse == null) return;
-        
-        int loaded = 0;
-        for (int i = 0; i < amount && CanAddCargo(); i++)
+        int toLoad = amount;
+        while (toLoad > 0)
         {
-            if (warehouse.HasResource(resourceId, 1))
+            int batch = Mathf.Min(toLoad, 16);
+            if (TryLoadMaterial(resourceId, batch))
             {
-                warehouse.SpendResource(resourceId, 1);
-                cargoItems.Add(resourceId);
-                loaded++;
+                warehouse.SpendResource(resourceId, batch);
+                toLoad -= batch;
             }
-            else
-            {
-                break;
-            }
-        }
-        
-        if (loaded > 0)
-        {
-            OnCargoChanged?.Invoke();
+            else break;
         }
     }
+
+    public void ClearCargo()
+    {
+        foreach (var slot in slots) slot.Clear();
+        OnCargoChanged?.Invoke();
+    }
+
+    private Warehouse FindNearestLocalWarehouse()
+    {
+        Warehouse[] whs = FindObjectsOfType<Warehouse>();
+        Warehouse nearest = null;
+        float minDist = float.MaxValue;
+        foreach (var wh in whs)
+        {
+            if (wh.isLocal)
+            {
+                float dist = Vector3.Distance(transform.position, wh.transform.position);
+                if (dist < minDist) { minDist = dist; nearest = wh; }
+            }
+        }
+        return nearest;
+    }
+
+    public bool IsMoving() => isMoving;
+    public Vector3 GetTargetPosition() => targetPosition;
+    public bool IsSelected() => isSelected;
+
+    public string GetShipName() => shipData != null ? shipData.shipName : gameObject.name;
+    public ShipType GetShipType() => shipData != null ? shipData.shipType : ShipType.Trade;
+    public bool IsTradeShip() => GetShipType() == ShipType.Trade;
+    public bool IsMilitaryShip() => GetShipType() == ShipType.Military;
     
     private void OnDestroy()
     {
