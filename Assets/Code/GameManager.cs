@@ -13,6 +13,9 @@ using Photon.Realtime;
 public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 {
     private const byte LobbyChatEventCode = 1;
+    private const byte VillagerSpawnEventCode = 11;
+    private const byte SoldierSpawnEventCode = 12;
+    private const byte BuildingDestroyEventCode = 13;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -159,9 +162,31 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                     {
                         VillagerManager.Instance.SpawnStartingPopulation(playerIndex);
                     }
+
+                    SyncLocalPopulation(playerIndex);
                 }
             }
         }
+    }
+
+    private void SyncLocalPopulation(int islandIndex)
+    {
+        if (!PhotonNetwork.InRoom || VillagerManager.Instance == null) return;
+        Vector2 islandPos = IslandManager.Instance.GetIslandPosition(islandIndex);
+        List<object> spawnData = new List<object>();
+        spawnData.Add(islandPos.x);
+        spawnData.Add(islandPos.y);
+        foreach (var v in VillagerManager.Instance.ActiveVillagers)
+        {
+            if (v == null) continue;
+            spawnData.Add((int)v.role);
+            spawnData.Add(v.transform.position.x);
+            spawnData.Add(v.transform.position.y);
+        }
+        if (spawnData.Count <= 2) return;
+        ExitGames.Client.Photon.SendOptions sendOpts = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+        PhotonNetwork.RaiseEvent(VillagerSpawnEventCode, spawnData.ToArray(),
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOpts);
     }
 
     private void UpdateStatusText()
@@ -313,10 +338,88 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     public void OnEvent(EventData photonEvent)
     {
-        if (photonEvent.Code != LobbyChatEventCode) return;
-        if (photonEvent.CustomData is string message)
+        if (photonEvent.Code == LobbyChatEventCode && photonEvent.CustomData is string message)
         {
             AddChatMessage(message);
+            return;
+        }
+
+        if (photonEvent.Code == VillagerSpawnEventCode && photonEvent.CustomData is object[] vData)
+        {
+            ReceiveVillagerSpawn(vData);
+            return;
+        }
+
+        if (photonEvent.Code == SoldierSpawnEventCode && photonEvent.CustomData is object[] sData)
+        {
+            ReceiveSoldierSpawn(sData);
+            return;
+        }
+
+        if (photonEvent.Code == BuildingDestroyEventCode && photonEvent.CustomData is object[] bData)
+        {
+            ReceiveBuildingDestroy(bData);
+            return;
+        }
+    }
+
+    private void ReceiveVillagerSpawn(object[] data)
+    {
+        if (VillagerManager.Instance == null) return;
+        float islandX = (float)data[0];
+        float islandY = (float)data[1];
+        for (int i = 2; i + 2 < data.Length; i += 3)
+        {
+            Villager.Role role = (Villager.Role)(int)data[i];
+            float vx = (float)data[i + 1];
+            float vy = (float)data[i + 2];
+            VillagerManager.Instance.SpawnVillagerAt(new Vector2(vx, vy), role);
+        }
+    }
+
+    private void ReceiveSoldierSpawn(object[] data)
+    {
+        float baseX = (float)data[0];
+        float baseY = (float)data[1];
+        for (int i = 2; i + 2 < data.Length; i += 3)
+        {
+            SoldierType type = (SoldierType)(int)data[i];
+            float ox = (float)data[i + 1];
+            float oy = (float)data[i + 2];
+            Vector3 pos = new Vector3(baseX + ox, baseY + oy, 0f);
+            SpawnRemoteSoldier(pos, type);
+        }
+    }
+
+    private void SpawnRemoteSoldier(Vector3 position, SoldierType type)
+    {
+        GameObject solObj = new GameObject($"Remote_{type}");
+        solObj.transform.position = position;
+        var sr = solObj.AddComponent<SpriteRenderer>();
+        sr.sortingOrder = 21;
+        solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+        var s = solObj.AddComponent<Soldier>();
+        s.soldierType = type;
+        s.team = Team.Player;
+        s.moveSpeed = 1.5f;
+    }
+
+    private void ReceiveBuildingDestroy(object[] data)
+    {
+        string buildingName = (string)data[0];
+        float bx = (float)data[1];
+        float by = (float)data[2];
+        Vector3 bPos = new Vector3(bx, by, -0.21f);
+        var allBuildings = FindObjectsByType<BuildingInstance>();
+        foreach (var b in allBuildings)
+        {
+            if (b == null) continue;
+            if (b.data != null && b.data.buildingName == buildingName &&
+                Vector3.Distance(b.transform.position, bPos) < 0.5f)
+            {
+                Destroy(b.gameObject);
+                return;
+            }
         }
     }
 
@@ -539,5 +642,27 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         }
 
         Debug.Log("[GameManager] 8 Start-Soldaten gespawnt (2 pro Typ).");
+
+        SyncInitialSoldiers(spawnPos, types);
+    }
+
+    private void SyncInitialSoldiers(Vector3 basePos, SoldierType[] types)
+    {
+        if (!PhotonNetwork.InRoom) return;
+        List<object> data = new List<object>();
+        data.Add(basePos.x);
+        data.Add(basePos.y);
+        foreach (var type in types)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                data.Add((int)type);
+                data.Add(i * 1.2f);
+                data.Add((int)type * 1.2f);
+            }
+        }
+        ExitGames.Client.Photon.SendOptions sendOpts = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+        PhotonNetwork.RaiseEvent(SoldierSpawnEventCode, data.ToArray(),
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOpts);
     }
 }
