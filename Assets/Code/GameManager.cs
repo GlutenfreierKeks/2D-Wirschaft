@@ -68,6 +68,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         EnsureManagerExists<VillagerManager>();
         EnsureManagerExists<NotificationManager>();
         EnsureManagerExists<AudioManager>();
+        EnsureManagerExists<TradingManager>();
+        EnsureManagerExists<TradingUI>();
     }
 
     private void EnsureManagerExists<T>() where T : MonoBehaviour
