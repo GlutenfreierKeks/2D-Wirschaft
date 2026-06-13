@@ -44,6 +44,13 @@ public class BuildingData : ScriptableObject
     [Header("Ship Settings")]
     public ShipData shipData;
 
+    [Header("Defense")]
+    public bool isDefenseTower = false;
+    public float towerRange = 18f;
+    public int towerDamage = 18;
+    public float towerAttackCooldown = 2.5f;
+    public float fogRevealRadius = 5f;
+
     [Header("Health")]
     [Tooltip("Start-Lebenspunkte (Standard 100, Lagerhaus 2000)")]
     public int maxHP = 100;

@@ -345,6 +345,13 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         {
             if (d.buildingName == name) return d;
         }
+
+        BuildingData[] resourceData = Resources.LoadAll<BuildingData>("BuildingData");
+        foreach (var d in resourceData)
+        {
+            if (d.buildingName == name) return d;
+        }
+
         return null;
     }
 
@@ -427,9 +434,16 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             if (data.shipData != null) ship.shipData = data.shipData;
         }
 
+        if (data.isDefenseTower)
+        {
+            DefenseTower tower = building.GetComponent<DefenseTower>();
+            if (tower == null) tower = building.AddComponent<DefenseTower>();
+        }
+
         FogRevealer revealer = building.GetComponent<FogRevealer>();
         if (revealer == null) revealer = building.AddComponent<FogRevealer>();
         revealer.isLocalPlayer = isLocal;
+        if (data.fogRevealRadius > 0f) revealer.radius = data.fogRevealRadius;
 
         // Apply red tint to enemy buildings
         if (!isLocal)

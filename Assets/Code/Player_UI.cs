@@ -176,7 +176,40 @@ public class Player_UI : MonoBehaviour
             Time.timeScale = 1.0f; // Default standard speed
         }
 
+        EnsureDefaultBuildMenuItems();
         BuildUI();
+    }
+
+    private void EnsureDefaultBuildMenuItems()
+    {
+        EnsureBuildMenuItem("turm", "Turm", "andere", "BuildingData/Turm", "Textures/turm");
+    }
+
+    private void EnsureBuildMenuItem(string id, string displayName, string categoryId, string buildingDataPath, string iconPath)
+    {
+        foreach (var item in menuItems)
+        {
+            if (item.id == id || item.displayName == displayName)
+            {
+                return;
+            }
+        }
+
+        BuildingData loadedBuilding = Resources.Load<BuildingData>(buildingDataPath);
+        if (loadedBuilding == null)
+        {
+            Debug.LogWarning($"[Player_UI] Konnte BuildingData nicht laden: {buildingDataPath}");
+            return;
+        }
+
+        menuItems.Add(new MenuItem
+        {
+            id = id,
+            displayName = displayName,
+            categoryId = categoryId,
+            buildingData = loadedBuilding,
+            icon = LoadSpriteFromResources(iconPath)
+        });
     }
 
     // ── Öffentliche API ──────────────────────────────────────────────────────

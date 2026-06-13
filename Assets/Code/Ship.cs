@@ -21,6 +21,10 @@ public class Ship : MonoBehaviour
     private float currentAngle = 0f;
     private List<Vector2> waterPath = new List<Vector2>();
     private int waterPathIndex = 0;
+
+    [Header("Health")]
+    public int maxHP = 180;
+    public int currentHP = 180;
     
     [Header("Crew")]
     public Villager assignedCrew;  // The villager sailing this ship
@@ -49,6 +53,7 @@ public class Ship : MonoBehaviour
         }
         
         InitializeSlots();
+        currentHP = Mathf.Max(1, maxHP);
         
         // Aktuelle Rotation vom BuildingManager übernehmen (nicht überschreiben)
         currentAngle = transform.rotation.eulerAngles.z;
@@ -600,6 +605,16 @@ public class Ship : MonoBehaviour
     public ShipType GetShipType() => shipData != null ? shipData.shipType : ShipType.Trade;
     public bool IsTradeShip() => GetShipType() == ShipType.Trade;
     public bool IsMilitaryShip() => GetShipType() == ShipType.Military;
+
+    public void TakeDamage(int damage)
+    {
+        currentHP -= Mathf.Max(0, damage);
+        if (currentHP <= 0)
+        {
+            currentHP = 0;
+            Destroy(gameObject);
+        }
+    }
     
     private void OnDestroy()
     {

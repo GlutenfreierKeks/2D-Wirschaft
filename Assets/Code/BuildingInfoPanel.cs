@@ -140,7 +140,9 @@ public class BuildingInfoPanel : MonoBehaviour
 
     public void Show(BuildingInstance building)
     {
+        SetTowerRangeVisible(currentBuilding, false);
         currentBuilding = building;
+        SetTowerRangeVisible(currentBuilding, true);
         isPanelActive = true;
         panelRoot.SetActive(true);
         
@@ -156,6 +158,7 @@ public class BuildingInfoPanel : MonoBehaviour
 
     public void Hide()
     {
+        SetTowerRangeVisible(currentBuilding, false);
         targetPosX = 480f; // Slide out nach rechts
         isPanelActive = false;
     }
@@ -654,6 +657,17 @@ public class BuildingInfoPanel : MonoBehaviour
 
     private string Capitalize(string s) =>
         string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    private void SetTowerRangeVisible(BuildingInstance building, bool visible)
+    {
+        if (building == null || building.data == null || !building.data.isDefenseTower) return;
+
+        DefenseTower tower = building.GetComponent<DefenseTower>();
+        if (tower != null)
+        {
+            tower.SetRangeVisible(visible);
+        }
+    }
 
     private static GameObject MakeImage(string name, Transform parent, Color color)
     {
