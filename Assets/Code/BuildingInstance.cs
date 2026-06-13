@@ -1,6 +1,9 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using Photon.Pun;
+using ExitGames.Client.Photon;
+using Photon.Realtime;
 
 public class BuildingInstance : MonoBehaviour
 {
@@ -640,6 +643,14 @@ public class BuildingInstance : MonoBehaviour
                     "ALLE LAGERHÄUSER ZERSTÖRT! DU HAST VERLOREN!", 30f);
                 Debug.LogError("[GAME OVER] Kein Lagerhaus mehr vorhanden!");
             }
+        }
+
+        if (PhotonNetwork.InRoom && data != null)
+        {
+            object[] payload = new object[] { data.buildingName, transform.position.x, transform.position.y };
+            SendOptions sendOpts = new SendOptions { Reliability = true };
+            PhotonNetwork.RaiseEvent(13, payload,
+                new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
         }
 
         Destroy(gameObject);
