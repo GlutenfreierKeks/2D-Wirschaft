@@ -462,17 +462,17 @@ public class IslandManager : MonoBehaviour
                     new ResourceConfig(ResourceType.Iron,   1, 2, 0.40f),
                     new ResourceConfig(ResourceType.Gold,   1, 1, 0.30f),
                 };
-            // Wüste: viel Frucht, viel Stein, etwas Gold, wenig Holz/Weizen/Eisen
+            // Wüste: wie normale Insel (Plains)
             case IslandType.Desert:
                 return new ResourceConfig[]
                 {
-                    new ResourceConfig(ResourceType.Fruit,  3, 5, 0.80f),
-                    new ResourceConfig(ResourceType.Stone,  3, 5, 0.80f),
-                    new ResourceConfig(ResourceType.Gold,   2, 3, 0.60f),
-                    new ResourceConfig(ResourceType.Iron,   1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Wood,   1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Wheat,  1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Animal, 1, 1, 0.25f),
+                    new ResourceConfig(ResourceType.Wheat,  3, 6, 0.85f),
+                    new ResourceConfig(ResourceType.Wood,   2, 4, 0.65f),
+                    new ResourceConfig(ResourceType.Stone,  1, 3, 0.55f),
+                    new ResourceConfig(ResourceType.Fruit,  1, 3, 0.50f),
+                    new ResourceConfig(ResourceType.Animal, 1, 3, 0.50f),
+                    new ResourceConfig(ResourceType.Iron,   1, 2, 0.40f),
+                    new ResourceConfig(ResourceType.Gold,   1, 1, 0.30f),
                 };
             // Jungle: viel Holz, viel Eisen, etwas Frucht, wenig Rest
             case IslandType.Jungle:
