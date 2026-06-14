@@ -357,9 +357,46 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
 
     public void SpawnBuilding(BuildingData data, Vector2 position, bool isLocal = true, int rotationDegrees = 0, int occupiedWidthOverride = -1, int occupiedHeightOverride = -1)
     {
-        if (data.prefab == null) return;
+        if (data.prefab == null && !data.isWarehouseType) return;
 
-        GameObject building = Instantiate(data.prefab, new Vector3(position.x, position.y, -0.21f), Quaternion.identity);
+        GameObject building;
+        if (data.prefab != null)
+        {
+            building = Instantiate(data.prefab, new Vector3(position.x, position.y, -0.21f), Quaternion.identity);
+        }
+        else
+        {
+            building = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            building.transform.position = new Vector3(position.x, position.y, -0.21f);
+
+            Renderer rend = building.GetComponent<Renderer>();
+            if (warehouseMaterial != null)
+            {
+                rend.material = new Material(warehouseMaterial);
+            }
+            else
+            {
+                Shader warehouseShader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
+                rend.material = new Material(warehouseShader);
+            }
+
+            Texture2D tex = Resources.Load<Texture2D>("warehouse_texture") ?? Resources.Load<Texture2D>("Textures/warehouse_texture");
+            if (tex != null)
+            {
+                rend.material.mainTexture = tex;
+            }
+            else
+            {
+                rend.material.color = new Color(0.75f, 0.75f, 0.75f, 1f);
+            }
+
+            MeshCollider meshCollider = building.GetComponent<MeshCollider>();
+            if (meshCollider != null)
+            {
+                DestroyImmediate(meshCollider);
+            }
+        }
+
         building.name = data.buildingName;
         building.transform.rotation = Quaternion.Euler(0f, 0f, rotationDegrees);
 
@@ -415,6 +452,22 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         instance.isLocal = isLocal;
         instance.footprintWidthOverride = occupiedWidth;
         instance.footprintHeightOverride = occupiedHeight;
+
+        if (data.isWarehouseType)
+        {
+            Warehouse warehouse = building.GetComponent<Warehouse>();
+            if (warehouse == null) warehouse = building.AddComponent<Warehouse>();
+            warehouse.isLocal = isLocal;
+            warehouse.isMainWarehouse = false;
+            warehouse.maxHealth = data.maxHP;
+            warehouse.currentHealth = data.maxHP;
+            warehouse.storageCapacity = 50;
+
+            if (WarehouseManager.Instance != null)
+            {
+                WarehouseManager.Instance.RegisterWarehouse(warehouse);
+            }
+        }
 
         if (data.placementRule == PlacementRule.Pier)
         {

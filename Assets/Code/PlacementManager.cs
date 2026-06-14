@@ -180,6 +180,13 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
         // Lagerhäuser und Lagerhaus-Typ Gebäude können überall gebaut werden
         if (currentBuilding.canBuildOnOtherIslands || currentBuilding.isWarehouseType)
         {
+            if (currentBuilding.isWarehouseType && IsWarehouseOnIsland(new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y))))
+            {
+                NotificationManager.Instance?.Notify("island_has_warehouse",
+                    "Auf dieser Insel steht bereits ein Lagerhaus!", 3f);
+                return false;
+            }
+
             // Prüfe ob mindestens 1 Arbeiter auf der Insel ist
             if (!HasWorkerOnIsland(center))
             {
@@ -414,14 +421,27 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
     private bool HasWorkerOnIsland(Vector2 center)
     {
         Villager[] villagers = FindObjectsOfType<Villager>();
+        Vector2Int centerGrid = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+
         foreach (var v in villagers)
         {
             if (v == null || !v.isActiveAndEnabled) continue;
             if (v.role != Villager.Role.Worker) continue;
+
             Vector2Int vGrid = new Vector2Int(Mathf.RoundToInt(v.transform.position.x), Mathf.RoundToInt(v.transform.position.y));
-            Vector2Int centerGrid = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
             if (IsSameIsland(vGrid, centerGrid))
                 return true;
+
+            if (!IslandManager.IsLand(vGrid))
+            {
+                foreach (var dir in directions)
+                {
+                    Vector2Int adjacent = vGrid + dir;
+                    if (IslandManager.IsLand(adjacent) && IsSameIsland(adjacent, centerGrid))
+                        return true;
+                }
+            }
         }
         return false;
     }

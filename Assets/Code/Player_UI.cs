@@ -183,6 +183,7 @@ public class Player_UI : MonoBehaviour
     private void EnsureDefaultBuildMenuItems()
     {
         EnsureBuildMenuItem("turm", "Turm", "andere", "BuildingData/Turm", "Textures/turm");
+        EnsureBuildMenuItem("lagerhaus", "Lagerhaus", "andere", "BuildingData/Lagerhaus", "warehouse_texture");
     }
 
     private void EnsureBuildMenuItem(string id, string displayName, string categoryId, string buildingDataPath, string iconPath)
@@ -196,6 +197,11 @@ public class Player_UI : MonoBehaviour
         }
 
         BuildingData loadedBuilding = Resources.Load<BuildingData>(buildingDataPath);
+        if (loadedBuilding == null && id == "lagerhaus")
+        {
+            loadedBuilding = CreateRuntimeWarehouseBuildingData();
+        }
+
         if (loadedBuilding == null)
         {
             Debug.LogWarning($"[Player_UI] Konnte BuildingData nicht laden: {buildingDataPath}");
@@ -210,6 +216,28 @@ public class Player_UI : MonoBehaviour
             buildingData = loadedBuilding,
             icon = LoadSpriteFromResources(iconPath)
         });
+    }
+
+    private BuildingData CreateRuntimeWarehouseBuildingData()
+    {
+        BuildingData warehouseData = ScriptableObject.CreateInstance<BuildingData>();
+        warehouseData.name = "Lagerhaus";
+        warehouseData.buildingName = "Lagerhaus";
+        warehouseData.prefab = null;
+        warehouseData.placementRule = PlacementRule.LandOnly;
+        warehouseData.width = 3;
+        warehouseData.height = 3;
+        warehouseData.woodCost = 50;
+        warehouseData.stoneCost = 30;
+        warehouseData.buildTime = 15f;
+        warehouseData.requiredWorkers = 1;
+        warehouseData.workersNeeded = 0;
+        warehouseData.sleepCapacity = 5;
+        warehouseData.fogRevealRadius = 10f;
+        warehouseData.maxHP = 2000;
+        warehouseData.isWarehouseType = true;
+        warehouseData.canBuildOnOtherIslands = true;
+        return warehouseData;
     }
 
     // ── Öffentliche API ──────────────────────────────────────────────────────
