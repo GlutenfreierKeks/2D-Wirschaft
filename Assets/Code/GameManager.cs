@@ -13,6 +13,10 @@ using Photon.Realtime;
 public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 {
     private const byte LobbyChatEventCode = 1;
+    private const byte VillagerSpawnEventCode = 11;
+    private const byte SoldierSpawnEventCode = 12;
+    private const byte BuildingDestroyEventCode = 13;
+    private const byte ShipSyncEventCode = 14;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -22,10 +26,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private RectTransform chatPanelRoot;
     private GameObject chatLogArea;
     private GameObject chatInputArea;
-    private TextMeshProUGUI chatMinimizeButtonText;
-    private bool chatIsMinimized;
-    private readonly Vector2 chatExpandedAnchorMax = new Vector2(0.36f, 0.24f);
-    private const float chatMinimizedAnchorMaxY = 0.06f;
+    private GameObject chatToggleIcon;
 
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI gameStatusText;
@@ -55,6 +56,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             if (gameStatusText != null) gameStatusText.text = "Game Started! (Offline Mode)";
             Debug.LogWarning("GameManager loaded, but client is not in a Photon room.");
         }
+
+        // Nur Dummy-Soldaten im Testmodus – Spieler startet ohne
     }
 
     private void EnsureRequiredManagers()
@@ -69,6 +72,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         EnsureManagerExists<VillagerManager>();
         EnsureManagerExists<NotificationManager>();
         EnsureManagerExists<AudioManager>();
+        EnsureManagerExists<TradingManager>();
+        EnsureManagerExists<TradingUI>();
     }
 
     private void EnsureManagerExists<T>() where T : MonoBehaviour
@@ -158,9 +163,66 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                     {
                         VillagerManager.Instance.SpawnStartingPopulation(playerIndex);
                     }
+
+                    SyncLocalPopulation(playerIndex);
                 }
             }
+
+            // Testmodus: Dummy-Gegner auf einer anderen Insel spawnen
+            if (isTestMode && players.Length < 2)
+            {
+                SpawnDummyPlayer();
+            }
         }
+    }
+
+    private void SpawnDummyPlayer()
+    {
+        int dummyIndex = 1;
+        Vector2 dummyPos = IslandManager.Instance.GetIslandPosition(dummyIndex);
+
+        BuildingManager.Instance.SpawnMainWarehouse(dummyPos, false);
+
+        // Ein Holzhaus für den Gegner (als Testziel)
+        if (BuildingManager.Instance != null)
+        {
+            BuildingData woodData = null;
+            BuildingData[] allData = Resources.FindObjectsOfTypeAll<BuildingData>();
+            foreach (var d in allData)
+            {
+                if (d.buildingName != null && d.buildingName.ToLower().Contains("holz"))
+                {
+                    woodData = d;
+                    break;
+                }
+            }
+            if (woodData != null)
+            {
+                BuildingManager.Instance.SpawnBuilding(woodData, dummyPos + new Vector2(0f, 4f), false);
+            }
+        }
+
+        Debug.Log("[GameManager] Dummy-Gegner gespawnt (Lagerhaus + Holzhaus).");
+    }
+
+    private void SyncLocalPopulation(int islandIndex)
+    {
+        if (!PhotonNetwork.InRoom || VillagerManager.Instance == null) return;
+        Vector2 islandPos = IslandManager.Instance.GetIslandPosition(islandIndex);
+        List<object> spawnData = new List<object>();
+        spawnData.Add(islandPos.x);
+        spawnData.Add(islandPos.y);
+        foreach (var v in VillagerManager.Instance.ActiveVillagers)
+        {
+            if (v == null) continue;
+            spawnData.Add((int)v.role);
+            spawnData.Add(v.transform.position.x);
+            spawnData.Add(v.transform.position.y);
+        }
+        if (spawnData.Count <= 2) return;
+        ExitGames.Client.Photon.SendOptions sendOpts = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+        PhotonNetwork.RaiseEvent(VillagerSpawnEventCode, spawnData.ToArray(),
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOpts);
     }
 
     private void UpdateStatusText()
@@ -181,7 +243,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         RectTransform root = CreateRect("GameChatPanel", canvas.transform);
         chatPanelRoot = root;
         root.anchorMin = new Vector2(0.04f, 0.02f);
-        root.anchorMax = chatExpandedAnchorMax;
+        root.anchorMax = new Vector2(0.36f, 0.24f);
         root.pivot = new Vector2(0f, 0f);
         root.anchoredPosition = Vector2.zero;
         root.offsetMin = Vector2.zero;
@@ -263,7 +325,10 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         buttonText.alignment = TextAlignmentOptions.Center;
 
         AddChatMessage("Spiel-Chat bereit. Wenn du den Gast siehst, bist du in derselben Lobby.");
-        CreateChatMinimizeButton(root);
+        CreateChatCloseButton(root);
+
+        chatPanelRoot.gameObject.SetActive(false);
+        CreateChatToggleIcon(canvas.transform);
     }
 
     private void OnChatInputEndEdit(string value)
@@ -309,67 +374,203 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     public void OnEvent(EventData photonEvent)
     {
-        if (photonEvent.Code != LobbyChatEventCode) return;
-        if (photonEvent.CustomData is string message)
+        if (photonEvent.Code == LobbyChatEventCode && photonEvent.CustomData is string message)
         {
             AddChatMessage(message);
+            return;
+        }
+
+        if (photonEvent.Code == VillagerSpawnEventCode && photonEvent.CustomData is object[] vData)
+        {
+            ReceiveVillagerSpawn(vData);
+            return;
+        }
+
+        if (photonEvent.Code == SoldierSpawnEventCode && photonEvent.CustomData is object[] sData)
+        {
+            ReceiveSoldierSpawn(sData);
+            return;
+        }
+
+        if (photonEvent.Code == BuildingDestroyEventCode && photonEvent.CustomData is object[] bData)
+        {
+            ReceiveBuildingDestroy(bData);
+            return;
+        }
+
+        if (photonEvent.Code == ShipSyncEventCode && photonEvent.CustomData is object[] shipData)
+        {
+            ReceiveShipSync(shipData);
+            return;
         }
     }
 
-    private void CreateChatMinimizeButton(RectTransform parent)
+    private void ReceiveVillagerSpawn(object[] data)
     {
-        RectTransform btnRect = CreateRect("GameChatMinimizeButton", parent);
+        if (VillagerManager.Instance == null) return;
+        float islandX = (float)data[0];
+        float islandY = (float)data[1];
+        for (int i = 2; i + 2 < data.Length; i += 3)
+        {
+            Villager.Role role = (Villager.Role)(int)data[i];
+            float vx = (float)data[i + 1];
+            float vy = (float)data[i + 2];
+            VillagerManager.Instance.SpawnVillagerAt(new Vector2(vx, vy), role);
+        }
+    }
+
+    private void ReceiveSoldierSpawn(object[] data)
+    {
+        float baseX = (float)data[0];
+        float baseY = (float)data[1];
+        for (int i = 2; i + 2 < data.Length; i += 3)
+        {
+            SoldierType type = (SoldierType)(int)data[i];
+            float ox = (float)data[i + 1];
+            float oy = (float)data[i + 2];
+            Vector3 pos = new Vector3(baseX + ox, baseY + oy, 0f);
+            SpawnRemoteSoldier(pos, type);
+        }
+    }
+
+    private void SpawnRemoteSoldier(Vector3 position, SoldierType type)
+    {
+        GameObject solObj = new GameObject($"Remote_{type}");
+        solObj.transform.position = position;
+        var sr = solObj.AddComponent<SpriteRenderer>();
+        sr.sortingOrder = 21;
+        solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+        var s = solObj.AddComponent<Soldier>();
+        s.soldierType = type;
+        s.team = Team.Player;
+        s.moveSpeed = 1.5f;
+    }
+
+    private void ReceiveBuildingDestroy(object[] data)
+    {
+        string buildingName = (string)data[0];
+        float bx = (float)data[1];
+        float by = (float)data[2];
+        Vector3 bPos = new Vector3(bx, by, -0.21f);
+        var allBuildings = FindObjectsByType<BuildingInstance>();
+        foreach (var b in allBuildings)
+        {
+            if (b == null) continue;
+            if (b.data != null && b.data.buildingName == buildingName &&
+                Vector3.Distance(b.transform.position, bPos) < 0.5f)
+            {
+                Destroy(b.gameObject);
+                return;
+            }
+        }
+    }
+
+    private void ReceiveShipSync(object[] data)
+    {
+        float spawnX = (float)data[0];
+        float spawnY = (float)data[1];
+        float posX = (float)data[2];
+        float posY = (float)data[3];
+        float rot = (float)data[4];
+
+        Ship[] ships = FindObjectsByType<Ship>(FindObjectsSortMode.None);
+        Vector2Int searchOrigin = new Vector2Int(Mathf.RoundToInt(spawnX), Mathf.RoundToInt(spawnY));
+        foreach (Ship ship in ships)
+        {
+            if (ship.spawnOrigin == searchOrigin)
+            {
+                ship.transform.position = new Vector3(posX, posY, ship.transform.position.z);
+                ship.transform.rotation = Quaternion.Euler(0f, 0f, rot);
+                return;
+            }
+        }
+    }
+
+    private void CreateChatCloseButton(RectTransform parent)
+    {
+        RectTransform btnRect = CreateRect("GameChatCloseButton", parent);
         btnRect.anchorMin = new Vector2(1f, 1f);
         btnRect.anchorMax = new Vector2(1f, 1f);
         btnRect.pivot = new Vector2(1f, 1f);
         btnRect.anchoredPosition = new Vector2(-10f, -8f);
-        btnRect.sizeDelta = new Vector2(32f, 28f);
+        btnRect.sizeDelta = new Vector2(28f, 28f);
 
         Image btnImage = btnRect.gameObject.AddComponent<Image>();
         btnImage.color = new Color(0.16f, 0.20f, 0.26f, 0.95f);
         btnImage.raycastTarget = true;
 
-        Button minimizeButton = btnRect.gameObject.AddComponent<Button>();
-        minimizeButton.targetGraphic = btnImage;
-        minimizeButton.onClick.AddListener(ToggleChatMinimized);
+        Button closeBtn = btnRect.gameObject.AddComponent<Button>();
+        closeBtn.targetGraphic = btnImage;
+        closeBtn.onClick.AddListener(CloseChatPanel);
 
-        chatMinimizeButtonText = CreateCenteredButtonText(btnRect.transform, "−");
-        chatMinimizeButtonText.fontSize = 20f;
-        chatMinimizeButtonText.color = new Color(0.90f, 0.84f, 0.60f, 1f);
-        chatMinimizeButtonText.raycastTarget = false;
+        TextMeshProUGUI txt = CreateCenteredButtonText(btnRect.transform, "X");
+        txt.fontSize = 16f;
+        txt.color = new Color(0.90f, 0.84f, 0.60f, 1f);
+        txt.raycastTarget = false;
 
         btnRect.SetAsLastSibling();
     }
 
-    private void ToggleChatMinimized()
+    private void CreateChatToggleIcon(Transform canvasTransform)
     {
-        chatIsMinimized = !chatIsMinimized;
+        RectTransform iconRect = CreateRect("ChatToggleIcon", canvasTransform);
+        iconRect.anchorMin = new Vector2(0.04f, 0.02f);
+        iconRect.anchorMax = new Vector2(0.04f, 0.02f);
+        iconRect.pivot = new Vector2(0f, 0f);
+        iconRect.anchoredPosition = Vector2.zero;
+        iconRect.sizeDelta = new Vector2(56f, 56f);
 
-        if (chatLogArea != null) chatLogArea.SetActive(!chatIsMinimized);
-        if (chatInputArea != null) chatInputArea.SetActive(!chatIsMinimized);
+        Image iconImage = iconRect.gameObject.AddComponent<Image>();
+        iconImage.raycastTarget = true;
 
-        if (chatPanelRoot != null)
+        Texture2D chatTex = Resources.Load<Texture2D>("chat-icon");
+        Sprite chatSprite = chatTex != null ? Sprite.Create(chatTex, new Rect(0, 0, chatTex.width, chatTex.height), new Vector2(0.5f, 0.5f)) : null;
+        if (chatSprite != null)
         {
-            Vector2 anchorMax = chatPanelRoot.anchorMax;
-            anchorMax.y = chatIsMinimized ? chatMinimizedAnchorMaxY : chatExpandedAnchorMax.y;
-            chatPanelRoot.anchorMax = anchorMax;
+            iconImage.sprite = chatSprite;
+            iconImage.preserveAspect = true;
+        }
+        else
+        {
+            iconImage.color = new Color(0.16f, 0.20f, 0.26f, 0.95f);
+            TextMeshProUGUI fallback = CreateCenteredButtonText(iconRect, "Chat");
+            fallback.fontSize = 12f;
         }
 
-        if (chatMinimizeButtonText != null)
+        Button toggleBtn = iconRect.gameObject.AddComponent<Button>();
+        toggleBtn.targetGraphic = iconImage;
+        toggleBtn.onClick.AddListener(ToggleChatPanel);
+
+        chatToggleIcon = iconRect.gameObject;
+    }
+
+    private void ToggleChatPanel()
+    {
+        if (chatPanelRoot == null || chatToggleIcon == null) return;
+        bool show = !chatPanelRoot.gameObject.activeSelf;
+        chatPanelRoot.gameObject.SetActive(show);
+        chatToggleIcon.SetActive(!show);
+
+        if (show && chatInputField != null)
         {
-            chatMinimizeButtonText.text = chatIsMinimized ? "+" : "−";
+            chatInputField.ActivateInputField();
         }
+    }
+
+    private void CloseChatPanel()
+    {
+        if (chatPanelRoot != null) chatPanelRoot.gameObject.SetActive(false);
+        if (chatToggleIcon != null) chatToggleIcon.SetActive(true);
     }
 
     private void Update()
     {
-        if (chatPanelRoot == null) return;
+        if (chatPanelRoot == null || chatToggleIcon == null) return;
         if (Keyboard.current == null || !Keyboard.current.tKey.wasPressedThisFrame) return;
-        if (chatInputField != null && chatInputField.isFocused) return;
 
-        ToggleChatMinimized();
+        ToggleChatPanel();
 
-        if (!chatIsMinimized && chatInputField != null)
+        if (chatPanelRoot.gameObject.activeSelf && chatInputField != null)
         {
             chatInputField.ActivateInputField();
         }
@@ -462,5 +663,69 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         Debug.Log($"Disconnected from Photon. Cause: {cause}");
         UnityEngine.SceneManagement.SceneManager.LoadScene(SceneNames.StartMenuScene);
+    }
+
+    private void SpawnInitialSoldiers()
+    {
+        Vector3 spawnPos;
+        Warehouse wh = FindObjectOfType<Warehouse>();
+        if (wh != null)
+        {
+            spawnPos = wh.transform.position + new Vector3(2f, 0f, 0f);
+        }
+        else if (IslandManager.Instance != null)
+        {
+            Vector2 islandPos = IslandManager.Instance.GetIslandPosition(0);
+            spawnPos = new Vector3(islandPos.x + 2f, islandPos.y, 0f);
+        }
+        else
+        {
+            return;
+        }
+
+        SoldierType[] types = { SoldierType.Spear, SoldierType.Shield, SoldierType.Sword, SoldierType.Bow };
+
+        foreach (var type in types)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                GameObject solObj = new GameObject($"Init_{type}_{i}");
+                Vector3 offset = new Vector3(i * 1.2f, (int)type * 1.2f, 0f);
+                solObj.transform.position = spawnPos + offset;
+
+                var sr = solObj.AddComponent<SpriteRenderer>();
+                sr.sortingOrder = 21;
+                solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+
+                var s = solObj.AddComponent<Soldier>();
+                s.soldierType = type;
+                s.team = Team.Player;
+                s.moveSpeed = 1.5f;
+            }
+        }
+
+        Debug.Log("[GameManager] 8 Start-Soldaten gespawnt (2 pro Typ).");
+
+        SyncInitialSoldiers(spawnPos, types);
+    }
+
+    private void SyncInitialSoldiers(Vector3 basePos, SoldierType[] types)
+    {
+        if (!PhotonNetwork.InRoom) return;
+        List<object> data = new List<object>();
+        data.Add(basePos.x);
+        data.Add(basePos.y);
+        foreach (var type in types)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                data.Add((int)type);
+                data.Add(i * 1.2f);
+                data.Add((int)type * 1.2f);
+            }
+        }
+        ExitGames.Client.Photon.SendOptions sendOpts = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+        PhotonNetwork.RaiseEvent(SoldierSpawnEventCode, data.ToArray(),
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOpts);
     }
 }

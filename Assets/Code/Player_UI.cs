@@ -45,6 +45,7 @@ public class Player_UI : MonoBehaviour
         new ResourceDefinition { id = "stein",       displayName = "Stein",       startValue = 100 },
         new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 0   },
         new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 0   },
+        new ResourceDefinition { id = "wüstenfrucht", displayName = "Wüstenfrucht", startValue = 0 },
         new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
         new ResourceDefinition { id = "dorfbewohner", displayName = "Freie Arbeiter", startValue = 10, maxValue = 999 },
         new ResourceDefinition { id = "arbeiter",     displayName = "Arbeiter",     startValue = 2,  maxValue = 999 },
@@ -88,17 +89,18 @@ public class Player_UI : MonoBehaviour
     [SerializeField] private Color borderColor = new Color(0.72f, 0.52f, 0.18f, 1.00f);   // goldene Umrandung
     [SerializeField] private Color labelColor  = new Color(0.90f, 0.78f, 0.52f, 0.85f);   // Pergament-Beige
     [SerializeField] private Color valueColor  = new Color(1.00f, 0.95f, 0.75f, 1.00f);   // helles Cremegold
-    [SerializeField] private float barHeight   = 40f;      // noch kompakter
+    [SerializeField] private float barHeight   = 58f;      // größer
     [SerializeField] private float slotPadding = 4f;
-    [SerializeField] private float iconSize    = 28f;      // noch kleinere Icons
+    [SerializeField] private float iconSize    = 34f;      // größere Icons
     [SerializeField] private float borderWidth = 2f;
-    [SerializeField] private float slotWidth   = 70f;      // breitere Slots
+    [SerializeField] private float slotWidth   = 80f;      // breitere Slots
 
     // ── Laufzeit ─────────────────────────────────────────────────────────────
 
     private readonly Dictionary<string, int>                values = new();
     private readonly Dictionary<string, int>                maxValues = new();
     private readonly Dictionary<string, TextMeshProUGUI>    labels = new();
+    private readonly Dictionary<string, Image>              resourceIcons = new();
     private readonly Dictionary<string, string>             currentRates = new();
 
     private float rateUpdateTimer = 0f;
@@ -151,10 +153,7 @@ public class Player_UI : MonoBehaviour
         EnsureResourceExists("eisen", 10, 999);
         EnsureResourceExists("gold", 10, 999);
         EnsureResourceExists("weizen", 10, 999);
-        EnsureResourceExists("fruechte", 0, 999);
-        EnsureResourceExists("wüstenfrucht", 0, 999);
         EnsureResourceExists("fleisch", 0, 999);
-        EnsureResourceExists("geld", 0, 999);
         EnsureResourceExists("soldaten", 0, 5); // Start mit Limit 5
     }
 
@@ -178,7 +177,68 @@ public class Player_UI : MonoBehaviour
             Time.timeScale = 1.0f; // Default standard speed
         }
 
+        EnsureDefaultBuildMenuItems();
         BuildUI();
+    }
+
+    private void EnsureDefaultBuildMenuItems()
+    {
+        EnsureBuildMenuItem("turm", "Turm", "andere", "BuildingData/Turm", "Textures/turm");
+        EnsureBuildMenuItem("lagerhaus", "Lagerhaus", "andere", "BuildingData/Lagerhaus", "warehouse_texture");
+    }
+
+    private void EnsureBuildMenuItem(string id, string displayName, string categoryId, string buildingDataPath, string iconPath)
+    {
+        foreach (var item in menuItems)
+        {
+            if (item.id == id || item.displayName == displayName)
+            {
+                return;
+            }
+        }
+
+        BuildingData loadedBuilding = Resources.Load<BuildingData>(buildingDataPath);
+        if (loadedBuilding == null && id == "lagerhaus")
+        {
+            loadedBuilding = CreateRuntimeWarehouseBuildingData();
+        }
+
+        if (loadedBuilding == null)
+        {
+            Debug.LogWarning($"[Player_UI] Konnte BuildingData nicht laden: {buildingDataPath}");
+            return;
+        }
+
+        menuItems.Add(new MenuItem
+        {
+            id = id,
+            displayName = displayName,
+            categoryId = categoryId,
+            buildingData = loadedBuilding,
+            icon = LoadSpriteFromResources(iconPath)
+        });
+    }
+
+    private BuildingData CreateRuntimeWarehouseBuildingData()
+    {
+        BuildingData warehouseData = ScriptableObject.CreateInstance<BuildingData>();
+        warehouseData.name = "Lagerhaus";
+        warehouseData.buildingName = "Lagerhaus";
+        warehouseData.prefab = null;
+        warehouseData.placementRule = PlacementRule.LandOnly;
+        warehouseData.width = 3;
+        warehouseData.height = 3;
+        warehouseData.woodCost = 50;
+        warehouseData.stoneCost = 30;
+        warehouseData.buildTime = 15f;
+        warehouseData.requiredWorkers = 1;
+        warehouseData.workersNeeded = 0;
+        warehouseData.sleepCapacity = 5;
+        warehouseData.fogRevealRadius = 10f;
+        warehouseData.maxHP = 2000;
+        warehouseData.isWarehouseType = true;
+        warehouseData.canBuildOnOtherIslands = true;
+        return warehouseData;
     }
 
     // ── Öffentliche API ──────────────────────────────────────────────────────
@@ -262,6 +322,29 @@ public class Player_UI : MonoBehaviour
             string rateText = currentRates.ContainsKey(id) ? currentRates[id] : "";
             lbl.text = baseText + rateText;
         }
+
+        if (id == "stimmung" && resourceIcons.TryGetValue(id, out var moodIcon))
+        {
+            int v = values[id];
+            string texName;
+            if (v >= 70) texName = "Textures/Gutemood";
+            else if (v >= 40) texName = "Textures/okemood";
+            else texName = "Textures/schlechtemood";
+            var sprite = LoadSpriteFromResources(texName);
+            if (sprite != null)
+            {
+                moodIcon.sprite = sprite;
+                moodIcon.preserveAspect = true;
+            }
+        }
+    }
+
+    private Sprite LoadSpriteFromResources(string path)
+    {
+        Texture2D tex = Resources.Load<Texture2D>(path);
+        if (tex != null)
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return null;
     }
 
     public void AddResource(string id, int delta) => SetResource(id, GetResource(id) + delta);
@@ -370,13 +453,10 @@ public class Player_UI : MonoBehaviour
         EnsureSlot(barGO.transform, "stein", "Stein", 100, 0);
         EnsureSlot(barGO.transform, "eisen", "Eisen", 0, 0);
         EnsureSlot(barGO.transform, "gold", "Gold (Erz)", 0, 0);
-        EnsureSlot(barGO.transform, "geld", "Geld (Münzen)", 0, 0);
         EnsureSlot(barGO.transform, "weizen", "Weizen", 0, 0);
-        EnsureSlot(barGO.transform, "fruechte", "Früchte", 0, 0);
         EnsureSlot(barGO.transform, "fleisch", "Fleisch", 0, 0);
 
         BuildBottomMenu(canvasGO.transform);
-        AutoPopulateBuildingMenu();
         BuildSoldierCommandMenu(canvasGO.transform);
         BuildTooltipPanel(canvasGO.transform);
         BuildStatisticsScreen(canvasGO.transform);
@@ -426,6 +506,7 @@ public class Player_UI : MonoBehaviour
         {
             CreateMenuButton(mainMenuContainer.transform, cat.displayName, () => OpenSubMenu(cat.displayName));
         }
+        CreateMenuButton(mainMenuContainer.transform, "Markt", () => { if (TradingUI.Instance != null) TradingUI.Instance.TogglePanel(); });
         CreateMenuButton(mainMenuContainer.transform, "Statistik", ToggleStatisticsScreen);
 
         // ── Sub Menu Blocker (Full Screen zum Schließen bei Klick daneben) ──
@@ -772,12 +853,30 @@ public class Player_UI : MonoBehaviour
         }
     }
 
-    private Sprite GetIcon(string id)
+    public Sprite GetIcon(string id)
     {
-        if (startingResources == null) return null;
-        foreach (var res in startingResources)
+        if (startingResources != null)
         {
-            if (res.id == id) return res.icon;
+            foreach (var res in startingResources)
+            {
+                if (res.id == id && res.icon != null) return res.icon;
+            }
+        }
+        
+        string path = null;
+        if (id == "holz") path = "Wood_Overlay";
+        else if (id == "stein") path = "Stone_Overlay";
+        else if (id == "eisen") path = "Iron_Overlay";
+        else if (id == "gold") path = "Gold_Overlay";
+        else if (id == "weizen") path = "Wheat_Overlay";
+        else if (id == "fleisch") path = "Meat_Overlay";
+        else if (id == "fruechte" || id == "wüstenfrucht") path = "Fruit_Overlay";
+        else if (id == "dorfbewohner") path = "Textures/dorfbewohner";
+        else if (id == "arbeiter") path = "Textures/schwertkämpfer";
+        
+        if (path != null)
+        {
+            return LoadSpriteFromResources(path);
         }
         return null;
     }
@@ -861,69 +960,6 @@ public class Player_UI : MonoBehaviour
         subMenuBlocker.SetActive(false);
         // Da wir es nicht mehr deaktivieren, brauchen wir es hier auch nicht aktivieren
         // mainMenuContainer.SetActive(true);
-    }
-
-    private void AutoPopulateBuildingMenu()
-    {
-        BuildingData[] allBuildings = Resources.FindObjectsOfTypeAll<BuildingData>();
-        if (allBuildings == null || allBuildings.Length == 0)
-        {
-            allBuildings = Resources.LoadAll<BuildingData>("");
-        }
-        if (allBuildings == null || allBuildings.Length == 0) return;
-
-        foreach (var buildingData in allBuildings)
-        {
-            if (buildingData == null || string.IsNullOrEmpty(buildingData.buildingName)) continue;
-            bool alreadyExists = false;
-
-            foreach (var item in menuItems)
-            {
-                if (item.buildingData == buildingData || (item.buildingData != null && item.buildingData.buildingName == buildingData.buildingName))
-                {
-                    alreadyExists = true;
-                    break;
-                }
-            }
-
-            if (alreadyExists) continue;
-
-            string categoryId = DetermineBuildingCategory(buildingData);
-            if (!menuCategories.Exists(c => c.id == categoryId))
-            {
-                categoryId = "andere";
-            }
-
-            MenuItem newItem = new MenuItem
-            {
-                id = buildingData.buildingName.Replace(" ", "_").ToLowerInvariant(),
-                displayName = buildingData.buildingName,
-                icon = buildingData.uiIcon,
-                categoryId = categoryId,
-                buildingData = buildingData
-            };
-            menuItems.Add(newItem);
-        }
-    }
-
-    private string DetermineBuildingCategory(BuildingData buildingData)
-    {
-        if (!string.IsNullOrEmpty(buildingData.uiCategoryId))
-            return buildingData.uiCategoryId;
-
-        if (buildingData.isDefenseTower)
-            return "andere";
-
-        if (buildingData.isBarracks)
-            return "andere";
-
-        if (buildingData.sleepCapacity > 0 || buildingData.producesVillagers || buildingData.productionResourceId == "bevolkerung")
-            return "hauser";
-
-        if (buildingData.requiredResourceType != ResourceType.None)
-            return "andere";
-
-        return "andere";
     }
 
     private void BuildStatisticsScreen(Transform canvasTransform)
@@ -1202,9 +1238,31 @@ public class Player_UI : MonoBehaviour
         }
         else
         {
-            iconImg.color = new Color(1f, 1f, 1f, 0.08f);
+            string iconPath = null;
+            if (def.id == "arbeiter") iconPath = "Textures/schwertkämpfer";
+            else if (def.id == "dorfbewohner") iconPath = "Textures/dorfbewohner";
+            else if (def.id == "fleisch") iconPath = "Meat_Overlay";
+
+            if (iconPath != null)
+            {
+                var loaded = LoadSpriteFromResources(iconPath);
+                if (loaded != null)
+                {
+                    iconImg.sprite = loaded;
+                    iconImg.preserveAspect = true;
+                }
+                else
+                {
+                    iconImg.color = new Color(1f, 1f, 1f, 0.08f);
+                }
+            }
+            else
+            {
+                iconImg.color = new Color(1f, 1f, 1f, 0.08f);
+            }
         }
         iconImg.raycastTarget = false;
+        resourceIcons[def.id] = iconImg;
 
         var iconLE = iconGO.AddComponent<LayoutElement>();
         iconLE.preferredWidth  = iconSize;

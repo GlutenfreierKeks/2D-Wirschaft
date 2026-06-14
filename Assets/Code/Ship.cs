@@ -1,588 +1,724 @@
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using Photon.Pun;
 
-public enum ShipState { Idle, Building, Loading, Sailing, Unloading }
-
-/// <summary>
-/// Represents a ship unit that can carry soldiers and workers across water to other islands.
-/// Ships are built at a Steg (pier) and can be selected to load/unload passengers and set sail.
-/// </summary>
-[RequireComponent(typeof(SpriteRenderer))]
-[RequireComponent(typeof(BoxCollider2D))]
 public class Ship : MonoBehaviour
 {
-    // ── Static registry ────────────────────────────────────────────────────────
-    public static readonly List<Ship> AllShips = new List<Ship>();
+    [Header("Ship Configuration")]
+    public ShipData shipData;
+    public bool isLocal = true;
+    
+    [Header("Cargo System")]
+    public List<ShipSlot> slots = new List<ShipSlot>();
+    
+    [Header("Movement")]
+    public float moveSpeed = 2f;
+    public float rotationSpeed = 180f;
+    private Vector3 targetPosition;
+    private bool isMoving = false;
+    private bool isSelected = false;
+    private float targetAngle = 0f;
+    private float currentAngle = 0f;
+    private List<Vector2> waterPath = new List<Vector2>();
+    private int waterPathIndex = 0;
 
-    // ── Settings ──────────────────────────────────────────────────────────────
-    [Header("Ship Settings")]
-    public int capacity = 8;
-    public float sailSpeed = 2.5f;
-    public float loadUnloadTime = 2f;
+    [Header("Health")]
+    public int maxHP = 180;
+    public int currentHP = 180;
+    
+    [Header("Crew")]
+    public Villager assignedCrew;  // The villager sailing this ship
+    
+    [Header("Multiplayer Sync")]
+    public Vector2Int spawnOrigin;
+    private float syncTimer = 0f;
+    private const float SyncInterval = 0.15f;
 
-    // ── State ─────────────────────────────────────────────────────────────────
-    public ShipState State { get; private set; } = ShipState.Idle;
-    public bool IsSelected { get; private set; } = false;
-
-    // ── Passengers ────────────────────────────────────────────────────────────
-    private readonly List<Soldier> soldierPassengers   = new List<Soldier>();
-    private readonly List<Villager> villagerPassengers = new List<Villager>();
-
-    public int PassengerCount   => soldierPassengers.Count + villagerPassengers.Count;
-    public int FreeSlotsCount   => capacity - PassengerCount;
-
-    // ── Navigation ────────────────────────────────────────────────────────────
-    private Vector2 sailTarget;
-    private bool hasSailTarget = false;
-    private readonly List<Vector2> sailPath = new List<Vector2>();
-    private int sailPathIndex = 0;
-
-
-    // ── Visuals ───────────────────────────────────────────────────────────────
-    private SpriteRenderer sr;
-    private TextMesh nameTag;
-    private TextMesh statusTag;
-    private LineRenderer selectionCircle;
-
-    // ── Owner ─────────────────────────────────────────────────────────────────
-    public int ownerActorNumber = 0;
-
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private void OnEnable()
-    {
-        if (!AllShips.Contains(this)) AllShips.Add(this);
-    }
-
-    private void OnDisable()
-    {
-        AllShips.Remove(this);
-    }
-
+    [Header("Visual")]
+    private SpriteRenderer spriteRenderer;
+    private Color originalColor;
+    public Color selectedColor = new Color(0.3f, 0.85f, 1f, 1f);
+    
+    // Events
+    public System.Action<Ship> OnShipClicked;
+    public System.Action OnCargoChanged;
+    
     private void Awake()
     {
-        sr = GetComponent<SpriteRenderer>();
-        sr.sortingOrder = 22;
-        BuildShipSprite();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
+        
+        if (shipData != null)
+        {
+            moveSpeed = shipData.moveSpeed;
+            rotationSpeed = shipData.rotationSpeed;
+        }
+        
+        InitializeSlots();
+        currentHP = Mathf.Max(1, maxHP);
+        
+        // Aktuelle Rotation vom BuildingManager übernehmen (nicht überschreiben)
+        currentAngle = transform.rotation.eulerAngles.z;
     }
 
+    private void InitializeSlots()
+    {
+        slots.Clear();
+        int count = shipData != null ? shipData.GetSlotCount() : 8;
+        for (int i = 0; i < count; i++)
+            slots.Add(new ShipSlot());
+    }
+    
     private void Start()
     {
-        SetupVisuals();
-        SetSelected(false);
-        UpdateStatusTag();
+        // Add click detector
+        var collider = GetComponent<Collider2D>();
+        if (collider == null)
+        {
+            var bc = gameObject.AddComponent<BoxCollider2D>();
+            bc.size = new Vector2(1.5f, 1.5f);
+        }
 
-        // Reveal fog around ship (medium radius)
-        var rev = gameObject.AddComponent<FogRevealer>();
-        rev.radius = 7.0f;
-        rev.isLocalPlayer = true;
+        // Subscribe to cargo changes
+        OnCargoChanged += UpdateVisualState;
+
+        // Automatisch einen arbeitslosen Dorfbewohner als Besatzung zuweisen
+        if (!HasCrew() && VillagerManager.Instance != null)
+        {
+            AssignFirstAvailableVillager();
+        }
     }
 
-
+    private void UpdateVisualState()
+    {
+        if (spriteRenderer != null)
+        {
+            int used = slots.Count(s => !s.IsEmpty);
+            int total = slots.Count;
+            float ratio = total > 0 ? (float)used / total : 0f;
+            spriteRenderer.color = Color.Lerp(originalColor, selectedColor, ratio * 0.3f);
+        }
+    }
+    
     private void Update()
     {
-        // Continuously reveal explored fog around the ship's current position
-        FogProjector.RegisterExploration(transform.position, 7f);
-
-        if (State == ShipState.Sailing && hasSailTarget)
+        HandleMovement();
+        HandleClickDetection();
+        BroadcastPosition();
+    }
+    
+    private void HandleClickDetection()
+    {
+        if (!isLocal) return;
+        
+        // Check if mouse is over this ship
+        Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(UnityEngine.InputSystem.Mouse.current.position.ReadValue());
+        Collider2D hit = Physics2D.OverlapPoint(mouseWorldPos);
+        
+        if (hit != null && hit.gameObject == gameObject)
         {
-            Vector2 pos2D = transform.position;
-            Vector2 dir   = (sailTarget - pos2D);
-            float dist    = dir.magnitude;
-
-            if (dist < 0.12f)
+            if (UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame)
             {
-                transform.position = new Vector3(sailTarget.x, sailTarget.y, transform.position.z);
-                
-                sailPathIndex++;
-                if (sailPathIndex < sailPath.Count)
+                // Check if shift is held for multi-select, otherwise single click
+                if (UnityEngine.InputSystem.Keyboard.current.shiftKey.isPressed)
                 {
-                    sailTarget = sailPath[sailPathIndex];
+                    ToggleSelection();
                 }
                 else
                 {
-                    State         = ShipState.Idle;
-                    hasSailTarget = false;
-                    UpdateStatusTag();
-                    StartCoroutine(UnloadPassengers());
+                    SelectShip();
                 }
-                return;
             }
+        }
+    }
+    
+    private void HandleMovement()
+    {
+        if (!isMoving) return;
 
-            // Rotate ship to face direction
-            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
-            transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.Euler(0f, 0f, angle), Time.deltaTime * 5f);
-
-            Vector2 next = Vector2.MoveTowards(pos2D, sailTarget, sailSpeed * Time.deltaTime);
-            transform.position = new Vector3(next.x, next.y, transform.position.z);
+        if (waterPath.Count == 0)
+        {
+            MoveDirectTowardsTarget();
+            return;
         }
 
-
-        UpdateStatusTag();
-    }
-
-    // ── Public API ────────────────────────────────────────────────────────────
-
-    public void SetSelected(bool selected)
-    {
-        IsSelected = selected;
-        if (selectionCircle != null) selectionCircle.enabled = selected;
-    }
-
-    /// <summary>Load a soldier into the ship if there is space.</summary>
-    public bool LoadSoldier(Soldier s)
-    {
-        if (s == null || FreeSlotsCount <= 0 || State != ShipState.Idle) return false;
-        soldierPassengers.Add(s);
-        s.gameObject.SetActive(false); // hide while on ship
-        NotificationManager.Instance?.Notify("ship_load", $"Soldat eingeschifft. ({PassengerCount}/{capacity})", 3f);
-        UpdateStatusTag();
-        return true;
-    }
-
-    /// <summary>Load a villager/worker into the ship if there is space.</summary>
-    public bool LoadVillager(Villager v)
-    {
-        if (v == null || FreeSlotsCount <= 0 || State != ShipState.Idle) return false;
-        villagerPassengers.Add(v);
-        v.gameObject.SetActive(false); // hide while on ship
-        NotificationManager.Instance?.Notify("ship_load", $"Bauarbeiter eingeschifft. ({PassengerCount}/{capacity})", 3f);
-        UpdateStatusTag();
-        return true;
-    }
-
-    /// <summary>Order the ship to sail to the given world position.</summary>
-    public void SailTo(Vector2 target)
-    {
-        if (State == ShipState.Sailing || State == ShipState.Building) return;
-
-        Vector2 start = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
-        Vector2 dest = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
-
-        List<Vector2> path = FindWaterPath(start, dest);
-        if (path.Count > 0)
+        Vector3 target;
+        if (waterPathIndex < waterPath.Count)
         {
-            sailPath.Clear();
-            sailPath.AddRange(path);
-            sailPathIndex = 0;
-            sailTarget = sailPath[0];
-            hasSailTarget = true;
-            State = ShipState.Sailing;
-            UpdateStatusTag();
+            target = new Vector3(waterPath[waterPathIndex].x, waterPath[waterPathIndex].y, transform.position.z);
         }
         else
         {
-            NotificationManager.Instance?.Notify("ship_no_path", "Kein Seeweg dorthin gefunden! (Schiffe können nicht über Land fahren)", 5f);
+            target = targetPosition;
         }
-    }
-
-
-    /// <summary>Unload all passengers at the current position immediately.</summary>
-    public void UnloadAll()
-    {
-        if (State == ShipState.Sailing || State == ShipState.Building) return;
-        StartCoroutine(UnloadPassengers());
-    }
-
-    // ── Loading helpers ───────────────────────────────────────────────────────
-
-    /// <summary>Load nearby soldiers (within radius) into the ship.</summary>
-    public int LoadNearbySoldiers(float radius = 5f)
-    {
-        if (State != ShipState.Idle) return 0;
-        int loaded = 0;
-        var toLoad = new List<Soldier>(Soldier.ActiveSoldiers);
-        foreach (var s in toLoad)
+        
+        Vector3 direction = target - transform.position;
+        direction.z = 0;
+        
+        if (direction.magnitude < 0.3f)
         {
-            if (FreeSlotsCount <= 0) break;
-            if (s == null || !s.IsOwnedByLocalPlayer) continue;
-            if (Vector2.Distance(transform.position, s.transform.position) <= radius)
+            if (waterPathIndex < waterPath.Count)
             {
-                if (LoadSoldier(s)) loaded++;
+                waterPathIndex++;
+                return;
+            }
+            else
+            {
+                StopMovement();
+                return;
             }
         }
-        return loaded;
+
+        if (IsOnLand())
+        {
+            StopMovement();
+            NotificationManager.Instance?.Notify("ship_stranded",
+                "Schiff gestrandet!", 5f);
+            return;
+        }
+        
+        targetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        
+        float angleDiff = Mathf.DeltaAngle(currentAngle, targetAngle);
+        float rotationStep = rotationSpeed * Time.deltaTime;
+        
+        if (Mathf.Abs(angleDiff) < rotationStep)
+            currentAngle = targetAngle;
+        else
+            currentAngle += Mathf.Sign(angleDiff) * rotationStep;
+        
+        transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
+        transform.position += transform.up * moveSpeed * Time.deltaTime;
+        
+        RevealFogAlongPath();
     }
 
-    /// <summary>Call one worker from the island the ship is currently at to walk to the ship.</summary>
-    public int LoadNearbyWorkers(float radius = 40f)
+    private void MoveDirectTowardsTarget()
     {
-        if (State != ShipState.Idle) return 0;
-        if (FreeSlotsCount <= 0) return 0;
-        if (VillagerManager.Instance == null) return 0;
+        Vector3 direction = targetPosition - transform.position;
+        direction.z = 0;
 
-        // Find nearest land spot to determine the island the ship is currently docked at
-        Vector2 landingSpot = FindNearestLandSpot();
-        if (landingSpot.x < -9000f)
+        if (direction.magnitude < 0.3f)
         {
-            NotificationManager.Instance?.Notify("ship_no_island", "Das Schiff ist nicht nah genug an einer Insel!", 4f);
-            return 0;
+            StopMovement();
+            return;
         }
 
-        int shipIslandIndex = IslandManager.GetIslandIndexAt(landingSpot);
-        if (shipIslandIndex < 0)
+        if (IsOnLand())
         {
-            NotificationManager.Instance?.Notify("ship_no_island", "Keine Insel am Steg/Strand erkannt!", 4f);
-            return 0;
+            StopMovement();
+            NotificationManager.Instance?.Notify("ship_stranded",
+                "Schiff gestrandet! Kein Wasserweg.", 5f);
+            return;
         }
 
-        // Find ONE free worker on the same island
-        Villager bestWorker = null;
+        targetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        float angleDiff = Mathf.DeltaAngle(currentAngle, targetAngle);
+        float rotationStep = rotationSpeed * Time.deltaTime;
+        if (Mathf.Abs(angleDiff) < rotationStep)
+            currentAngle = targetAngle;
+        else
+            currentAngle += Mathf.Sign(angleDiff) * rotationStep;
+
+        transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
+        transform.position += transform.up * moveSpeed * Time.deltaTime;
+    }
+
+    private bool IsOnLand()
+    {
+        Vector2Int grid = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+        return IslandManager.IsLand(grid);
+    }
+    
+    public void MoveTo(Vector3 destination)
+    {
+        if (!HasCrew())
+        {
+            AssignFirstAvailableVillager();
+        }
+
+        if (!HasCrew())
+        {
+            Debug.Log("[Ship] Cannot move - no villager assigned as crew!");
+            NotificationManager.Instance?.Notify("ship_no_crew", "Ein Schiff braucht einen Dorfbewohner um zu fahren!", 5f);
+            return;
+        }
+        
+        Vector2Int destGrid = new Vector2Int(Mathf.RoundToInt(destination.x), Mathf.RoundToInt(destination.y));
+        
+        if (IslandManager.IsLand(destGrid))
+        {
+            destination = FindNearestWater(destination);
+        }
+        
+        targetPosition = new Vector3(destination.x, destination.y, transform.position.z);
+        
+        waterPath = BuildingManager.FindWaterPath(transform.position, destination);
+        waterPathIndex = 0;
+        isMoving = true;
+        
+        Debug.Log($"[Ship] Moving to {destination}, path length: {waterPath.Count}");
+    }
+    
+
+    private Vector3 FindNearestWater(Vector3 landPos)
+    {
+        Vector2Int center = new Vector2Int(Mathf.RoundToInt(landPos.x), Mathf.RoundToInt(landPos.y));
+        int searchRadius = 20;
+
+        for (int r = 1; r <= searchRadius; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r) continue;
+                    Vector2Int test = new Vector2Int(center.x + dx, center.y + dy);
+                    if (BuildingManager.IsWalkable(test))
+                    {
+                        Vector3 nearest = new Vector3(test.x, test.y, landPos.z);
+                        if (IslandManager.IsLand(test))
+                        {
+                            // Check adjacent water
+                            Vector2Int[] dirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+                            foreach (var d in dirs)
+                            {
+                                Vector2Int water = test + d;
+                                if (!IslandManager.IsLand(water))
+                                    return new Vector3(water.x, water.y, landPos.z);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return landPos;
+    }
+
+    public void AssignFirstAvailableVillager()
+    {
+        if (VillagerManager.Instance == null) return;
+
+        Villager v = VillagerManager.Instance.GetAvailableVillager();
+        if (v != null)
+        {
+            AssignCrew(v);
+            Debug.Log($"[Ship] Auto-assigned villager {v.name} as crew");
+        }
+    }
+    
+    private void StopMovement()
+    {
+        isMoving = false;
+        RevealAreaAroundShip();
+        if (isLocal && PhotonNetwork.InRoom)
+        {
+            SendSyncEvent();
+        }
+    }
+    
+    public void StopMovementCommand()
+    {
+        isMoving = false;
+    }
+
+    private void BroadcastPosition()
+    {
+        if (!isLocal || !PhotonNetwork.InRoom) return;
+
+        if (!isMoving) return;
+
+        syncTimer += Time.deltaTime;
+        if (syncTimer < SyncInterval) return;
+        syncTimer = 0f;
+
+        SendSyncEvent();
+    }
+
+    private void SendSyncEvent()
+    {
+        Vector3 pos = transform.position;
+        float rot = transform.rotation.eulerAngles.z;
+        object[] data = new object[]
+        {
+            (float)spawnOrigin.x,
+            (float)spawnOrigin.y,
+            pos.x,
+            pos.y,
+            rot
+        };
+        PhotonNetwork.RaiseEvent(14, data,
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others },
+            new ExitGames.Client.Photon.SendOptions { Reliability = false });
+    }
+    
+    private void RevealFogAlongPath()
+    {
+        float revealRadius = 12f;
+        FogProjector.RegisterExploration(transform.position, revealRadius);
+    }
+    
+    private void RevealAreaAroundShip()
+    {
+        float revealRadius = 16f;
+        FogProjector.RegisterExploration(transform.position, revealRadius);
+    }
+    
+    private void SelectShip()
+    {
+        // Deselect all other ships first
+        Ship[] allShips = FindObjectsOfType<Ship>();
+        foreach (Ship s in allShips)
+        {
+            s.isSelected = false;
+            s.UpdateVisualSelection();
+        }
+        
+        isSelected = true;
+        UpdateVisualSelection();
+        
+        // Open ship UI panel — auto-create if not in scene (wie BuildingInfoPanel)
+        ShipCargoUI cargoUI = ShipCargoUI.Instance;
+        if (cargoUI == null)
+        {
+            cargoUI = FindObjectOfType<ShipCargoUI>();
+        }
+        if (cargoUI == null)
+        {
+            GameObject go = new GameObject("ShipCargoUI");
+            cargoUI = go.AddComponent<ShipCargoUI>();
+            Debug.Log("[Ship] ShipCargoUI auto-erstellt.");
+        }
+        cargoUI.ShowShipUI(this);
+    }
+    
+    private void ToggleSelection()
+    {
+        isSelected = !isSelected;
+        UpdateVisualSelection();
+        
+        if (isSelected)
+        {
+            OnShipClicked?.Invoke(this);
+        }
+    }
+    
+    private void UpdateVisualSelection()
+    {
+        if (spriteRenderer == null) return;
+        
+        if (isSelected)
+        {
+            spriteRenderer.color = selectedColor;
+        }
+        else
+        {
+            spriteRenderer.color = originalColor;
+        }
+    }
+    
+    // ── Cargo System (New Slot-Based) ─────────────────────────────────────
+
+    public bool HasCrew()
+    {
+        return assignedCrew != null;
+    }
+    
+    public bool AssignCrew(Villager villager)
+    {
+        if (assignedCrew != null) return false;
+        
+        assignedCrew = villager;
+        villager.AssignToShip(this);
+        return true;
+    }
+    
+    public void ReleaseCrew()
+    {
+        if (assignedCrew != null)
+        {
+            assignedCrew.ReleaseFromShip();
+            assignedCrew = null;
+        }
+    }
+
+    // ── Slot Management ──────────────────────────────────────────────────
+
+    public int GetSlotCount() => slots.Count;
+
+    public int GetUsedSlotCount() => slots.Count(s => !s.IsEmpty);
+
+    public int GetFreeSlotCount() => slots.Count(s => s.IsEmpty);
+
+    public bool HasFreeSlot() => GetFreeSlotCount() > 0;
+
+    public int GetCargoCount() => slots.Count(s => s.content == ShipSlot.SlotContent.Material);
+
+    public int GetCargoCapacity() => slots.Count;
+
+    public int GetFreeCargoSpace() => GetFreeSlotCount();
+
+    public bool CanAddCargo() => HasFreeSlot();
+
+    public List<ShipSlot> GetAllSlots() => new List<ShipSlot>(slots);
+
+    public Dictionary<string, int> GetAllCargoGrouped()
+    {
+        var grouped = new Dictionary<string, int>();
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
+            {
+                if (!grouped.ContainsKey(slot.resourceId)) grouped[slot.resourceId] = 0;
+                grouped[slot.resourceId] += slot.amount;
+            }
+        }
+        return grouped;
+    }
+
+    public List<string> GetAllCargo()
+    {
+        var list = new List<string>();
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
+            {
+                for (int i = 0; i < slot.amount; i++)
+                    list.Add(slot.resourceId);
+            }
+        }
+        return list;
+    }
+
+    // ── Loading ──────────────────────────────────────────────────────────
+
+    public bool TryLoadMaterial(string resourceId, int amount)
+    {
+        int remaining = amount;
+
+        // Erst vorhandene Slots mit gleichem Material auffüllen (max 16)
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && slot.resourceId == resourceId && slot.amount < 16)
+            {
+                int canAdd = Mathf.Min(remaining, 16 - slot.amount);
+                slot.amount += canAdd;
+                remaining -= canAdd;
+                if (remaining <= 0) { OnCargoChanged?.Invoke(); return true; }
+            }
+        }
+
+        // Dann leere Slots belegen
+        foreach (var slot in slots)
+        {
+            if (slot.IsEmpty)
+            {
+                int toLoad = Mathf.Min(remaining, 16);
+                slot.content = ShipSlot.SlotContent.Material;
+                slot.resourceId = resourceId;
+                slot.amount = toLoad;
+                remaining -= toLoad;
+                if (remaining <= 0) { OnCargoChanged?.Invoke(); return true; }
+            }
+        }
+
+        OnCargoChanged?.Invoke();
+        return remaining < amount;
+    }
+
+    public bool TryLoadBuilder()
+    {
+        foreach (var slot in slots)
+        {
+            if (slot.IsEmpty)
+            {
+                Villager freeVillager = FindFreeVillager();
+                if (freeVillager == null)
+                {
+                    NotificationManager.Instance?.Notify("no_free_villager",
+                        "Kein freier Dorfbewohner verfügbar!", 4f);
+                    return false;
+                }
+                freeVillager.gameObject.SetActive(false);
+                slot.content = ShipSlot.SlotContent.Builder;
+                slot.amount = 1;
+                slot.villager = freeVillager;
+                OnCargoChanged?.Invoke();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Villager FindFreeVillager()
+    {
+        if (VillagerManager.Instance == null) return null;
+        Villager best = null;
         float bestDist = float.MaxValue;
-
-        var allVillagers = Object.FindObjectsByType<Villager>(FindObjectsSortMode.None);
-        foreach (var v in allVillagers)
+        foreach (var v in VillagerManager.Instance.ActiveVillagers)
         {
-            if (v == null || v.role != Villager.Role.Worker) continue;
-
-            int workerIslandIndex = IslandManager.GetIslandIndexAt(v.transform.position);
-            if (workerIslandIndex != shipIslandIndex) continue;
-
-            float dist = Vector2.Distance(transform.position, v.transform.position);
-            if (dist < bestDist)
+            if (v == null || !v.gameObject.activeSelf) continue;
+            if (v.role == Villager.Role.Worker) continue;
+            if (v.assignedShip != null) continue;
+            if (v.AssignedBuilding != null) continue;
+            float d = Vector3.Distance(transform.position, v.transform.position);
+            if (d < bestDist)
             {
-                bestDist = dist;
-                bestWorker = v;
+                bestDist = d;
+                best = v;
             }
         }
-
-        if (bestWorker != null)
-        {
-            bestWorker.AssignToBoardShip(this);
-            NotificationManager.Instance?.Notify("ship_workers_called", "Ein Bauarbeiter gerufen. Er läuft zum Schiff.", 4f);
-            return 1;
-        }
-
-        NotificationManager.Instance?.Notify("ship_no_workers", "Kein freier Bauarbeiter auf dieser Insel gefunden!", 4f);
-        return 0;
+        return best;
     }
 
-
-
-    // ── Internal ──────────────────────────────────────────────────────────────
-
-    private IEnumerator UnloadPassengers()
+    public bool TryLoadSoldier(SoldierType type)
     {
-        Vector2 landingSpot = FindNearestLandSpot();
-        if (landingSpot.x < -9000f)
+        foreach (var slot in slots)
         {
-            NotificationManager.Instance?.Notify("ship_unload_fail", "Aussteigen fehlgeschlagen: Keine Insel in der Nähe!", 5f);
-            State = ShipState.Idle;
-            UpdateStatusTag();
-            yield break;
-        }
-
-        State = ShipState.Unloading;
-        UpdateStatusTag();
-        yield return new WaitForSeconds(loadUnloadTime);
-
-        // Unload soldiers
-        foreach (var s in soldierPassengers)
-        {
-            if (s == null) continue;
-            s.transform.position = new Vector3(
-                landingSpot.x + Random.Range(-1.5f, 1.5f),
-                landingSpot.y + Random.Range(-1.5f, 1.5f),
-                s.transform.position.z);
-            s.gameObject.SetActive(true);
-        }
-        soldierPassengers.Clear();
-
-        // Unload villagers
-        foreach (var v in villagerPassengers)
-        {
-            if (v == null) continue;
-            v.transform.position = new Vector3(
-                landingSpot.x + Random.Range(-1.5f, 1.5f),
-                landingSpot.y + Random.Range(-1.5f, 1.5f),
-                v.transform.position.z);
-            v.gameObject.SetActive(true);
-        }
-        villagerPassengers.Clear();
-
-        State = ShipState.Idle;
-        transform.rotation = Quaternion.identity;
-        UpdateStatusTag();
-
-        NotificationManager.Instance?.Notify("ship_unload", "Einheiten erfolgreich an Land abgesetzt!", 4f);
-    }
-
-    private Vector2 FindNearestLandSpot()
-    {
-        Vector2 pos = transform.position;
-        // BFS to find nearest land cell within a reasonable distance (e.g. 8 tiles radius)
-        Queue<Vector2> q = new Queue<Vector2>();
-        HashSet<Vector2> visited = new HashSet<Vector2>();
-        q.Enqueue(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
-        visited.Add(q.Peek());
-
-        Vector2[] dirs = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
-        while (q.Count > 0 && visited.Count < 200)
-        {
-            Vector2 cur = q.Dequeue();
-            if (IslandManager.IsLand(cur)) return cur;
-            foreach (var d in dirs)
+            if (slot.IsEmpty)
             {
-                Vector2 next = cur + d;
-                if (visited.Add(next)) q.Enqueue(next);
+                slot.content = ShipSlot.SlotContent.Soldier;
+                slot.soldierType = type;
+                slot.amount = 1;
+                OnCargoChanged?.Invoke();
+                return true;
             }
         }
-        return new Vector2(-9999f, -9999f); // Sentinel indicating no land nearby
+        return false;
     }
 
+    // ── Unloading ────────────────────────────────────────────────────────
 
-    // ── Visuals ───────────────────────────────────────────────────────────────
-
-    private void BuildShipSprite()
+    public void UnloadAllToIsland()
     {
-        // Build a simple ship sprite procedurally (hull shape)
-        int w = 24, h = 32;
-        Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-        Color clear  = Color.clear;
-        Color hull   = new Color(0.45f, 0.28f, 0.10f);    // brown hull
-        Color deck   = new Color(0.60f, 0.40f, 0.15f);    // lighter deck
-        Color mast   = new Color(0.30f, 0.18f, 0.06f);    // dark mast
-        Color sail   = new Color(0.95f, 0.92f, 0.80f);    // cream sail
-        Color sailAc = new Color(0.80f, 0.30f, 0.20f);    // red accent stripe
-
-        // Fill transparent
-        for (int x = 0; x < w; x++)
-            for (int y = 0; y < h; y++)
-                tex.SetPixel(x, y, clear);
-
-        // Hull (trapezoid bottom half)
-        for (int y = 0; y < 12; y++)
+        foreach (var slot in slots)
         {
-            int margin = (int)(y * 0.4f);
-            for (int x = margin; x < w - margin; x++)
-                tex.SetPixel(x, y, hull);
-        }
-
-        // Deck (flat top of hull)
-        for (int y = 12; y < 14; y++)
-            for (int x = 2; x < w - 2; x++)
-                tex.SetPixel(x, y, deck);
-
-        // Mast (center vertical bar)
-        for (int y = 13; y < 28; y++)
-            tex.SetPixel(w / 2, y, mast);
-        tex.SetPixel(w / 2 - 1, 13, mast);
-        tex.SetPixel(w / 2 + 1, 13, mast);
-
-        // Sail
-        for (int y = 16; y < 26; y++)
-        {
-            int halfW = (int)(5f * Mathf.Sin(Mathf.PI * (y - 16f) / 10f));
-            for (int x = w / 2 - halfW; x <= w / 2 + halfW; x++)
+            if (slot.content == ShipSlot.SlotContent.Material)
             {
-                Color c = (y == 20) ? sailAc : sail;
-                if (x >= 0 && x < w) tex.SetPixel(x, y, c);
+                var warehouse = FindNearestLocalWarehouse();
+                if (warehouse != null)
+                    warehouse.ReceiveResource(slot.resourceId, slot.amount);
             }
-        }
-
-        tex.filterMode = FilterMode.Point;
-        tex.Apply();
-
-        Sprite s = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.25f), 16f);
-        sr.sprite = s;
-    }
-
-    private void SetupVisuals()
-    {
-        // Name tag
-        var nameGO = new GameObject("ShipNameTag");
-        nameGO.transform.SetParent(transform);
-        nameGO.transform.localPosition = new Vector3(0f, 1.5f, 0f);
-        nameTag = nameGO.AddComponent<TextMesh>();
-        nameTag.text = "⛵ Schiff";
-        nameTag.characterSize = 0.1f;
-        nameTag.fontSize = 36;
-        nameTag.anchor = TextAnchor.MiddleCenter;
-        nameTag.alignment = TextAlignment.Center;
-        nameTag.color = new Color(1f, 0.9f, 0.6f);
-        nameTag.GetComponent<MeshRenderer>().sortingOrder = 12;
-
-        // Status tag
-        var statusGO = new GameObject("ShipStatusTag");
-        statusGO.transform.SetParent(transform);
-        statusGO.transform.localPosition = new Vector3(0f, 1.1f, 0f);
-        statusTag = statusGO.AddComponent<TextMesh>();
-        statusTag.characterSize = 0.09f;
-        statusTag.fontSize = 28;
-        statusTag.anchor = TextAnchor.MiddleCenter;
-        statusTag.alignment = TextAlignment.Center;
-        statusTag.GetComponent<MeshRenderer>().sortingOrder = 12;
-
-        // Selection circle
-        selectionCircle = gameObject.GetComponent<LineRenderer>();
-        if (selectionCircle == null) selectionCircle = gameObject.AddComponent<LineRenderer>();
-        selectionCircle.startWidth = 0.08f;
-        selectionCircle.endWidth = 0.08f;
-        selectionCircle.useWorldSpace = false;
-        selectionCircle.loop = true;
-        selectionCircle.material = new Material(Shader.Find("Sprites/Default"));
-        selectionCircle.startColor = new Color(0.3f, 0.8f, 1f, 0.6f);
-        selectionCircle.endColor = selectionCircle.startColor;
-        selectionCircle.sortingOrder = 5;
-        selectionCircle.positionCount = 36;
-        float r = 1.0f;
-        for (int i = 0; i < 36; i++)
-        {
-            float a = i * Mathf.PI * 2f / 36f;
-            selectionCircle.SetPosition(i, new Vector3(Mathf.Cos(a) * r, Mathf.Sin(a) * r, 0f));
-        }
-    }
-
-    private void UpdateStatusTag()
-    {
-        if (statusTag == null) return;
-        switch (State)
-        {
-            case ShipState.Idle:
-                statusTag.text = $"Bereit · {PassengerCount}/{capacity}";
-                statusTag.color = new Color(0.6f, 1f, 0.6f);
-                break;
-            case ShipState.Building:
-                statusTag.text = "⚙ Im Bau...";
-                statusTag.color = new Color(1f, 0.8f, 0.3f);
-                break;
-            case ShipState.Sailing:
-                statusTag.text = $"⛵ Segelt... · {PassengerCount} Bord";
-                statusTag.color = new Color(0.4f, 0.8f, 1f);
-                break;
-            case ShipState.Unloading:
-                statusTag.text = "↧ Entlädt...";
-                statusTag.color = new Color(1f, 0.7f, 0.3f);
-                break;
-        }
-    }
-
-    public string GetStatusText()
-    {
-        return State switch
-        {
-            ShipState.Idle      => $"Bereit ({PassengerCount}/{capacity} Passagiere)",
-            ShipState.Building  => "Im Bau...",
-            ShipState.Sailing   => $"Segelt... ({PassengerCount} an Bord)",
-            ShipState.Unloading => "Entlädt Passagiere...",
-            _                   => "Unbekannt"
-        };
-    }
-
-    // ── Water A* Pathfinding ──────────────────────────────────────────────────
-    private static List<Vector2> FindWaterPath(Vector2 start, Vector2 destination)
-    {
-        List<Vector2> empty = new List<Vector2>();
-
-        // Both start and destination must be water (i.e. not land)
-        if (IslandManager.IsLand(start) || IslandManager.IsLand(destination))
-        {
-            return empty;
-        }
-
-        if (start == destination)
-        {
-            empty.Add(destination);
-            return empty;
-        }
-
-        PriorityQueueWater frontier = new PriorityQueueWater();
-        frontier.Enqueue(start, 0f);
-
-        Dictionary<Vector2, Vector2> cameFrom = new Dictionary<Vector2, Vector2>();
-        Dictionary<Vector2, float> costSoFar = new Dictionary<Vector2, float>
-        {
-            [start] = 0f
-        };
-
-        Vector2[] directions = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
-        int iterations = 0;
-        int maxIterations = 8000;
-
-        while (frontier.Count > 0 && iterations++ < maxIterations)
-        {
-            Vector2 current = frontier.Dequeue();
-            if (current == destination)
+            else if (slot.content == ShipSlot.SlotContent.Builder)
             {
-                return ReconstructWaterPath(cameFrom, destination);
-            }
-
-            for (int i = 0; i < directions.Length; i++)
-            {
-                Vector2 next = current + directions[i];
-
-                // Water-only pathing: skip land
-                if (IslandManager.IsLand(next))
+                if (slot.villager != null)
                 {
-                    continue;
+                    slot.villager.transform.position = transform.position + new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0f);
+                    slot.villager.gameObject.SetActive(true);
+                    slot.villager.ReleaseFromShip();
                 }
-
-                float newCost = costSoFar[current] + 1f;
-                if (costSoFar.TryGetValue(next, out float existingCost) && newCost >= existingCost)
+                else if (VillagerManager.Instance != null)
                 {
-                    continue;
-                }
-
-                costSoFar[next] = newCost;
-                cameFrom[next] = current;
-                frontier.Enqueue(next, newCost + HeuristicWater(next, destination));
-            }
-        }
-
-        return empty;
-    }
-
-    private static List<Vector2> ReconstructWaterPath(Dictionary<Vector2, Vector2> cameFrom, Vector2 destination)
-    {
-        List<Vector2> path = new List<Vector2> { destination };
-        Vector2 current = destination;
-
-        while (cameFrom.TryGetValue(current, out Vector2 previous))
-        {
-            current = previous;
-            path.Add(current);
-        }
-
-        path.Reverse();
-        if (path.Count > 0)
-        {
-            path.RemoveAt(0);
-        }
-
-        return path;
-    }
-
-    private static float HeuristicWater(Vector2 a, Vector2 b)
-    {
-        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
-    }
-
-    private class PriorityQueueWater
-    {
-        private readonly List<KeyValuePair<Vector2, float>> elements = new List<KeyValuePair<Vector2, float>>();
-
-        public int Count => elements.Count;
-
-        public void Enqueue(Vector2 item, float priority)
-        {
-            elements.Add(new KeyValuePair<Vector2, float>(item, priority));
-        }
-
-        public Vector2 Dequeue()
-        {
-            int bestIndex = 0;
-            for (int i = 1; i < elements.Count; i++)
-            {
-                if (elements[i].Value < elements[bestIndex].Value)
-                {
-                    bestIndex = i;
+                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Worker);
                 }
             }
-            Vector2 bestItem = elements[bestIndex].Key;
-            elements.RemoveAt(bestIndex);
-            return bestItem;
+            else if (slot.content == ShipSlot.SlotContent.Soldier)
+            {
+                // Soldaten spawnen
+                GameObject solObj = new GameObject($"Unloaded_Soldier_{slot.soldierType}");
+                solObj.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                var sr = solObj.AddComponent<SpriteRenderer>();
+                sr.sortingOrder = 21;
+                solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+                var s = solObj.AddComponent<Soldier>();
+                s.soldierType = slot.soldierType;
+                s.team = Team.Player;
+                s.moveSpeed = 1.5f;
+            }
+            slot.Clear();
         }
+        OnCargoChanged?.Invoke();
+    }
+
+    public void RemoveSlotItem(int slotIndex)
+    {
+        if (slotIndex >= 0 && slotIndex < slots.Count)
+        {
+            slots[slotIndex].Clear();
+            OnCargoChanged?.Invoke();
+        }
+    }
+
+    // ── Warehouse Interop (alt, für Kompatibilität) ──────────────────────
+
+    public void UnloadToWarehouse(Warehouse warehouse)
+    {
+        if (warehouse == null) return;
+        foreach (var slot in slots)
+        {
+            if (slot.content == ShipSlot.SlotContent.Material && !string.IsNullOrEmpty(slot.resourceId))
+            {
+                warehouse.ReceiveResource(slot.resourceId, slot.amount);
+                slot.Clear();
+            }
+        }
+        OnCargoChanged?.Invoke();
+    }
+
+    public void LoadFromWarehouse(Warehouse warehouse, string resourceId, int amount)
+    {
+        if (warehouse == null) return;
+        int toLoad = amount;
+        while (toLoad > 0)
+        {
+            int batch = Mathf.Min(toLoad, 16);
+            if (TryLoadMaterial(resourceId, batch))
+            {
+                warehouse.SpendResource(resourceId, batch);
+                toLoad -= batch;
+            }
+            else break;
+        }
+    }
+
+    public void ClearCargo()
+    {
+        foreach (var slot in slots) slot.Clear();
+        OnCargoChanged?.Invoke();
+    }
+
+    private Warehouse FindNearestLocalWarehouse()
+    {
+        Warehouse[] whs = FindObjectsOfType<Warehouse>();
+        Warehouse nearest = null;
+        float minDist = float.MaxValue;
+        foreach (var wh in whs)
+        {
+            if (wh.isLocal)
+            {
+                float dist = Vector3.Distance(transform.position, wh.transform.position);
+                if (dist < minDist) { minDist = dist; nearest = wh; }
+            }
+        }
+        return nearest;
+    }
+
+    public bool IsMoving() => isMoving;
+    public Vector3 GetTargetPosition() => targetPosition;
+    public bool IsSelected() => isSelected;
+
+    public string GetShipName() => shipData != null ? shipData.shipName : gameObject.name;
+    public ShipType GetShipType() => shipData != null ? shipData.shipType : ShipType.Trade;
+    public bool IsTradeShip() => GetShipType() == ShipType.Trade;
+    public bool IsMilitaryShip() => GetShipType() == ShipType.Military;
+
+    public void TakeDamage(int damage)
+    {
+        currentHP -= Mathf.Max(0, damage);
+        if (currentHP <= 0)
+        {
+            currentHP = 0;
+            Destroy(gameObject);
+        }
+    }
+    
+    private void OnDestroy()
+    {
+        ReleaseCrew();
     }
 }
-

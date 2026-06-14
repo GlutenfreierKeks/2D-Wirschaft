@@ -60,6 +60,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private Button[] villagerButtons;
     private Button[] workerButtons;
     private Button[] worldSizeButtons;
+    private Button[] debugModeButtons;
 
     private void OnEnable()
     {
@@ -111,6 +112,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         if (!currentProps.ContainsKey(LobbySettingsKeys.StartWorkers)) props[LobbySettingsKeys.StartWorkers] = 2;
         if (!currentProps.ContainsKey(LobbySettingsKeys.WorldSize)) props[LobbySettingsKeys.WorldSize] = "Standard";
         if (!currentProps.ContainsKey(LobbySettingsKeys.MapSeed)) props[LobbySettingsKeys.MapSeed] = Random.Range(1, 1000000);
+        if (!currentProps.ContainsKey(LobbySettingsKeys.DebugMode)) props[LobbySettingsKeys.DebugMode] = false;
 
         if (props.Count > 0)
         {
@@ -170,20 +172,15 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         int villagers = props.TryGetValue(LobbySettingsKeys.StartVillagers, out object villObj) ? System.Convert.ToInt32(villObj) : 10;
         int workers = props.TryGetValue(LobbySettingsKeys.StartWorkers, out object workObj) ? System.Convert.ToInt32(workObj) : 2;
         string worldSize = props.TryGetValue(LobbySettingsKeys.WorldSize, out object worldObj) ? worldObj.ToString() : "Standard";
+        bool debugMode = props.TryGetValue(LobbySettingsKeys.DebugMode, out object debugObj) ? (bool)debugObj : false;
 
-        settingsSummaryText.text = $"Tempo {speed}x   •   Tag {GetDayLengthLabel(dayLength)}   •   Start {villagers} Dorfbewohner / {workers} Bauarbeiter   •   Welt {worldSize}";
+        settingsSummaryText.text = $"Tempo {speed}x   •   Tag {GetDayLengthLabel(dayLength)}   •   Start {villagers} Dorfbewohner / {workers} Bauarbeiter   •   Welt {worldSize}{(debugMode ? "   •   DEBUG" : "")}";
     }
 
     private void OnStartTestButtonClicked()
     {
         if (PhotonNetwork.IsMasterClient)
         {
-            if (!IsSceneAvailable(SceneNames.GameScene))
-            {
-                Debug.LogError($"Scene '{SceneNames.GameScene}' is not in build settings.");
-                return;
-            }
-
             PhotonNetwork.CurrentRoom.IsOpen = false;
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
@@ -202,26 +199,9 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         bool isTestMode = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("TestMode") && (bool)PhotonNetwork.CurrentRoom.CustomProperties["TestMode"];
         if (!isTestMode && PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom.PlayerCount == PhotonNetwork.CurrentRoom.MaxPlayers)
         {
-            if (!IsSceneAvailable(SceneNames.GameScene))
-            {
-                Debug.LogError($"Scene '{SceneNames.GameScene}' is not in build settings.");
-                return;
-            }
-
             PhotonNetwork.CurrentRoom.IsOpen = false;
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
-    }
-
-    private bool IsSceneAvailable(string sceneName)
-    {
-        int count = UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings;
-        for (int i = 0; i < count; i++)
-        {
-            string path = UnityEngine.SceneManagement.SceneUtility.GetScenePathByBuildIndex(i);
-            if (System.IO.Path.GetFileNameWithoutExtension(path) == sceneName) return true;
-        }
-        return false;
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -343,6 +323,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         villagerButtons = CreateOptionRow(settingsRoot, 2, "Start Dorfbewohner", new[] { "6", "10", "14" }, index => SetStartVillagers(villagerOptions[index]));
         workerButtons = CreateOptionRow(settingsRoot, 3, "Start Bauarbeiter", new[] { "1", "2", "4" }, index => SetStartWorkers(workerOptions[index]));
         worldSizeButtons = CreateOptionRow(settingsRoot, 4, "Weltgroesse", worldSizeLabels, index => SetWorldSize(worldSizeLabels[index]));
+        debugModeButtons = CreateOptionRow(settingsRoot, 5, "Debug Modus", new[] { "Aus", "An" }, index => SetDebugMode(index == 1));
 
         CreateStartButton(parent);
     }
@@ -660,6 +641,12 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         SetRoomProperty(LobbySettingsKeys.WorldSize, worldSize);
     }
 
+    private void SetDebugMode(bool enabled)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        SetRoomProperty(LobbySettingsKeys.DebugMode, enabled);
+    }
+
     private void SetRoomProperty(string key, object value)
     {
         ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable { { key, value } };
@@ -686,18 +673,21 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         int villagers = props.TryGetValue(LobbySettingsKeys.StartVillagers, out object villObj) ? System.Convert.ToInt32(villObj) : 10;
         int workers = props.TryGetValue(LobbySettingsKeys.StartWorkers, out object workObj) ? System.Convert.ToInt32(workObj) : 2;
         string worldSize = props.TryGetValue(LobbySettingsKeys.WorldSize, out object worldObj) ? worldObj.ToString() : "Standard";
+        bool debugMode = props.TryGetValue(LobbySettingsKeys.DebugMode, out object debugObj) ? (bool)debugObj : false;
 
         HighlightButtons(speedButtons, speedOptions, speed);
         HighlightButtons(dayLengthButtons, dayLengthOptions, dayLength);
         HighlightButtons(villagerButtons, villagerOptions, villagers);
         HighlightButtons(workerButtons, workerOptions, workers);
         HighlightButtons(worldSizeButtons, worldSizeLabels, worldSize);
+        HighlightButtons(debugModeButtons, new[] { "Aus", "An" }, debugMode ? "An" : "Aus");
 
         SetButtonsInteractable(speedButtons, PhotonNetwork.IsMasterClient);
         SetButtonsInteractable(dayLengthButtons, PhotonNetwork.IsMasterClient);
         SetButtonsInteractable(villagerButtons, PhotonNetwork.IsMasterClient);
         SetButtonsInteractable(workerButtons, PhotonNetwork.IsMasterClient);
         SetButtonsInteractable(worldSizeButtons, PhotonNetwork.IsMasterClient);
+        SetButtonsInteractable(debugModeButtons, PhotonNetwork.IsMasterClient);
     }
 
     private void HighlightButtons(Button[] buttons, int[] values, int active)

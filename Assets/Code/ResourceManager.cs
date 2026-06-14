@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using Photon.Pun;
 
 public class ResourceManager : MonoBehaviour
 {
@@ -15,13 +16,30 @@ public class ResourceManager : MonoBehaviour
     {
         if (Player_UI.Instance == null) return;
 
+        bool debugMode = false;
+        if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.DebugMode, out object debugVal))
+        {
+            debugMode = (bool)debugVal;
+        }
+
+        if (debugMode)
+        {
+            Player_UI.Instance.SetResource("holz", 999);
+            Player_UI.Instance.SetResource("stein", 999);
+            Player_UI.Instance.SetResource("eisen", 999);
+            Player_UI.Instance.SetResource("gold", 999);
+            Player_UI.Instance.SetResource("weizen", 999);
+            Player_UI.Instance.SetResource("fleisch", 999);
+            return;
+        }
+
         int wood = 0;
         int stone = 0;
 
         switch (type)
         {
             case IslandType.Plains: wood = 20; stone = 10; break;
-            case IslandType.Desert: wood = 5; stone = 5; break;
+            case IslandType.Desert: wood = 20; stone = 10; break;
             case IslandType.Jungle: wood = 40; stone = 5; break;
             case IslandType.Stone: wood = 10; stone = 30; break;
         }

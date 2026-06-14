@@ -372,6 +372,23 @@ public class VillagerManager : MonoBehaviour
             breakdown.Add("Obdachlosigkeit: niemand schläft draußen");
         }
 
+        breakdown.Add("");
+        breakdown.Add("<b>Stimmungs-Ausgleich (Drift zu 50%):</b>");
+        float avgDriftPerSecond = (50f - globalMood) * 0.003f;
+        float avgDriftPerMinute = avgDriftPerSecond * 60f;
+        if (globalMood > 50.1f)
+        {
+            breakdown.Add($"<color=#FF5555>Druck nach unten (hohe Stimmung): {avgDriftPerMinute:F1} Pkt/Min</color>");
+        }
+        else if (globalMood < 49.9f)
+        {
+            breakdown.Add($"<color=#55FF55>Druck nach oben (niedrige Stimmung): +{avgDriftPerMinute:F1} Pkt/Min</color>");
+        }
+        else
+        {
+            breakdown.Add("Druck zu 50%: neutral");
+        }
+
         float yieldModifier = Mathf.Lerp(0.3f, 1.0f, globalMood / 100f);
         if (yieldModifier < 0.995f)
         {

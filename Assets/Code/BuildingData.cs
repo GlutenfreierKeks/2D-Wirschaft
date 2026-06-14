@@ -9,7 +9,9 @@ public class BuildingData : ScriptableObject
     public ResourceType requiredResourceType = ResourceType.None;
     
     [Header("Size in Grid Cells")]
+    [Tooltip("Normale Gebaude: Breite x Hoehe. Schiffe: die laengere Seite gilt automatisch als Schiffslaenge, die kuerzere als Schiffbreite.")]
     public int width = 1;
+    [Tooltip("Bei Schiffen zeigt die Grundausrichtung nach Sueden. Die Platzierungslogik dreht das Schiff automatisch passend zum Pier.")]
     public int height = 1;
 
     [Header("Costs")]
@@ -39,38 +41,28 @@ public class BuildingData : ScriptableObject
     [Tooltip("0 = kein Schlafplatz. Kleines Haus: 2, Großes Haus: 4, Hauptlager: 5")]
     public int sleepCapacity = 0;
 
+    [Header("Ship Settings")]
+    public ShipData shipData;
+
+    [Header("Defense")]
+    public bool isDefenseTower = false;
+    public float towerRange = 18f;
+    public int towerDamage = 18;
+    public float towerAttackCooldown = 2.5f;
+    public float fogRevealRadius = 5f;
+
+    [Header("Health")]
+    [Tooltip("Start-Lebenspunkte (Standard 100, Lagerhaus 2000)")]
+    public int maxHP = 100;
+
+    [Header("Warehouse Type")]
+    [Tooltip("Wenn aktiv, ist dies ein Lagerhaus-Typ. Nur auf fremden Inseln baubar. Ermöglicht weiteres Bauen auf dieser Insel.")]
+    public bool isWarehouseType = false;
+
     [Header("Visuals")]
     public Color ghostColor = new Color(0, 1, 0, 0.5f);
-
-    [Header("Shipyard")]
-    [Tooltip("If set, this building/pier acts as a shipyard where ships can be built.")]
-    public bool isShipyard = false;
-    [Tooltip("Wood cost to build one ship.")]
-    public int shipWoodCost = 10;
-    [Tooltip("Iron cost to build one ship.")]
-    public int shipIronCost = 5;
-    [Tooltip("Gold cost to build one ship.")]
-    public int shipGoldCost = 3;
-    [Tooltip("Time in seconds to build a ship.")]
-    public float shipBuildTime = 20f;
-    [Tooltip("Max passengers per ship.")]
-    public int shipCapacity = 8;
-
-    [Header("Defense Tower")]
-    [Tooltip("If set, this building acts as a defensive archer tower and can station trained bow soldiers.")]
-    public bool isDefenseTower = false;
-    [Tooltip("How many archers the tower can station.")]
-    public int archerSlots = 0;
-    [Tooltip("If >0, this radius will be used for fog revealing instead of the default.")]
-    public float revealRadius = 0f;
-    [Tooltip("Tower attack range (world units).")]
-    public float towerRange = 15f;
-    [Tooltip("Damage per shot for stationed archers.")]
-    public float towerDamage = 20f;
-    [Tooltip("Cooldown between shots (seconds).")]
-    public float towerCooldown = 3f;
-    [Tooltip("Kategorie im Bau-Menü. Leer lässt das System selbst entscheiden.")]
-    public string uiCategoryId = "";
-    [Tooltip("Optionales Icon für das Bau-Menü.")]
-    public Sprite uiIcon = null;
+    
+    [Header("Island Ownership")]
+    [Tooltip("Wenn aktiv, kann dieses Gebäude auf anderen Inseln gebaut werden (z.B. Lagerhaus). Andere Gebäude nur auf eigener Insel.")]
+    public bool canBuildOnOtherIslands = false;
 }

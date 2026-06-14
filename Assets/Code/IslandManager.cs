@@ -57,44 +57,11 @@ public class IslandManager : MonoBehaviour
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
     private static HashSet<Vector2> allLandCells = new HashSet<Vector2>();
-    private static Dictionary<Vector2, int> islandCellIndices = new Dictionary<Vector2, int>();
     private static Sprite defaultNodeSprite;
 
     public static bool IsLand(Vector2 pos)
     {
         return allLandCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
-    }
-
-    public static int GetIslandIndexAt(Vector2 pos)
-    {
-        Vector2 snapped = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
-        return islandCellIndices.TryGetValue(snapped, out int index) ? index : -1;
-    }
-
-    public static int GetLocalPlayerIslandIndex()
-    {
-        if (!PhotonNetwork.InRoom)
-        {
-            return 0;
-        }
-
-        Photon.Realtime.Player[] players = PhotonNetwork.PlayerList;
-        for (int i = 0; i < players.Length; i++)
-        {
-            if (players[i].IsLocal)
-            {
-                return i;
-            }
-        }
-
-        return 0;
-    }
-
-    public static bool IsOwnIsland(Vector2 pos)
-    {
-        int islandIndex = GetIslandIndexAt(pos);
-        if (islandIndex < 0) return false;
-        return islandIndex == GetLocalPlayerIslandIndex();
     }
 
     private void Awake()
@@ -130,22 +97,28 @@ public class IslandManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    islandCount = 30;
-                    blocksPerIsland = 2000;
-                    minDistanceBetweenIslands = 60f;
-                    mapMargin = 60f;
+                    islandCount = 15;
+                    blocksPerIsland = 1000;
+                    minDistanceBetweenIslands = 50f;
+                    mapMargin = 45f;
+                    break;
+                case "Standard":
+                    islandCount = 25;
+                    blocksPerIsland = 1500;
+                    minDistanceBetweenIslands = 55f;
+                    mapMargin = 50f;
                     break;
                 case "Gross":
-                    islandCount = 70;
-                    blocksPerIsland = 3000;
-                    minDistanceBetweenIslands = 90f;
-                    mapMargin = 80f;
+                    islandCount = 40;
+                    blocksPerIsland = 2000;
+                    minDistanceBetweenIslands = 65f;
+                    mapMargin = 60f;
                     break;
                 default:
-                    islandCount = 60;
-                    blocksPerIsland = 3750;
-                    minDistanceBetweenIslands = 60f;
-                    mapMargin = 70f;
+                    islandCount = 25;
+                    blocksPerIsland = 1500;
+                    minDistanceBetweenIslands = 55f;
+                    mapMargin = 50f;
                     break;
             }
         }
@@ -214,15 +187,14 @@ public class IslandManager : MonoBehaviour
                 IslandType type = typeIndex < allTypes.Length ? allTypes[typeIndex] : (IslandType)Random.Range(0, allTypes.Length);
                 typeIndex++;
 
-                int islandIndex = islandPositions.Count;
                 islandPositions.Add(newPos);
                 islandTypes.Add(type);
-                CreateIslandMesh(newPos, type, islandIndex);
+                CreateIslandMesh(newPos, type);
             }
         }
     }
 
-    private void CreateIslandMesh(Vector2 startPos, IslandType type, int islandIndex)
+    private void CreateIslandMesh(Vector2 startPos, IslandType type)
     {
         HashSet<Vector2> occupiedCells = new HashSet<Vector2>();
         occupiedCells.Add(startPos);
@@ -303,14 +275,7 @@ public class IslandManager : MonoBehaviour
         }
 
         // 1. Add logical land cells
-        foreach (Vector2 cell in occupiedCells)
-        {
-            allLandCells.Add(cell);
-            if (!islandCellIndices.ContainsKey(cell))
-            {
-                islandCellIndices[cell] = islandIndex;
-            }
-        }
+        foreach (Vector2 cell in occupiedCells) allLandCells.Add(cell);
 
         // Distribute resources based on logical occupiedCells
         DistributeResources(occupiedCells, type);
@@ -503,17 +468,17 @@ public class IslandManager : MonoBehaviour
                     new ResourceConfig(ResourceType.Iron,   1, 2, 0.40f),
                     new ResourceConfig(ResourceType.Gold,   1, 1, 0.30f),
                 };
-            // Wüste: viel Frucht, viel Stein, etwas Gold, wenig Holz/Weizen/Eisen
+            // Wüste: wie normale Insel (Plains)
             case IslandType.Desert:
                 return new ResourceConfig[]
                 {
-                    new ResourceConfig(ResourceType.Fruit,  3, 5, 0.80f),
-                    new ResourceConfig(ResourceType.Stone,  3, 5, 0.80f),
-                    new ResourceConfig(ResourceType.Gold,   2, 3, 0.60f),
-                    new ResourceConfig(ResourceType.Iron,   1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Wood,   1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Wheat,  1, 2, 0.30f),
-                    new ResourceConfig(ResourceType.Animal, 1, 1, 0.25f),
+                    new ResourceConfig(ResourceType.Wheat,  3, 6, 0.85f),
+                    new ResourceConfig(ResourceType.Wood,   2, 4, 0.65f),
+                    new ResourceConfig(ResourceType.Stone,  1, 3, 0.55f),
+                    new ResourceConfig(ResourceType.Fruit,  1, 3, 0.50f),
+                    new ResourceConfig(ResourceType.Animal, 1, 3, 0.50f),
+                    new ResourceConfig(ResourceType.Iron,   1, 2, 0.40f),
+                    new ResourceConfig(ResourceType.Gold,   1, 1, 0.30f),
                 };
             // Jungle: viel Holz, viel Eisen, etwas Frucht, wenig Rest
             case IslandType.Jungle:

@@ -1,11 +1,24 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using Photon.Pun;
+using ExitGames.Client.Photon;
+using Photon.Realtime;
 
 public class BuildingInstance : MonoBehaviour
 {
     public BuildingData data;
     public bool isLocal;
+    [HideInInspector] public int footprintWidthOverride;
+    [HideInInspector] public int footprintHeightOverride;
+
+    [Header("Health")]
+    public int maxHP = 100;
+    public int currentHP = 100;
+    private GameObject healthBar;
+    private const float HealthBarWidth = 0.8f;
+    private const float HealthBarHeight = 0.08f;
+    private const float HealthBarY = -0.5f;
     
     private bool isConstructed = false;
     private float constructionProgress = 0f;
@@ -117,13 +130,15 @@ public class BuildingInstance : MonoBehaviour
         if (data == null) return;
         if (!isLocal) return;
 
+        UpdateHealthBar();
+
         if (isConstructed && operatingWorkers.Count < data.workersNeeded)
         {
             TryHireOperatingWorkers();
         }
 
-        // Handle Barracks recruitment and tower recruitment if this is a constructed barracks or tower
-        if (isConstructed && (data.isBarracks || data.isDefenseTower))
+        // Handle Barracks recruitment if this is a constructed barracks
+        if (isConstructed && data.isBarracks)
         {
             UpdateBarracksRecruitment();
         }
@@ -237,6 +252,10 @@ public class BuildingInstance : MonoBehaviour
             return;
         }
 
+        maxHP = data.maxHP;
+        currentHP = data.maxHP;
+        CreateHealthBar();
+
         EnsureBuildingCollider();
 
         if (VillagerManager.Instance != null && isLocal)
@@ -258,9 +277,11 @@ public class BuildingInstance : MonoBehaviour
 
         var col = gameObject.AddComponent<BoxCollider2D>();
         Vector3 s = transform.localScale;
+        int footprintWidth = footprintWidthOverride > 0 ? footprintWidthOverride : data.width;
+        int footprintHeight = footprintHeightOverride > 0 ? footprintHeightOverride : data.height;
         col.size = new Vector2(
-            s.x > 0.001f ? data.width / s.x : data.width,
-            s.y > 0.001f ? data.height / s.y : data.height
+            s.x > 0.001f ? footprintWidth / s.x : footprintWidth,
+            s.y > 0.001f ? footprintHeight / s.y : footprintHeight
         );
     }
 
@@ -351,6 +372,18 @@ public class BuildingInstance : MonoBehaviour
     {
         isConstructed = true;
         if (revealer != null && isLocal) revealer.enabled = true;
+        
+        // Lagerhaus-Typ: Enthülle die ganze Insel
+        if (isLocal && data != null && data.isWarehouseType)
+        {
+            Vector2Int start = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+            var islandCells = BuildingManager.FloodFillIsland(start);
+            foreach (var cell in islandCells)
+            {
+                FogProjector.RegisterExploration(new Vector2(cell.x, cell.y), 1f);
+            }
+            Debug.Log($"[BuildingInstance] Insel enthüllt ({islandCells.Count} Zellen) durch {name}");
+        }
         
         if (isLocal)
         {
@@ -536,6 +569,93 @@ public class BuildingInstance : MonoBehaviour
         }
     }
 
+    // ── Health System ────────────────────────────────────────────────────
+
+    private void CreateHealthBar()
+    {
+        Transform existing = transform.Find("_HealthBar");
+        if (existing != null) return;
+
+        healthBar = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        healthBar.name = "_HealthBar";
+        healthBar.transform.SetParent(transform, false);
+        healthBar.transform.localPosition = new Vector3(0f, HealthBarY, -0.2f);
+        healthBar.transform.localScale = new Vector3(HealthBarWidth, HealthBarHeight, 1f);
+
+        var rend = healthBar.GetComponent<Renderer>();
+        rend.material = new Material(Shader.Find("Sprites/Default"));
+        rend.material.color = Color.green;
+
+        Destroy(healthBar.GetComponent<Collider>());
+        healthBar.SetActive(false);
+    }
+
+    private void UpdateHealthBar()
+    {
+        if (healthBar == null) return;
+
+        if (currentHP >= maxHP)
+        {
+            healthBar.SetActive(false);
+            return;
+        }
+
+        healthBar.SetActive(true);
+        float ratio = Mathf.Clamp01((float)currentHP / maxHP);
+        healthBar.transform.localScale = new Vector3(HealthBarWidth * ratio, HealthBarHeight, 1f);
+        healthBar.transform.localPosition = new Vector3(-HealthBarWidth * (1f - ratio) * 0.5f, HealthBarY, -0.2f);
+
+        var rend = healthBar.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            rend.material.color = ratio > 0.5f ? Color.green
+                : ratio > 0.25f ? Color.yellow
+                : Color.red;
+        }
+    }
+
+    public void TakeDamage(int amount)
+    {
+        currentHP -= amount;
+        if (currentHP <= 0)
+        {
+            currentHP = 0;
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        // Game Over check: letztes Lagerhaus zerstört?
+        if (data != null && (data.isWarehouseType || data.canBuildOnOtherIslands))
+        {
+            bool anyLeft = false;
+            foreach (var wh in FindObjectsOfType<Warehouse>())
+                if (wh != null && wh.isLocal) { anyLeft = true; break; }
+            if (!anyLeft)
+            {
+                foreach (var bi in FindObjectsOfType<BuildingInstance>())
+                    if (bi != null && bi.isLocal && bi.data != null && bi.data.isWarehouseType) { anyLeft = true; break; }
+            }
+            if (!anyLeft)
+            {
+                NotificationManager.Instance?.Notify("game_over",
+                    "ALLE LAGERHÄUSER ZERSTÖRT! DU HAST VERLOREN!", 30f);
+                Debug.LogError("[GAME OVER] Kein Lagerhaus mehr vorhanden!");
+            }
+        }
+
+        if (PhotonNetwork.InRoom && data != null)
+        {
+            object[] payload = new object[] { data.buildingName, transform.position.x, transform.position.y };
+            SendOptions sendOpts = new SendOptions { Reliability = true };
+            PhotonNetwork.RaiseEvent(13, payload,
+                new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+        }
+
+        Destroy(gameObject);
+    }
+
     /// <summary>Gebäude abreißen – gibt Hälfte der Baukosten zurück.</summary>
     public void Demolish()
     {
@@ -658,12 +778,6 @@ public class BuildingInstance : MonoBehaviour
     {
         if (!isLocal) return;
 
-        if (data != null && data.isDefenseTower && sType != SoldierType.Bow)
-        {
-            NotificationManager.Instance?.Notify("tower_bow_only", "Dieser Turm kann nur Bogenschützen ausbilden.", 5f);
-            return;
-        }
-
         if (CanAffordSoldier())
         {
             SpendSoldierResources();
@@ -700,17 +814,10 @@ public class BuildingInstance : MonoBehaviour
                 {
                     // Randomly pick an enabled type
                     List<SoldierType> activeTypes = new List<SoldierType>();
-                    if (data != null && data.isDefenseTower)
-                    {
-                        activeTypes.Add(SoldierType.Bow);
-                    }
-                    else
-                    {
-                        if (spearSelected) activeTypes.Add(SoldierType.Spear);
-                        if (shieldSelected) activeTypes.Add(SoldierType.Shield);
-                        if (swordSelected) activeTypes.Add(SoldierType.Sword);
-                        if (bowSelected) activeTypes.Add(SoldierType.Bow);
-                    }
+                    if (spearSelected) activeTypes.Add(SoldierType.Spear);
+                    if (shieldSelected) activeTypes.Add(SoldierType.Shield);
+                    if (swordSelected) activeTypes.Add(SoldierType.Sword);
+                    if (bowSelected) activeTypes.Add(SoldierType.Bow);
 
                     if (activeTypes.Count > 0)
                     {
@@ -776,19 +883,6 @@ public class BuildingInstance : MonoBehaviour
             {
                 VillagerManager.Instance.NotifyVillagerConverted(candidate);
             }
-
-                // If this barracks is actually a tower that stations archers, try to place the recruited bow inside
-                if (data != null && data.isDefenseTower && currentRecruitingType == SoldierType.Bow)
-                {
-                    ArcherTower tower = GetComponent<ArcherTower>();
-                    if (tower != null && tower.TryStationArcher())
-                    {
-                        // Recruitment consumed the villager and gained a soldier but no free Soldier GameObject is spawned.
-                        SpawnProductionParticles();
-                        Destroy(candidate.gameObject);
-                        return;
-                    }
-                }
 
             int formationIndex = Mathf.Max(0, Player_UI.Instance.GetResource("soldaten"));
             int columns = 3;

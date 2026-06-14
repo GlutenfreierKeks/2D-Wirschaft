@@ -545,6 +545,11 @@ MonoBehaviour:
     icon: {fileID: 21300000, guid: 7874dee145c85af45a85d92a77300c38, type: 3}
     categoryId: andere
     buildingData: {fileID: 11400000, guid: af3747c386ba742448bf0b9b9a0e49eb, type: 2}
+  - id: kleintradeship
+    displayName: Kleines Handels Schiff
+    icon: {fileID: 21300000, guid: 257286d46bd3cbf4ebfcb0e67f88cf9f, type: 3}
+    categoryId: andere
+    buildingData: {fileID: 11400000, guid: dd34b25176cae674b807c3635edd0555, type: 2}
   barColor: {r: 0.18, g: 0.1, b: 0.03, a: 0.96}
   slotColor: {r: 0.42, g: 0.27, b: 0.09, a: 0.92}
   borderColor: {r: 0.72, g: 0.52, b: 0.18, a: 1}
@@ -595,7 +600,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingManager
   warehouseMaterial: {fileID: 2100000, guid: f73a762e4619cc44d9fbbf416ef43b27, type: 2}
-  stegPrefab: {fileID: 0}
+  stegPrefab: {fileID: 5783824831707029423, guid: 61dae7cd3db980b40b429dc3053d2104, type: 3}
 --- !u!1 &897622320
 GameObject:
   m_ObjectHideFlags: 0

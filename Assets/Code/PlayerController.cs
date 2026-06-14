@@ -6,6 +6,14 @@ public class PlayerController : MonoBehaviourPun
 {
     [SerializeField] private float moveSpeed = 5f;
 
+    private void Awake()
+    {
+        if (GetComponent<PlayerCombatHealth>() == null)
+        {
+            gameObject.AddComponent<PlayerCombatHealth>();
+        }
+    }
+
     private void Update()
     {
         // Only control our own player and not bots

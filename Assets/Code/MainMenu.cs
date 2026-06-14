@@ -198,9 +198,10 @@ public class MainMenu : MonoBehaviourPunCallbacks
             IsVisible = false,
             CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { 
                 { "TestMode", true },
-                { LobbySettingsKeys.MapSeed, seed }
+                { LobbySettingsKeys.MapSeed, seed },
+                { LobbySettingsKeys.DebugMode, true }
             },
-            CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed }
+            CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed, LobbySettingsKeys.DebugMode }
         };
 
         SetStatus("Erstelle Test-Lobby...");
@@ -211,27 +212,8 @@ public class MainMenu : MonoBehaviourPunCallbacks
     public override void OnJoinedRoom()
     {
         Debug.Log($"[MainMenu] OnJoinedRoom: Raum={PhotonNetwork.CurrentRoom.Name}, Spieler={PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
-        if (!IsSceneInBuildSettings(SceneNames.LobbyScene))
-        {
-            SetStatus($"Fehler: Szene '{SceneNames.LobbyScene}' nicht in Build Settings.");
-            SetUIInteractable(true);
-            Debug.LogError($"Scene '{SceneNames.LobbyScene}' fehlt in den Build Settings.");
-            return;
-        }
-
         SetStatus("Lobby gefunden. Wechsle in den Warteraum...");
         PhotonNetwork.LoadLevel(SceneNames.LobbyScene);
-    }
-
-    private bool IsSceneInBuildSettings(string sceneName)
-    {
-        int count = UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings;
-        for (int i = 0; i < count; i++)
-        {
-            string path = UnityEngine.SceneManagement.SceneUtility.GetScenePathByBuildIndex(i);
-            if (System.IO.Path.GetFileNameWithoutExtension(path) == sceneName) return true;
-        }
-        return false;
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)

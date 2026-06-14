@@ -74,6 +74,7 @@ public class Soldier : MonoBehaviour
     private bool hasMoveOrder;
     private bool attackMoveEnabled;
     private Soldier attackTarget;
+    private BuildingInstance attackBuildingTarget;
 
     private bool hasPatrolOrder;
     private Vector2 patrolPointA;
@@ -153,6 +154,31 @@ public class Soldier : MonoBehaviour
             attackTarget = FindPreferredEnemy();
         }
 
+        // Check for enemy buildings in range
+        if (attackBuildingTarget == null || !attackBuildingTarget.gameObject.activeInHierarchy)
+        {
+            attackBuildingTarget = FindEnemyBuildingInRange(attackRange);
+        }
+
+        if (attackBuildingTarget != null)
+        {
+            float distance = Vector2.Distance(transform.position, attackBuildingTarget.transform.position);
+            if (distance <= attackRange)
+            {
+                if (Time.time >= lastAttackTime + attackCooldown)
+                {
+                    AttackBuilding(attackBuildingTarget);
+                    lastAttackTime = Time.time;
+                }
+                return;
+            }
+            else if (distance <= attackRange + AggroPadding)
+            {
+                MoveTowards(attackBuildingTarget.transform.position);
+                return;
+            }
+        }
+
         if (attackTarget != null)
         {
             if (!hasReportedEnemyContact && team == Team.Player)
@@ -169,7 +195,6 @@ public class Soldier : MonoBehaviour
                     Attack(attackTarget);
                     lastAttackTime = Time.time;
                 }
-
                 return;
             }
 
@@ -181,6 +206,7 @@ public class Soldier : MonoBehaviour
         }
 
         attackTarget = null;
+        attackBuildingTarget = null;
         hasReportedEnemyContact = false;
         FollowOrders();
     }
@@ -206,6 +232,7 @@ public class Soldier : MonoBehaviour
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = false;
         attackTarget = null;
+        attackBuildingTarget = null;
         SetPathTo(destination);
     }
 
@@ -214,6 +241,8 @@ public class Soldier : MonoBehaviour
         hasPatrolOrder = false;
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = true;
+        attackTarget = null;
+        attackBuildingTarget = null;
         SetPathTo(destination);
     }
 
@@ -221,8 +250,8 @@ public class Soldier : MonoBehaviour
     {
         attackMoveEnabled = true;
         hasPatrolOrder = true;
-        patrolPointA = SnapToNearestLand(pointA);
-        patrolPointB = SnapToNearestLand(pointB);
+        patrolPointA = SnapToNearestPassable(pointA);
+        patrolPointB = SnapToNearestPassable(pointB);
         patrolTowardsB = true;
         UpdatePatrolRenderer();
         SetPathTo(patrolPointB);
@@ -454,14 +483,20 @@ public class Soldier : MonoBehaviour
 
     private void CleanupTarget()
     {
-        if (attackTarget == null)
+        if (attackTarget != null)
         {
-            return;
+            if (!attackTarget.gameObject.activeInHierarchy || attackTarget.currentHealth <= 0f)
+            {
+                attackTarget = null;
+            }
         }
 
-        if (!attackTarget.gameObject.activeInHierarchy || attackTarget.currentHealth <= 0f)
+        if (attackBuildingTarget != null)
         {
-            attackTarget = null;
+            if (!attackBuildingTarget.gameObject.activeInHierarchy || attackBuildingTarget.currentHP <= 0)
+            {
+                attackBuildingTarget = null;
+            }
         }
     }
 
@@ -484,6 +519,36 @@ public class Soldier : MonoBehaviour
             {
                 closestDistance = distance;
                 closest = other;
+            }
+        }
+
+        return closest;
+    }
+
+    /// <summary>Finde feindliche Gebäude in Reichweite.</summary>
+    private BuildingInstance FindEnemyBuildingInRange(float range)
+    {
+        BuildingInstance[] buildings = FindObjectsOfType<BuildingInstance>();
+        BuildingInstance closest = null;
+        float closestDist = float.MaxValue;
+
+        foreach (var b in buildings)
+        {
+            if (b == null || !b.gameObject.activeInHierarchy) continue;
+
+            bool isEnemy = false;
+            if (team == Team.Player && !b.isLocal)
+                isEnemy = true;
+            else if (team == Team.Enemy && b.isLocal)
+                isEnemy = true;
+
+            if (!isEnemy) continue;
+
+            float distance = Vector2.Distance(transform.position, b.transform.position);
+            if (distance <= range && distance < closestDist)
+            {
+                closestDist = distance;
+                closest = b;
             }
         }
 
@@ -567,6 +632,22 @@ public class Soldier : MonoBehaviour
         enemySoldier.TakeDamage(damage);
     }
 
+    private void AttackBuilding(BuildingInstance building)
+    {
+        if (building == null) return;
+
+        Debug.Log($"[Soldier] Attacking building {building.name}! Damage: {damage}");
+
+        int damageToDeal = Mathf.RoundToInt(damage);
+        building.TakeDamage(damageToDeal);
+
+        if (team == Team.Player)
+        {
+            NotificationManager.Instance?.Notify("building_under_attack",
+                "Dein Gebäude wird angegriffen!", 3f);
+        }
+    }
+
     private void Die()
     {
         if (SelectionManager.Instance != null)
@@ -597,8 +678,8 @@ public class Soldier : MonoBehaviour
     private void SetPathTo(Vector2 destination)
     {
         Vector2 start = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
-        Vector2 snappedDestination = SnapToNearestLand(destination);
-        List<Vector2> newPath = FindPath(start, snappedDestination);
+        Vector2 snappedDestination = SnapToNearestPassable(destination);
+        List<Vector2> newPath = BuildingManager.FindPath(start, snappedDestination);
 
         currentPath.Clear();
         currentPathIndex = 0;
@@ -613,10 +694,10 @@ public class Soldier : MonoBehaviour
         hasMoveOrder = true;
     }
 
-    private static Vector2 SnapToNearestLand(Vector2 target)
+    private static Vector2 SnapToNearestPassable(Vector2 target)
     {
         Vector2 snapped = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
-        if (IslandManager.IsLand(snapped))
+        if (BuildingManager.IsWalkable(snapped))
         {
             return snapped;
         }
@@ -638,7 +719,7 @@ public class Soldier : MonoBehaviour
                     continue;
                 }
 
-                if (IslandManager.IsLand(next))
+                if (BuildingManager.IsWalkable(next))
                 {
                     return next;
                 }

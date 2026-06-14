@@ -10,20 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
-  m_Name: Steg
+  m_Name: Lagerhaus
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
-  buildingName: Steg
-  prefab: {fileID: 5783824831707029423, guid: 61dae7cd3db980b40b429dc3053d2104, type: 3}
-  placementRule: 2
+  buildingName: "Lagerhaus"
+  prefab: {fileID: 0}
+  placementRule: 0
   requiredResourceType: 7
-  width: 1
-  height: 1
-  woodCost: 1
-  stoneCost: 0
+  width: 3
+  height: 3
+  woodCost: 20
+  stoneCost: 10
   ironCost: 0
   goldCost: 0
-  buildTime: 5
-  requiredWorkers: 1
+  buildTime: 10
+  requiredWorkers: 2
   isWorkerHub: 0
   isBarracks: 0
   productionResourceId: 
@@ -35,10 +35,4 @@ MonoBehaviour:
   workersNeeded: 0
   sleepCapacity: 0
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}
-  isShipyard: 1
-  shipWoodCost: 10
-  shipIronCost: 5
-  shipGoldCost: 3
-  shipBuildTime: 20
-  shipCapacity: 8
-
+  canBuildOnOtherIslands: 1

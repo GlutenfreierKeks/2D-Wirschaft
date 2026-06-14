@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class Villager : MonoBehaviour
 {
@@ -9,9 +10,14 @@ public class Villager : MonoBehaviour
     public float moveSpeed = 1.5f;
     private Vector2 targetPosition;
     private bool isMoving = false;
+    private readonly List<Vector2> currentPath = new List<Vector2>();
+    private int currentPathIndex = 0;
     private BuildingInstance assignedBuilding;
     public BuildingInstance AssignedBuilding => assignedBuilding;
     private BuildingInstance assignedSleepHouse;
+    
+    [Header("Ship Assignment")]
+    public Ship assignedShip;  // Reference to ship if assigned as crew
     
     [HideInInspector]
     public bool isOperatingWorker = false;
@@ -21,18 +27,8 @@ public class Villager : MonoBehaviour
     public float mood = 80f; // Villager Mood: starts at 80%
     private float workActionCooldown = 0f;
 
-    private Ship targetShipToBoard;
-
     private SpriteRenderer sr;
     private Renderer rend;
-
-    public void AssignToBoardShip(Ship ship)
-    {
-        targetShipToBoard = ship;
-        targetPosition = ship.transform.position;
-        isMoving = true;
-    }
-
 
     private void Start()
     {
@@ -47,37 +43,6 @@ public class Villager : MonoBehaviour
 
     private void Update()
     {
-        if (targetShipToBoard != null)
-        {
-            if (targetShipToBoard == null || !targetShipToBoard.gameObject.activeInHierarchy || targetShipToBoard.FreeSlotsCount <= 0 || targetShipToBoard.State != ShipState.Idle)
-            {
-                targetShipToBoard = null;
-                Release();
-            }
-            else
-            {
-                targetPosition = targetShipToBoard.transform.position;
-                isMoving = true;
-
-                float speedMod = 1.0f;
-                if (mood > 80f) speedMod = 1.25f;
-                else if (mood < 30f) speedMod = 0.7f;
-
-                transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * speedMod * Time.deltaTime);
-
-                if (Vector2.Distance(transform.position, targetShipToBoard.transform.position) < 1.2f)
-                {
-                    if (targetShipToBoard.LoadVillager(this))
-                    {
-                        targetShipToBoard = null;
-                        isMoving = false;
-                        return;
-                    }
-                }
-                return;
-            }
-        }
-
         // Erhöhte Sterberate für alle bei schlechtem Mood
         if (VillagerManager.Instance != null)
         {
@@ -108,11 +73,29 @@ public class Villager : MonoBehaviour
             if (mood > 80f) speedMod = 1.25f;
             else if (mood < 30f) speedMod = 0.7f;
 
-            transform.position = Vector3.MoveTowards(transform.position, new Vector3(targetPosition.x, targetPosition.y, transform.position.z), moveSpeed * speedMod * Time.deltaTime);
-            
-            if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
+            if (currentPath.Count > 0 && currentPathIndex < currentPath.Count)
             {
-                OnReachedTarget();
+                Vector2 waypoint = currentPath[currentPathIndex];
+                Vector2 next = Vector2.MoveTowards(transform.position, waypoint, moveSpeed * speedMod * Time.deltaTime);
+                transform.position = new Vector3(next.x, next.y, transform.position.z);
+
+                if (Vector2.Distance(transform.position, waypoint) < 0.1f)
+                {
+                    currentPathIndex++;
+                }
+            }
+            else
+            {
+                Vector2 next = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * speedMod * Time.deltaTime);
+                transform.position = new Vector3(next.x, next.y, transform.position.z);
+            }
+
+            if (currentPath.Count == 0 || currentPathIndex >= currentPath.Count)
+            {
+                if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
+                {
+                    OnReachedTarget();
+                }
             }
         }
         else
@@ -228,6 +211,7 @@ public class Villager : MonoBehaviour
                             {
                                 SetVisibility(true);
                                 targetPosition = sleepHouse.transform.position;
+                                SetPathTo(targetPosition);
                                 isMoving = true;
                             }
                         }
@@ -255,18 +239,18 @@ public class Villager : MonoBehaviour
             }
         }
 
-        // Soft floor: the lower the mood, the harder it is to sink further.
-        // A slight positive resistance force applies at very low levels (< 35%) to act as a stabilizer.
-        if (mood < 35f)
-        {
-            mood = Mathf.Min(100f, mood + Time.deltaTime * 0.015f * (35f - mood));
-        }
+        // Linear mood stabilizer (regression to 50% baseline):
+        // The higher the mood, the easier it sinks (negative force).
+        // The lower the mood, the easier it rises (positive force).
+        float moodStabilizerForce = (50f - mood) * 0.003f;
+        mood = Mathf.Clamp(mood + moodStabilizerForce * Time.deltaTime, 0f, 100f);
     }
 
     public void AssignToBuild(BuildingInstance building, Vector2 offset)
     {
         assignedBuilding = building;
         targetPosition = (Vector2)building.transform.position + offset;
+        SetPathTo(targetPosition);
         isMoving = true;
         Debug.Log($"[Villager] Assigned to {building.data.buildingName}. New Target: {targetPosition}");
     }
@@ -345,16 +329,17 @@ public class Villager : MonoBehaviour
         for (int attempt = 0; attempt < 15; attempt++)
         {
             Vector2 candidate = currentPos + Random.insideUnitCircle * 5f;
-            // Snap to grid so IsLand() lookup works correctly
             candidate = new Vector2(Mathf.Round(candidate.x), Mathf.Round(candidate.y));
             if (IslandManager.IsLand(candidate))
             {
                 targetPosition = candidate;
+                SetPathTo(targetPosition);
                 isMoving = true;
                 return;
             }
         }
         // No valid land cell found nearby – stay in place
+        currentPath.Clear();
         isMoving = false;
     }
 
@@ -364,13 +349,77 @@ public class Villager : MonoBehaviour
         if (target != null)
         {
             targetPosition = target.transform.position;
+            SetPathTo(targetPosition);
             isMoving = true;
-            assignedBuilding = target; 
+            assignedBuilding = target;
         }
         else
         {
             Debug.Log("Kein Job oder Kaserne gefunden!");
         }
+    }
+
+    private void SetPathTo(Vector2 destination)
+    {
+        Vector2 startGrid = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
+        Vector2 destGrid = new Vector2(Mathf.Round(destination.x), Mathf.Round(destination.y));
+        
+        // Snap destination to nearest passable point
+        Vector2 snappedDest = SnapToNearestPassable(destGrid);
+        
+        List<Vector2> path = BuildingManager.FindPath(startGrid, snappedDest);
+
+        currentPath.Clear();
+        currentPathIndex = 0;
+
+        if (path.Count > 0)
+        {
+            currentPath.AddRange(path);
+            targetPosition = snappedDest;
+            isMoving = true;
+        }
+        else
+        {
+            currentPath.Clear();
+            isMoving = false;
+        }
+    }
+
+    private Vector2 SnapToNearestPassable(Vector2 target)
+    {
+        Vector2 snapped = new Vector2(Mathf.Round(target.x), Mathf.Round(target.y));
+        if (BuildingManager.IsWalkable(snapped))
+        {
+            return snapped;
+        }
+
+        Queue<Vector2> queue = new Queue<Vector2>();
+        HashSet<Vector2> visited = new HashSet<Vector2>();
+        queue.Enqueue(snapped);
+        visited.Add(snapped);
+
+        Vector2[] directions = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
+        while (queue.Count > 0 && visited.Count < 2500)
+        {
+            Vector2 current = queue.Dequeue();
+            for (int i = 0; i < directions.Length; i++)
+            {
+                Vector2 next = current + directions[i];
+                if (!visited.Add(next))
+                {
+                    continue;
+                }
+
+                if (BuildingManager.IsWalkable(next))
+                {
+                    return next;
+                }
+
+                queue.Enqueue(next);
+            }
+        }
+
+        return snapped;
     }
 
     private BuildingInstance FindNearestOpportunity()
@@ -490,8 +539,6 @@ public class Villager : MonoBehaviour
         isOperatingWorker = false;
         assignedBuilding = null;
         isMoving = false;
-        targetShipToBoard = null;
-
         
         // ONLY reset to Villager if they are NOT a Worker!
         // A construction worker should stay a construction worker so they can build more things.
@@ -600,6 +647,47 @@ public class Villager : MonoBehaviour
     public void ClearSleepHouseReference()
     {
         assignedSleepHouse = null;
+    }
+    
+    // ── Ship Assignment (for Crew) ─────────────────────────────────────────────
+    
+    public void AssignToShip(Ship ship)
+    {
+        if (ship == null) return;
+        
+        // Release from any current assignment
+        Release();
+        
+        assignedShip = ship;
+        
+        // Visual feedback - different color for ship crew
+        if (sr != null) sr.color = new Color(0.6f, 0.8f, 1f, 1f); // Light blue for ship crew
+        else if (rend != null) rend.material.color = new Color(0.6f, 0.8f, 1f, 1f);
+        
+        Debug.Log($"[Villager] Assigned as crew to ship {ship.GetShipName()}");
+    }
+    
+    public void ReleaseFromShip()
+    {
+        if (assignedShip != null)
+        {
+            Debug.Log($"[Villager] Released from ship {assignedShip.GetShipName()}");
+            assignedShip = null;
+        }
+        
+        // Reset to normal color
+        if (sr != null) sr.color = (role == Role.Worker) ? Color.orange : Color.white;
+        else if (rend != null) rend.material.color = (role == Role.Worker) ? Color.orange : Color.white;
+    }
+    
+    public bool IsOnShip()
+    {
+        return assignedShip != null;
+    }
+    
+    public Ship GetAssignedShip()
+    {
+        return assignedShip;
     }
 
     private BuildingInstance FindSleepHouse()
