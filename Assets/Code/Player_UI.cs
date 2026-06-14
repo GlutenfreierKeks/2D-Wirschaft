@@ -45,6 +45,7 @@ public class Player_UI : MonoBehaviour
         new ResourceDefinition { id = "stein",       displayName = "Stein",       startValue = 100 },
         new ResourceDefinition { id = "eisen",       displayName = "Eisen",       startValue = 0   },
         new ResourceDefinition { id = "gold",        displayName = "Gold",        startValue = 0   },
+        new ResourceDefinition { id = "wüstenfrucht", displayName = "Wüstenfrucht", startValue = 0 },
         new ResourceDefinition { id = "bevolkerung", displayName = "Bevölkerung", startValue = 10, maxValue = 20 },
         new ResourceDefinition { id = "dorfbewohner", displayName = "Freie Arbeiter", startValue = 10, maxValue = 999 },
         new ResourceDefinition { id = "arbeiter",     displayName = "Arbeiter",     startValue = 2,  maxValue = 999 },

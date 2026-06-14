@@ -39,7 +39,7 @@ public class ResourceManager : MonoBehaviour
         switch (type)
         {
             case IslandType.Plains: wood = 20; stone = 10; break;
-            case IslandType.Desert: wood = 5; stone = 5; break;
+            case IslandType.Desert: wood = 20; stone = 10; break;
             case IslandType.Jungle: wood = 40; stone = 5; break;
             case IslandType.Stone: wood = 10; stone = 30; break;
         }
