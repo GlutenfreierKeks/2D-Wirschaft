@@ -455,6 +455,7 @@ public class Ship : MonoBehaviour
                 freeVillager.gameObject.SetActive(false);
                 slot.content = ShipSlot.SlotContent.Builder;
                 slot.amount = 1;
+                slot.villager = freeVillager;
                 OnCargoChanged?.Invoke();
                 return true;
             }
@@ -513,8 +514,16 @@ public class Ship : MonoBehaviour
             }
             else if (slot.content == ShipSlot.SlotContent.Builder)
             {
-                if (VillagerManager.Instance != null)
+                if (slot.villager != null)
+                {
+                    slot.villager.transform.position = transform.position + new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0f);
+                    slot.villager.gameObject.SetActive(true);
+                    slot.villager.ReleaseFromShip();
+                }
+                else if (VillagerManager.Instance != null)
+                {
                     VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Worker);
+                }
             }
             else if (slot.content == ShipSlot.SlotContent.Soldier)
             {

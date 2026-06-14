@@ -80,6 +80,10 @@ public class FogRevealer : MonoBehaviour
     private void OnEnable()
     {
         if (maskObj != null) maskObj.SetActive(true);
+        if (isLocalPlayer)
+        {
+            FogProjector.RegisterExploration(transform.position, radius);
+        }
     }
 
     private void OnDisable()
