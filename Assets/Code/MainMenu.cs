@@ -141,7 +141,7 @@ public class MainMenu : MonoBehaviourPunCallbacks
             return;
         }
 
-        byte selectedMaxPlayers = maxPlayersOptions[Mathf.Clamp(maxPlayersDropdown.value, 0, maxPlayersOptions.Length - 1)];
+        byte selectedMaxPlayers = GetSelectedMaxPlayers();
         int seed = Random.Range(1, 1000000);
         RoomOptions roomOptions = new RoomOptions
         {
@@ -158,6 +158,21 @@ public class MainMenu : MonoBehaviourPunCallbacks
         SetStatus($"Erstelle Lobby '{roomName}'...");
         SetUIInteractable(false);
         PhotonNetwork.CreateRoom(roomName, roomOptions);
+    }
+
+    private byte GetSelectedMaxPlayers()
+    {
+        if (runtimeMaxPlayersDropdown != null)
+        {
+            return maxPlayersOptions[Mathf.Clamp(runtimeMaxPlayersDropdown.value, 0, maxPlayersOptions.Length - 1)];
+        }
+
+        if (maxPlayersDropdown != null)
+        {
+            return maxPlayersOptions[Mathf.Clamp(maxPlayersDropdown.value, 0, maxPlayersOptions.Length - 1)];
+        }
+
+        return maxPlayersOptions[0];
     }
 
     public void OnJoinByNameButtonClicked()
