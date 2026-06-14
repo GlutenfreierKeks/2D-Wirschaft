@@ -49,10 +49,10 @@ public class IslandManager : MonoBehaviour
 
     [Header("Island Settings")]
     [SerializeField] private Material islandMaterial;
-    [SerializeField] private int islandCount = 60;
-    [SerializeField] private int blocksPerIsland = 3750;
-    [SerializeField] private float mapMargin = 70f;
-    [SerializeField] private float minDistanceBetweenIslands = 60f;
+    [SerializeField] private int islandCount = 15;
+    [SerializeField] private int blocksPerIsland = 1000;
+    [SerializeField] private float mapMargin = 45f;
+    [SerializeField] private float minDistanceBetweenIslands = 50f;
 
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
@@ -97,28 +97,28 @@ public class IslandManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    islandCount = 15;
-                    blocksPerIsland = 1000;
-                    minDistanceBetweenIslands = 50f;
-                    mapMargin = 45f;
+                    islandCount = 8;
+                    blocksPerIsland = 900;
+                    minDistanceBetweenIslands = 35f;
+                    mapMargin = 30f;
                     break;
                 case "Standard":
-                    islandCount = 25;
-                    blocksPerIsland = 1500;
-                    minDistanceBetweenIslands = 55f;
-                    mapMargin = 50f;
+                    islandCount = 10;
+                    blocksPerIsland = 1200;
+                    minDistanceBetweenIslands = 30f;
+                    mapMargin = 25f;
                     break;
                 case "Gross":
-                    islandCount = 40;
-                    blocksPerIsland = 2000;
-                    minDistanceBetweenIslands = 65f;
-                    mapMargin = 60f;
+                    islandCount = 15;
+                    blocksPerIsland = 1500;
+                    minDistanceBetweenIslands = 35f;
+                    mapMargin = 30f;
                     break;
                 default:
-                    islandCount = 25;
-                    blocksPerIsland = 1500;
-                    minDistanceBetweenIslands = 55f;
-                    mapMargin = 50f;
+                    islandCount = 10;
+                    blocksPerIsland = 1200;
+                    minDistanceBetweenIslands = 30f;
+                    mapMargin = 25f;
                     break;
             }
         }

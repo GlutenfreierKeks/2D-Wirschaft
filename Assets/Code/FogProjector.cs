@@ -8,7 +8,7 @@ public class FogProjector : MonoBehaviour
     [Header("Fog Settings")]
     [SerializeField] private Material fogMaterial;
     [SerializeField] private int maskResolution = 1024;
-    [SerializeField] private float mapSize = 5000f;
+    [SerializeField] private float mapSize = 2000f;
 
     private RenderTexture maskTexture;
     private RenderTexture exploredTexture;
@@ -43,6 +43,12 @@ public class FogProjector : MonoBehaviour
 
     private void Start()
     {
+        if (GridManager.Instance != null)
+        {
+            int gridSize = GridManager.Instance.GetGridSize();
+            mapSize = Mathf.Max(mapSize, gridSize * 1.5f);
+        }
+
         Shader accumulatorShader = Shader.Find("Hidden/FogAccumulator");
         if (accumulatorShader == null)
         {

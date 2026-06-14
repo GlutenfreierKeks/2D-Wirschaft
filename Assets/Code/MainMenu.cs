@@ -547,7 +547,86 @@ public class MainMenu : MonoBehaviourPunCallbacks
         }
         dropdown.value = Mathf.Clamp(selectedIndex, 0, options.Length - 1);
         dropdown.RefreshShownValue();
+        SetupDropdownTemplate(dropdown, textColor, panelColor, accentColor);
         return dropdown;
+    }
+
+    private void SetupDropdownTemplate(TMP_Dropdown dropdown, Color textCol, Color bgCol, Color accentCol)
+    {
+        GameObject template = new GameObject("Template", typeof(RectTransform));
+        template.SetActive(false);
+        template.transform.SetParent(dropdown.transform, false);
+        RectTransform tmplRt = template.GetComponent<RectTransform>();
+        tmplRt.anchorMin = new Vector2(0f, 1f);
+        tmplRt.anchorMax = new Vector2(1f, 1f);
+        tmplRt.pivot = new Vector2(0.5f, 1f);
+        tmplRt.anchoredPosition = new Vector2(0f, 0f);
+        tmplRt.sizeDelta = new Vector2(0f, 160f);
+
+        GameObject vpGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
+        vpGo.transform.SetParent(template.transform, false);
+        RectTransform vpRt = vpGo.GetComponent<RectTransform>();
+        vpRt.anchorMin = Vector2.zero;
+        vpRt.anchorMax = Vector2.one;
+        vpRt.sizeDelta = Vector2.zero;
+        Image vpImg = vpGo.GetComponent<Image>();
+        vpImg.color = bgCol;
+        vpGo.GetComponent<Mask>().showMaskGraphic = false;
+
+        GameObject contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        contentGo.transform.SetParent(vpGo.transform, false);
+        RectTransform ctRt = contentGo.GetComponent<RectTransform>();
+        ctRt.anchorMin = Vector2.zero;
+        ctRt.anchorMax = Vector2.one;
+        ctRt.sizeDelta = Vector2.zero;
+        ctRt.anchoredPosition = Vector2.zero;
+        VerticalLayoutGroup vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(4, 4, 4, 4);
+        vlg.spacing = 2f;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+        ContentSizeFitter csf = contentGo.GetComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        GameObject itemGo = new GameObject("Item", typeof(RectTransform), typeof(Toggle), typeof(LayoutElement));
+        itemGo.transform.SetParent(contentGo.transform, false);
+        itemGo.GetComponent<LayoutElement>().minHeight = 40f;
+        itemGo.GetComponent<LayoutElement>().flexibleWidth = 1f;
+        RectTransform itemRt = itemGo.GetComponent<RectTransform>();
+        itemRt.anchorMin = new Vector2(0f, 0.5f);
+        itemRt.anchorMax = new Vector2(1f, 0.5f);
+        itemRt.sizeDelta = new Vector2(0f, 40f);
+
+        GameObject itemBg = new GameObject("Background", typeof(RectTransform), typeof(Image));
+        itemBg.transform.SetParent(itemGo.transform, false);
+        RectTransform ibgRt = itemBg.GetComponent<RectTransform>();
+        ibgRt.anchorMin = Vector2.zero;
+        ibgRt.anchorMax = Vector2.one;
+        ibgRt.sizeDelta = Vector2.zero;
+        Image ibgImg = itemBg.GetComponent<Image>();
+        ibgImg.color = new Color(0.2f, 0.18f, 0.15f, 1f);
+
+        GameObject itemLabel = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        itemLabel.transform.SetParent(itemGo.transform, false);
+        RectTransform ilRt = itemLabel.GetComponent<RectTransform>();
+        ilRt.anchorMin = Vector2.zero;
+        ilRt.anchorMax = Vector2.one;
+        ilRt.offsetMin = new Vector2(10f, 4f);
+        ilRt.offsetMax = new Vector2(-10f, -4f);
+        TextMeshProUGUI ilText = itemLabel.GetComponent<TextMeshProUGUI>();
+        ilText.fontSize = 18f;
+        ilText.color = textCol;
+        ilText.alignment = TextAlignmentOptions.MidlineLeft;
+
+        ScrollRect sr = template.AddComponent<ScrollRect>();
+        sr.content = ctRt;
+        sr.viewport = vpRt;
+        sr.horizontal = false;
+        sr.vertical = true;
+
+        dropdown.template = tmplRt;
+        dropdown.itemText = ilText;
     }
 
     private void CreateRuntimeButton(RectTransform parent, string label, Color fill, UnityEngine.Events.UnityAction action, float height = 54f)

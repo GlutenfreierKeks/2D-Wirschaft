@@ -382,6 +382,8 @@ public class Villager : MonoBehaviour
         {
             currentPath.Clear();
             isMoving = false;
+            NotificationManager.Instance?.Notify("no_path_villager",
+                "Kein Weg! Der Dorfbewohner kann nur auf Land gehen.", 4f);
         }
     }
 

@@ -617,6 +617,17 @@ public class BuildingInstance : MonoBehaviour
     public void TakeDamage(int amount)
     {
         currentHP -= amount;
+
+        if (PhotonNetwork.InRoom && !isLocal)
+        {
+            object[] damageData = new object[] { data.buildingName, transform.position.x, transform.position.y, amount };
+            SendOptions sendOpts = new SendOptions { Reliability = true };
+            PhotonNetwork.RaiseEvent(16, damageData,
+                new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+        }
+
+        UpdateHealthBar();
+
         if (currentHP <= 0)
         {
             currentHP = 0;
@@ -903,13 +914,19 @@ public class BuildingInstance : MonoBehaviour
             bc.size = new Vector2(1f, 1f);
 
             Soldier s = solObj.AddComponent<Soldier>();
+            s.netId = Soldier.nextNetIdValue;
+            Soldier.nextNetIdValue++;
             s.soldierType = currentRecruitingType;
             s.team = Team.Player;
-            s.moveSpeed = 1.5f;    // Same speed as villagers!
+            s.moveSpeed = 1.5f;
             if (Photon.Pun.PhotonNetwork.LocalPlayer != null)
             {
                 s.ownerActorNumber = Photon.Pun.PhotonNetwork.LocalPlayer.ActorNumber;
             }
+
+            FogRevealer fr = solObj.AddComponent<FogRevealer>();
+            fr.radius = 4f;
+            fr.isLocalPlayer = true;
 
             // Map BarracksResource to WeaponMaterial (top-level enum)
             switch (currentRecruitingResource)
@@ -922,6 +939,14 @@ public class BuildingInstance : MonoBehaviour
 
             // Play recruitment particles!
             SpawnProductionParticles();
+
+            if (PhotonNetwork.InRoom)
+            {
+                object[] syncData = new object[] { s.netId, (int)currentRecruitingType, spawnPos.x, spawnPos.y };
+                SendOptions sendOpts = new SendOptions { Reliability = true };
+                PhotonNetwork.RaiseEvent(12, syncData,
+                    new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+            }
 
             Destroy(candidate.gameObject);
         }

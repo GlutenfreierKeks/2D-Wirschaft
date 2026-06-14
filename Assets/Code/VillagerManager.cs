@@ -78,6 +78,10 @@ public class VillagerManager : MonoBehaviour
             if (custom != null) sr.sprite = custom;
         }
 
+        FogRevealer fr = vObj.AddComponent<FogRevealer>();
+        fr.radius = 4f;
+        fr.isLocalPlayer = true;
+
         activeVillagers.Add(v);
     }
 

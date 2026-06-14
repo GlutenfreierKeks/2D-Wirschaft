@@ -7,6 +7,7 @@ public class Ship : MonoBehaviour
 {
     [Header("Ship Configuration")]
     public ShipData shipData;
+    public int shipLevel = 1;
     public bool isLocal = true;
     
     [Header("Cargo System")]
@@ -51,30 +52,52 @@ public class Ship : MonoBehaviour
         {
             originalColor = spriteRenderer.color;
         }
-        
+
+        currentAngle = transform.rotation.eulerAngles.z;
+    }
+
+    public void SyncFromData()
+    {
         if (shipData != null)
         {
             moveSpeed = shipData.moveSpeed;
             rotationSpeed = shipData.rotationSpeed;
+            shipLevel = shipData.level;
+            maxHP = shipData.level switch
+            {
+                1 => 180,
+                2 => 350,
+                3 => 600,
+                _ => 180
+            };
         }
-        
-        InitializeSlots();
         currentHP = Mathf.Max(1, maxHP);
-        
-        // Aktuelle Rotation vom BuildingManager übernehmen (nicht überschreiben)
-        currentAngle = transform.rotation.eulerAngles.z;
+        InitializeSlots();
     }
 
     private void InitializeSlots()
     {
         slots.Clear();
-        int count = shipData != null ? shipData.GetSlotCount() : 8;
+        int count = shipData != null ? shipData.GetSlotCount() : GetSlotCountForLevel();
         for (int i = 0; i < count; i++)
             slots.Add(new ShipSlot());
+    }
+
+    private int GetSlotCountForLevel()
+    {
+        return shipLevel switch
+        {
+            1 => 8,
+            2 => 16,
+            3 => 30,
+            _ => 8
+        };
     }
     
     private void Start()
     {
+        SyncFromData();
+
         // Add click detector
         var collider = GetComponent<Collider2D>();
         if (collider == null)
@@ -359,14 +382,12 @@ public class Ship : MonoBehaviour
     
     private void RevealFogAlongPath()
     {
-        float revealRadius = 12f;
-        FogProjector.RegisterExploration(transform.position, revealRadius);
+        FogProjector.RegisterExploration(transform.position, 40f);
     }
     
     private void RevealAreaAroundShip()
     {
-        float revealRadius = 16f;
-        FogProjector.RegisterExploration(transform.position, revealRadius);
+        FogProjector.RegisterExploration(transform.position, 50f);
     }
     
     private void SelectShip()
@@ -578,6 +599,14 @@ public class Ship : MonoBehaviour
 
     public bool TryLoadSoldier(SoldierType type)
     {
+        Soldier available = FindNearestSoldier(type);
+        if (available == null)
+        {
+            NotificationManager.Instance?.Notify("no_soldier_nearby",
+                $"Kein {type}-Soldat in der Nähe!", 4f);
+            return false;
+        }
+
         foreach (var slot in slots)
         {
             if (slot.IsEmpty)
@@ -585,9 +614,43 @@ public class Ship : MonoBehaviour
                 slot.content = ShipSlot.SlotContent.Soldier;
                 slot.soldierType = type;
                 slot.amount = 1;
+                slot.loadedSoldierRef = available;
+                available.gameObject.SetActive(false);
                 OnCargoChanged?.Invoke();
                 return true;
             }
+        }
+        return false;
+    }
+
+    private Soldier FindNearestSoldier(SoldierType type)
+    {
+        Soldier[] allSoldiers = FindObjectsByType<Soldier>(FindObjectsSortMode.None);
+        Soldier best = null;
+        float bestDist = float.MaxValue;
+
+        foreach (var s in allSoldiers)
+        {
+            if (s == null || !s.gameObject.activeInHierarchy) continue;
+            if (s.soldierType != type) continue;
+            if (s.team != Team.Player) continue;
+            if (IsSoldierAlreadyLoaded(s)) continue;
+
+            float d = Vector3.Distance(transform.position, s.transform.position);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = s;
+            }
+        }
+        return best;
+    }
+
+    private bool IsSoldierAlreadyLoaded(Soldier soldier)
+    {
+        foreach (var slot in slots)
+        {
+            if (slot.loadedSoldierRef == soldier) return true;
         }
         return false;
     }
@@ -619,16 +682,26 @@ public class Ship : MonoBehaviour
             }
             else if (slot.content == ShipSlot.SlotContent.Soldier)
             {
-                // Soldaten spawnen
-                GameObject solObj = new GameObject($"Unloaded_Soldier_{slot.soldierType}");
-                solObj.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
-                var sr = solObj.AddComponent<SpriteRenderer>();
-                sr.sortingOrder = 21;
-                solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
-                var s = solObj.AddComponent<Soldier>();
-                s.soldierType = slot.soldierType;
-                s.team = Team.Player;
-                s.moveSpeed = 1.5f;
+                if (slot.loadedSoldierRef != null)
+                {
+                    slot.loadedSoldierRef.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                    slot.loadedSoldierRef.gameObject.SetActive(true);
+                }
+                else
+                {
+                    GameObject solObj = new GameObject($"Unloaded_Soldier_{slot.soldierType}");
+                    solObj.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                    var sr = solObj.AddComponent<SpriteRenderer>();
+                    sr.sortingOrder = 21;
+                    solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
+                    var s = solObj.AddComponent<Soldier>();
+                    s.soldierType = slot.soldierType;
+                    s.team = Team.Player;
+                    s.moveSpeed = 1.5f;
+                    FogRevealer fr = solObj.AddComponent<FogRevealer>();
+                    fr.radius = 4f;
+                    fr.isLocalPlayer = true;
+                }
             }
             slot.Clear();
         }
@@ -639,7 +712,13 @@ public class Ship : MonoBehaviour
     {
         if (slotIndex >= 0 && slotIndex < slots.Count)
         {
-            slots[slotIndex].Clear();
+            var slot = slots[slotIndex];
+            if (slot.loadedSoldierRef != null)
+            {
+                slot.loadedSoldierRef.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                slot.loadedSoldierRef.gameObject.SetActive(true);
+            }
+            slot.Clear();
             OnCargoChanged?.Invoke();
         }
     }

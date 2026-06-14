@@ -7,11 +7,11 @@ public class GridManager : MonoBehaviour
     public static GridManager Instance;
 
     [Header("Grid Settings")]
-    [SerializeField] private int gridSize = 1800;
+    [SerializeField] private int gridSize = 1000;
     [SerializeField] private Material gridMaterial;
     
     [Header("Spawning")]
-    [SerializeField] private float spawnRadius = 300f;
+    [SerializeField] private float spawnRadius = 180f;
 
     private GameObject gridObj;
     private Transform mainCamTransform;
@@ -48,20 +48,20 @@ public class GridManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    gridSize = 900;
-                    spawnRadius = 160f;
+                    gridSize = 500;
+                    spawnRadius = 100f;
                     break;
                 case "Standard":
-                    gridSize = 1200;
-                    spawnRadius = 220f;
+                    gridSize = 700;
+                    spawnRadius = 140f;
                     break;
                 case "Gross":
-                    gridSize = 1700;
-                    spawnRadius = 320f;
+                    gridSize = 1000;
+                    spawnRadius = 200f;
                     break;
                 default:
-                    gridSize = 1200;
-                    spawnRadius = 220f;
+                    gridSize = 700;
+                    spawnRadius = 140f;
                     break;
             }
         }
@@ -78,9 +78,16 @@ public class GridManager : MonoBehaviour
         
         Destroy(gridObj.GetComponent<MeshCollider>());
 
+        Renderer gridRenderer = gridObj.GetComponent<Renderer>();
         if (gridMaterial != null)
         {
-            gridObj.GetComponent<Renderer>().material = gridMaterial;
+            gridRenderer.material = gridMaterial;
+        }
+        else
+        {
+            Shader fallbackShader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+            gridRenderer.material = new Material(fallbackShader);
+            gridRenderer.material.color = new Color(0.08f, 0.10f, 0.13f, 0.08f);
         }
     }
 

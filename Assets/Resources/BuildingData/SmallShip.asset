@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 957f24d6ad939b945a11f0dbfda93d76, type: 3}
-  m_Name: smalltradingship
+  m_Name: SmallShip
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
   buildingName: Small Ship
   prefab: {fileID: 7534688989467978198, guid: 6313be81ace603e4ab9eca36f19025d4, type: 3}
@@ -34,13 +34,13 @@ MonoBehaviour:
   producesVillagers: 0
   workersNeeded: 0
   sleepCapacity: 0
-  shipData: {fileID: 0}
+  shipData: {fileID: 11400000, guid: 403aadea227c45a3ac695f3918f3e0f2, type: 3}
   isDefenseTower: 0
   towerRange: 18
   towerDamage: 18
   towerAttackCooldown: 2.5
   fogRevealRadius: 5
-  maxHP: 100
-  isWarehouseType: 0
+  maxHP: 180
   ghostColor: {r: 0, g: 1, b: 0, a: 0.5}
+  isWarehouseType: 0
   canBuildOnOtherIslands: 0

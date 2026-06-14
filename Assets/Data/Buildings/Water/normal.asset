@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e984084ba512c04fbbb30cf42871811, type: 3}
+  m_Name: normal
+  m_EditorClassIdentifier: Assembly-CSharp::ShipData
+  shipName: Medium Ship
+  shipType: 0
+  prefab: {fileID: 7534688989467978198, guid: 6313be81ace603e4ab9eca36f19025d4, type: 3}
+  width: 4
+  height: 2
+  level: 2
+  crewRequired: 2
+  moveSpeed: 2
+  rotationSpeed: 100
+  shipColor: {r: 1, g: 1, b: 1, a: 1}
+  shipSprite: {fileID: 21300000, guid: 257286d46bd3cbf4ebfcb0e67f88cf9f, type: 3}

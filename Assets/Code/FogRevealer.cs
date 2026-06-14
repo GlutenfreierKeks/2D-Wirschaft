@@ -18,13 +18,15 @@ public class FogRevealer : MonoBehaviour
 
     private void CreateMask()
     {
+        if (!isLocalPlayer) return;
+
         maskObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
         maskObj.name = "MaskIndicator";
         maskObj.transform.SetParent(transform);
         maskObj.transform.localPosition = Vector3.zero;
         maskObj.transform.localScale = new Vector3(radius * 2.5f, radius * 2.5f, 1);
         
-        maskObj.layer = isLocalPlayer ? 31 : 0; 
+        maskObj.layer = 31;
         
         Renderer rend = maskObj.GetComponent<Renderer>();
         Shader maskShader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");

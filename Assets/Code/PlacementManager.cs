@@ -345,47 +345,39 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
 
     /// <summary>
     /// Für Piers: Prüft ob die anliegende Insel ein eigenes Lagerhaus hat.
+    /// Folgt der Steg-Kette per BFS bis Land mit Lagerhaus gefunden wird.
     /// </summary>
     private bool CheckPierIslandOwnership(Vector2 center)
     {
         Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
-        
-        // Ein Pier muss an Land oder another Pier angrenzen - prüfe alle 4 Richtungen
         Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
-        
-        foreach (var dir in directions)
+
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        queue.Enqueue(gridPos);
+        visited.Add(gridPos);
+
+        while (queue.Count > 0)
         {
-            Vector2Int adjacent = gridPos + dir;
-            
-            // Ist das angrenzende Feld Land?
-            if (IslandManager.IsLand(adjacent))
+            Vector2Int current = queue.Dequeue();
+            foreach (var dir in directions)
             {
-                // Prüfe ob auf dieser Insel ein eigenes Lagerhaus steht
-                if (IsWarehouseOnIsland(adjacent))
-                    return true;
-            }
-        }
-        
-        // Auch als Pier an eigenem Pier angrenzend prüfen
-        foreach (var dir in directions)
-        {
-            Vector2Int adjacent = gridPos + dir;
-            if (BuildingManager.IsStegAt(adjacent))
-            {
-                // Dieser Pier ist an einem existierenden Pier - prüfe ob der Steg zu einer Insel mit eigenem Lagerhaus gehört
-                // Da Stege nur an Land oder anderen Stegen platziert werden, folgt die Kette zum Land
-                foreach (var dir2 in directions)
+                Vector2Int neighbor = current + dir;
+                if (visited.Contains(neighbor)) continue;
+                visited.Add(neighbor);
+
+                if (IslandManager.IsLand(neighbor))
                 {
-                    Vector2Int landCheck = adjacent + dir2;
-                    if (IslandManager.IsLand(landCheck))
-                    {
-                        if (IsWarehouseOnIsland(landCheck))
-                            return true;
-                    }
+                    if (IsWarehouseOnIsland(neighbor))
+                        return true;
+                }
+                else if (BuildingManager.IsStegAt(neighbor))
+                {
+                    queue.Enqueue(neighbor);
                 }
             }
         }
-        
+
         return false;
     }
 
@@ -837,11 +829,11 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
     {
         switch (Mathf.RoundToInt(Mathf.Repeat(rotationDegrees, 360f)))
         {
-            case 0: return Vector2Int.right;
-            case 90: return Vector2Int.up;
-            case 180: return Vector2Int.left;
-            case 270: return Vector2Int.down;
-            default: return Vector2Int.right;
+            case 0: return Vector2Int.down;
+            case 90: return Vector2Int.right;
+            case 180: return Vector2Int.up;
+            case 270: return Vector2Int.left;
+            default: return Vector2Int.down;
         }
     }
 
@@ -988,12 +980,17 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
 
     private int GetShipRotationFromDirections(Vector2Int along, Vector2Int outward)
     {
-        // Ships are placed so that their bow points away from the pier.
-        // The actual rotation depends only on the outward direction.
-        if (outward == Vector2Int.up) return 180;
-        if (outward == Vector2Int.down) return 0;
-        if (outward == Vector2Int.right) return 90;
-        if (outward == Vector2Int.left) return 270;
+        // Die Textur-Spitze zeigt standardmäßig nach unten (-Y).
+        // Die Spitze soll parallel zum Schiff (along-Richtung) zeigen,
+        // nicht zum Steg hin (outward).
+        // Bei Rotation 0: tip = -transform.up = (0,-1) → unten
+        // Bei Rotation 90: tip = -transform.up = (1,0) → rechts
+        // Bei Rotation 180: tip = -transform.up = (0,1) → oben
+        // Bei Rotation 270: tip = -transform.up = (-1,0) → links
+        if (along == Vector2Int.up) return 180;
+        if (along == Vector2Int.down) return 0;
+        if (along == Vector2Int.right) return 90;
+        if (along == Vector2Int.left) return 270;
         return 0;
     }
 }

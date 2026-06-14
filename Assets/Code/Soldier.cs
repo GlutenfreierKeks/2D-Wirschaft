@@ -34,6 +34,9 @@ public class Soldier : MonoBehaviour
 
     public static readonly List<Soldier> ActiveSoldiers = new List<Soldier>();
 
+    public static int nextNetIdValue = 1;
+    public int netId;
+
     [Header("Welcher Soldat ist das?")]
     public SoldierType soldierType;
 
@@ -82,6 +85,11 @@ public class Soldier : MonoBehaviour
     private bool patrolTowardsB;
     private bool hasReportedEnemyContact;
 
+    private float syncTimer;
+    private Vector3 lastSyncPos;
+    private const float SyncInterval = 0.2f;
+    private const float SyncMoveThreshold = 0.5f;
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
@@ -117,6 +125,7 @@ public class Soldier : MonoBehaviour
 
     private void Awake()
     {
+        if (netId == 0) netId = nextNetIdValue++;
         spriteRenderer = GetComponent<SpriteRenderer>();
         spriteRenderer.sortingOrder = 21;
 
@@ -209,6 +218,7 @@ public class Soldier : MonoBehaviour
         attackBuildingTarget = null;
         hasReportedEnemyContact = false;
         FollowOrders();
+        BroadcastPosition();
     }
 
     public void SetSelected(bool selected)
@@ -322,28 +332,28 @@ public class Soldier : MonoBehaviour
         {
             case SoldierType.Spear:
                 maxHealth = 100f;
-                damage = 25f;
-                attackRange = 10f;
-                attackCooldown = 2f;
+                damage = 5f;
+                attackRange = 1.5f;
+                attackCooldown = 2.5f;
                 shield = 0f;
                 break;
             case SoldierType.Shield:
-                maxHealth = 100f;
-                damage = 35f;
+                maxHealth = 150f;
+                damage = 3f;
                 attackRange = 1f;
-                attackCooldown = 1.5f;
-                shield = 50f;
+                attackCooldown = 2.5f;
+                shield = 30f;
                 break;
             case SoldierType.Sword:
                 maxHealth = 100f;
-                damage = 30f;
-                attackRange = 2f;
-                attackCooldown = 1f;
+                damage = 6f;
+                attackRange = 1.2f;
+                attackCooldown = 2f;
                 shield = 0f;
                 break;
             case SoldierType.Bow:
-                maxHealth = 100f;
-                damage = 20f;
+                maxHealth = 80f;
+                damage = 8f;
                 attackRange = 15f;
                 attackCooldown = 3f;
                 shield = 0f;
@@ -370,8 +380,8 @@ public class Soldier : MonoBehaviour
         {
             case WeaponMaterial.Wood: multiplier = 0.6f; break;
             case WeaponMaterial.Stone: multiplier = 1f; break;
-            case WeaponMaterial.Gold: multiplier = 1.3f; break;
-            case WeaponMaterial.Iron: multiplier = 1.7f; break;
+            case WeaponMaterial.Gold: multiplier = 1.2f; break;
+            case WeaponMaterial.Iron: multiplier = 1.4f; break;
         }
 
         maxHealth *= multiplier;
@@ -629,6 +639,7 @@ public class Soldier : MonoBehaviour
             ArrowProjectile.Spawn(transform.position + new Vector3(0f, 0.1f, 0f), enemySoldier.transform.position);
         }
 
+        SpawnHitEffect(enemySoldier.transform.position);
         enemySoldier.TakeDamage(damage);
     }
 
@@ -636,7 +647,12 @@ public class Soldier : MonoBehaviour
     {
         if (building == null) return;
 
-        Debug.Log($"[Soldier] Attacking building {building.name}! Damage: {damage}");
+        if (soldierType == SoldierType.Bow)
+        {
+            ArrowProjectile.Spawn(transform.position + new Vector3(0f, 0.1f, 0f), building.transform.position);
+        }
+
+        SpawnHitEffect(building.transform.position);
 
         int damageToDeal = Mathf.RoundToInt(damage);
         building.TakeDamage(damageToDeal);
@@ -648,6 +664,41 @@ public class Soldier : MonoBehaviour
         }
     }
 
+    private void SpawnHitEffect(Vector3 position)
+    {
+        GameObject pObj = new GameObject("HitEffect");
+        pObj.transform.position = position;
+        ParticleSystem ps = pObj.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        var main = ps.main;
+        main.duration = 0.2f;
+        main.loop = false;
+        main.startLifetime = 0.3f;
+        main.startSpeed = 2f;
+        main.startSize = 0.3f;
+        main.startColor = Color.white;
+        main.gravityModifier = 0f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+        main.maxParticles = 10;
+
+        var emission = ps.emission;
+        emission.rateOverTime = 0;
+        var burst = new ParticleSystem.Burst(0f, 6);
+        emission.SetBursts(new ParticleSystem.Burst[] { burst });
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.1f;
+
+        var renderer = pObj.GetComponent<ParticleSystemRenderer>();
+        renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+
+        ps.Play();
+    }
+
     private void Die()
     {
         if (SelectionManager.Instance != null)
@@ -656,6 +707,25 @@ public class Soldier : MonoBehaviour
         }
 
         Destroy(gameObject);
+    }
+
+    private void BroadcastPosition()
+    {
+        if (!PhotonNetwork.InRoom) return;
+        if (team != Team.Player) return;
+
+        Vector3 pos = transform.position;
+        if (Vector3.Distance(pos, lastSyncPos) < SyncMoveThreshold) return;
+
+        syncTimer += Time.deltaTime;
+        if (syncTimer < SyncInterval) return;
+        syncTimer = 0f;
+        lastSyncPos = pos;
+
+        object[] data = new object[] { netId, pos.x, pos.y };
+        PhotonNetwork.RaiseEvent(15, data,
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others },
+            new ExitGames.Client.Photon.SendOptions { Reliability = false });
     }
 
     private void UpdatePatrolRenderer()
@@ -687,6 +757,8 @@ public class Soldier : MonoBehaviour
         if (newPath.Count == 0)
         {
             hasMoveOrder = false;
+            NotificationManager.Instance?.Notify("no_path",
+                "Kein Weg! Soldat kann nur auf Inseln und Stegen laufen.", 4f);
             return;
         }
 

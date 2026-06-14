@@ -23,7 +23,15 @@ public class CameraController : MonoBehaviour
     private void Start()
     {
         cam = GetComponent<Camera>();
-        targetZoom = cam.orthographicSize;
+        if (GridManager.Instance != null)
+        {
+            int gridSize = GridManager.Instance.GetGridSize();
+            targetZoom = Mathf.Clamp(gridSize * 0.08f, minZoom, maxZoom);
+        }
+        else
+        {
+            targetZoom = cam.orthographicSize;
+        }
         
         // Find the grid object (created by GridManager)
         gridObject = GameObject.Find("BackgroundGrid");

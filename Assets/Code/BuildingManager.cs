@@ -486,6 +486,10 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             ship.isLocal = isLocal;
             ship.spawnOrigin = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
             if (data.shipData != null) ship.shipData = data.shipData;
+            if (data.buildingName.Contains("Small")) ship.shipLevel = 1;
+            else if (data.buildingName.Contains("Medium")) ship.shipLevel = 2;
+            else if (data.buildingName.Contains("Large")) ship.shipLevel = 3;
+            ship.SyncFromData();
         }
 
         if (data.isDefenseTower)

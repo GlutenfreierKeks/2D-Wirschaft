@@ -12,6 +12,7 @@ public class ShipSlot
     public int amount = 0;
     public SoldierType soldierType = SoldierType.Spear;
     public Villager villager = null;
+    public Soldier loadedSoldierRef = null;
 
     public bool IsEmpty => content == SlotContent.Empty;
     public bool IsPerson => content == SlotContent.Builder || content == SlotContent.Soldier;
@@ -22,6 +23,7 @@ public class ShipSlot
         resourceId = "";
         amount = 0;
         villager = null;
+        loadedSoldierRef = null;
     }
 }
 

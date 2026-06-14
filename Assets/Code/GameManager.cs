@@ -17,6 +17,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private const byte SoldierSpawnEventCode = 12;
     private const byte BuildingDestroyEventCode = 13;
     private const byte ShipSyncEventCode = 14;
+    private const byte SoldierMoveEventCode = 15;
+    private const byte BuildingDamageEventCode = 16;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -403,6 +405,18 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             ReceiveShipSync(shipData);
             return;
         }
+
+        if (photonEvent.Code == SoldierMoveEventCode && photonEvent.CustomData is object[] moveData)
+        {
+            ReceiveSoldierMove(moveData);
+            return;
+        }
+
+        if (photonEvent.Code == BuildingDamageEventCode && photonEvent.CustomData is object[] dmgData)
+        {
+            ReceiveBuildingDamage(dmgData);
+            return;
+        }
     }
 
     private void ReceiveVillagerSpawn(object[] data)
@@ -421,19 +435,14 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
 
     private void ReceiveSoldierSpawn(object[] data)
     {
-        float baseX = (float)data[0];
-        float baseY = (float)data[1];
-        for (int i = 2; i + 2 < data.Length; i += 3)
-        {
-            SoldierType type = (SoldierType)(int)data[i];
-            float ox = (float)data[i + 1];
-            float oy = (float)data[i + 2];
-            Vector3 pos = new Vector3(baseX + ox, baseY + oy, 0f);
-            SpawnRemoteSoldier(pos, type);
-        }
+        int netId = (int)data[0];
+        SoldierType type = (SoldierType)(int)data[1];
+        float px = (float)data[2];
+        float py = (float)data[3];
+        SpawnRemoteSoldier(new Vector3(px, py, 0f), type, netId);
     }
 
-    private void SpawnRemoteSoldier(Vector3 position, SoldierType type)
+    private void SpawnRemoteSoldier(Vector3 position, SoldierType type, int netId = 0)
     {
         GameObject solObj = new GameObject($"Remote_{type}");
         solObj.transform.position = position;
@@ -441,9 +450,13 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         sr.sortingOrder = 21;
         solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
         var s = solObj.AddComponent<Soldier>();
+        s.netId = netId;
         s.soldierType = type;
         s.team = Team.Player;
         s.moveSpeed = 1.5f;
+        FogRevealer fr = solObj.AddComponent<FogRevealer>();
+        fr.radius = 4f;
+        fr.isLocalPlayer = false;
     }
 
     private void ReceiveBuildingDestroy(object[] data)
@@ -481,6 +494,43 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             {
                 ship.transform.position = new Vector3(posX, posY, ship.transform.position.z);
                 ship.transform.rotation = Quaternion.Euler(0f, 0f, rot);
+                return;
+            }
+        }
+    }
+
+    private void ReceiveSoldierMove(object[] data)
+    {
+        int netId = (int)data[0];
+        float px = (float)data[1];
+        float py = (float)data[2];
+
+        foreach (Soldier s in Soldier.ActiveSoldiers)
+        {
+            if (s.netId == netId)
+            {
+                s.transform.position = new Vector3(px, py, s.transform.position.z);
+                return;
+            }
+        }
+    }
+
+    private void ReceiveBuildingDamage(object[] data)
+    {
+        string buildingName = (string)data[0];
+        float bx = (float)data[1];
+        float by = (float)data[2];
+        int amount = (int)data[3];
+        Vector3 bPos = new Vector3(bx, by, -0.21f);
+
+        var allBuildings = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        foreach (var b in allBuildings)
+        {
+            if (b == null) continue;
+            if (b.data != null && b.data.buildingName == buildingName &&
+                Vector3.Distance(b.transform.position, bPos) < 0.5f)
+            {
+                b.TakeDamage(amount);
                 return;
             }
         }

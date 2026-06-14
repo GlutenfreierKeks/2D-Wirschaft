@@ -747,8 +747,40 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         if (PhotonNetwork.IsMasterClient)
         {
+            ShowLoadingOverlay();
             PhotonNetwork.CurrentRoom.IsOpen = false;
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
+        }
+    }
+
+    private void ShowLoadingOverlay()
+    {
+        GameObject overlay = new GameObject("LoadingOverlay", typeof(RectTransform), typeof(Image));
+        Canvas canvas = FindObjectOfType<Canvas>();
+        if (canvas != null)
+        {
+            overlay.transform.SetParent(canvas.transform, false);
+            RectTransform rt = overlay.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            Image img = overlay.GetComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.85f);
+            img.raycastTarget = true;
+
+            GameObject loadingText = new GameObject("LoadingText", typeof(RectTransform), typeof(TextMeshProUGUI));
+            loadingText.transform.SetParent(overlay.transform, false);
+            RectTransform trt = loadingText.GetComponent<RectTransform>();
+            trt.anchorMin = new Vector2(0f, 0.4f);
+            trt.anchorMax = new Vector2(1f, 0.6f);
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = Vector2.zero;
+            TextMeshProUGUI tmp = loadingText.GetComponent<TextMeshProUGUI>();
+            tmp.text = "LADE SPIEL\nBitte warten...";
+            tmp.fontSize = 36;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.color = Color.white;
         }
     }
 
