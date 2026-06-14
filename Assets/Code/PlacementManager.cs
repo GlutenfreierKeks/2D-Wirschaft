@@ -988,16 +988,12 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
 
     private int GetShipRotationFromDirections(Vector2Int along, Vector2Int outward)
     {
-        if (along == Vector2Int.up)
-        {
-            return outward == Vector2Int.right ? 0 : 180;
-        }
-
-        if (along == Vector2Int.right)
-        {
-            return outward == Vector2Int.up ? 90 : 270;
-        }
-
+        // Ships are placed so that their bow points away from the pier.
+        // The actual rotation depends only on the outward direction.
+        if (outward == Vector2Int.up) return 180;
+        if (outward == Vector2Int.down) return 0;
+        if (outward == Vector2Int.right) return 90;
+        if (outward == Vector2Int.left) return 270;
         return 0;
     }
 }
