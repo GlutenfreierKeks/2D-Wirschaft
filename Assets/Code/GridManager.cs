@@ -48,16 +48,20 @@ public class GridManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    gridSize = 1400;
+                    gridSize = 900;
+                    spawnRadius = 160f;
+                    break;
+                case "Standard":
+                    gridSize = 1200;
                     spawnRadius = 220f;
                     break;
                 case "Gross":
-                    gridSize = 2600;
-                    spawnRadius = 420f;
+                    gridSize = 1700;
+                    spawnRadius = 320f;
                     break;
                 default:
-                    gridSize = 1800;
-                    spawnRadius = 300f;
+                    gridSize = 1200;
+                    spawnRadius = 220f;
                     break;
             }
         }

@@ -97,22 +97,28 @@ public class IslandManager : MonoBehaviour
             switch (preset)
             {
                 case "Kompakt":
-                    islandCount = 30;
-                    blocksPerIsland = 2000;
-                    minDistanceBetweenIslands = 60f;
-                    mapMargin = 60f;
+                    islandCount = 15;
+                    blocksPerIsland = 1000;
+                    minDistanceBetweenIslands = 50f;
+                    mapMargin = 45f;
+                    break;
+                case "Standard":
+                    islandCount = 25;
+                    blocksPerIsland = 1500;
+                    minDistanceBetweenIslands = 55f;
+                    mapMargin = 50f;
                     break;
                 case "Gross":
-                    islandCount = 70;
-                    blocksPerIsland = 3000;
-                    minDistanceBetweenIslands = 90f;
-                    mapMargin = 80f;
+                    islandCount = 40;
+                    blocksPerIsland = 2000;
+                    minDistanceBetweenIslands = 65f;
+                    mapMargin = 60f;
                     break;
                 default:
-                    islandCount = 60;
-                    blocksPerIsland = 3750;
-                    minDistanceBetweenIslands = 60f;
-                    mapMargin = 70f;
+                    islandCount = 25;
+                    blocksPerIsland = 1500;
+                    minDistanceBetweenIslands = 55f;
+                    mapMargin = 50f;
                     break;
             }
         }

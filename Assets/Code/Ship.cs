@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using Photon.Pun;
 
 public class Ship : MonoBehaviour
 {
@@ -29,6 +30,11 @@ public class Ship : MonoBehaviour
     [Header("Crew")]
     public Villager assignedCrew;  // The villager sailing this ship
     
+    [Header("Multiplayer Sync")]
+    public Vector2Int spawnOrigin;
+    private float syncTimer = 0f;
+    private const float SyncInterval = 0.15f;
+
     [Header("Visual")]
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
@@ -102,6 +108,7 @@ public class Ship : MonoBehaviour
     {
         HandleMovement();
         HandleClickDetection();
+        BroadcastPosition();
     }
     
     private void HandleClickDetection()
@@ -309,11 +316,45 @@ public class Ship : MonoBehaviour
     {
         isMoving = false;
         RevealAreaAroundShip();
+        if (isLocal && PhotonNetwork.InRoom)
+        {
+            SendSyncEvent();
+        }
     }
     
     public void StopMovementCommand()
     {
         isMoving = false;
+    }
+
+    private void BroadcastPosition()
+    {
+        if (!isLocal || !PhotonNetwork.InRoom) return;
+
+        if (!isMoving) return;
+
+        syncTimer += Time.deltaTime;
+        if (syncTimer < SyncInterval) return;
+        syncTimer = 0f;
+
+        SendSyncEvent();
+    }
+
+    private void SendSyncEvent()
+    {
+        Vector3 pos = transform.position;
+        float rot = transform.rotation.eulerAngles.z;
+        object[] data = new object[]
+        {
+            (float)spawnOrigin.x,
+            (float)spawnOrigin.y,
+            pos.x,
+            pos.y,
+            rot
+        };
+        PhotonNetwork.RaiseEvent(14, data,
+            new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others },
+            new ExitGames.Client.Photon.SendOptions { Reliability = false });
     }
     
     private void RevealFogAlongPath()

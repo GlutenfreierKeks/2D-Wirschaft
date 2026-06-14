@@ -484,6 +484,7 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             Ship ship = building.GetComponent<Ship>();
             if (ship == null) ship = building.AddComponent<Ship>();
             ship.isLocal = isLocal;
+            ship.spawnOrigin = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
             if (data.shipData != null) ship.shipData = data.shipData;
         }
 

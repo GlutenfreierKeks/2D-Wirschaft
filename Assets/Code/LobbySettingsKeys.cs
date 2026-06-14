@@ -6,4 +6,5 @@ public static class LobbySettingsKeys
     public const string StartWorkers = "StartWorkers";
     public const string WorldSize = "WorldSize";
     public const string MapSeed = "MapSeed";
+    public const string DebugMode = "DebugMode";
 }

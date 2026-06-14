@@ -16,6 +16,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private const byte VillagerSpawnEventCode = 11;
     private const byte SoldierSpawnEventCode = 12;
     private const byte BuildingDestroyEventCode = 13;
+    private const byte ShipSyncEventCode = 14;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -396,6 +397,12 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             ReceiveBuildingDestroy(bData);
             return;
         }
+
+        if (photonEvent.Code == ShipSyncEventCode && photonEvent.CustomData is object[] shipData)
+        {
+            ReceiveShipSync(shipData);
+            return;
+        }
     }
 
     private void ReceiveVillagerSpawn(object[] data)
@@ -453,6 +460,27 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                 Vector3.Distance(b.transform.position, bPos) < 0.5f)
             {
                 Destroy(b.gameObject);
+                return;
+            }
+        }
+    }
+
+    private void ReceiveShipSync(object[] data)
+    {
+        float spawnX = (float)data[0];
+        float spawnY = (float)data[1];
+        float posX = (float)data[2];
+        float posY = (float)data[3];
+        float rot = (float)data[4];
+
+        Ship[] ships = FindObjectsByType<Ship>(FindObjectsSortMode.None);
+        Vector2Int searchOrigin = new Vector2Int(Mathf.RoundToInt(spawnX), Mathf.RoundToInt(spawnY));
+        foreach (Ship ship in ships)
+        {
+            if (ship.spawnOrigin == searchOrigin)
+            {
+                ship.transform.position = new Vector3(posX, posY, ship.transform.position.z);
+                ship.transform.rotation = Quaternion.Euler(0f, 0f, rot);
                 return;
             }
         }

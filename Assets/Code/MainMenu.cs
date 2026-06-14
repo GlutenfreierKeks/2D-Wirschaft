@@ -198,9 +198,10 @@ public class MainMenu : MonoBehaviourPunCallbacks
             IsVisible = false,
             CustomRoomProperties = new ExitGames.Client.Photon.Hashtable { 
                 { "TestMode", true },
-                { LobbySettingsKeys.MapSeed, seed }
+                { LobbySettingsKeys.MapSeed, seed },
+                { LobbySettingsKeys.DebugMode, true }
             },
-            CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed }
+            CustomRoomPropertiesForLobby = new[] { "TestMode", LobbySettingsKeys.MapSeed, LobbySettingsKeys.DebugMode }
         };
 
         SetStatus("Erstelle Test-Lobby...");
