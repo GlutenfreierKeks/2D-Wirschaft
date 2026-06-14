@@ -56,7 +56,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             Debug.LogWarning("GameManager loaded, but client is not in a Photon room.");
         }
 
-        SpawnInitialSoldiers();
+        // Nur Dummy-Soldaten im Testmodus – Spieler startet ohne
     }
 
     private void EnsureRequiredManagers()
@@ -166,7 +166,42 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                     SyncLocalPopulation(playerIndex);
                 }
             }
+
+            // Testmodus: Dummy-Gegner auf einer anderen Insel spawnen
+            if (isTestMode && players.Length < 2)
+            {
+                SpawnDummyPlayer();
+            }
         }
+    }
+
+    private void SpawnDummyPlayer()
+    {
+        int dummyIndex = 1;
+        Vector2 dummyPos = IslandManager.Instance.GetIslandPosition(dummyIndex);
+
+        BuildingManager.Instance.SpawnMainWarehouse(dummyPos, false);
+
+        // Ein Holzhaus für den Gegner (als Testziel)
+        if (BuildingManager.Instance != null)
+        {
+            BuildingData woodData = null;
+            BuildingData[] allData = Resources.FindObjectsOfTypeAll<BuildingData>();
+            foreach (var d in allData)
+            {
+                if (d.buildingName != null && d.buildingName.ToLower().Contains("holz"))
+                {
+                    woodData = d;
+                    break;
+                }
+            }
+            if (woodData != null)
+            {
+                BuildingManager.Instance.SpawnBuilding(woodData, dummyPos + new Vector2(0f, 4f), false);
+            }
+        }
+
+        Debug.Log("[GameManager] Dummy-Gegner gespawnt (Lagerhaus + Holzhaus).");
     }
 
     private void SyncLocalPopulation(int islandIndex)

@@ -291,6 +291,8 @@ public class SelectionManager : MonoBehaviour
 
         if (clickedBuilding != null)
         {
+            if (!clickedBuilding.isLocal) return;
+
             // Schiffe haben ihre eigene UI (ShipCargoUI), kein BuildingInfoPanel öffnen
             if (clickedBuilding.GetComponent<Ship>() != null)
             {

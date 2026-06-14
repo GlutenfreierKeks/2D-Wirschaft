@@ -133,6 +133,12 @@ public class Ship : MonoBehaviour
     {
         if (!isMoving) return;
 
+        if (waterPath.Count == 0)
+        {
+            MoveDirectTowardsTarget();
+            return;
+        }
+
         Vector3 target;
         if (waterPathIndex < waterPath.Count)
         {
@@ -159,6 +165,14 @@ public class Ship : MonoBehaviour
                 return;
             }
         }
+
+        if (IsOnLand())
+        {
+            StopMovement();
+            NotificationManager.Instance?.Notify("ship_stranded",
+                "Schiff gestrandet!", 5f);
+            return;
+        }
         
         targetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
         
@@ -174,6 +188,43 @@ public class Ship : MonoBehaviour
         transform.position += transform.up * moveSpeed * Time.deltaTime;
         
         RevealFogAlongPath();
+    }
+
+    private void MoveDirectTowardsTarget()
+    {
+        Vector3 direction = targetPosition - transform.position;
+        direction.z = 0;
+
+        if (direction.magnitude < 0.3f)
+        {
+            StopMovement();
+            return;
+        }
+
+        if (IsOnLand())
+        {
+            StopMovement();
+            NotificationManager.Instance?.Notify("ship_stranded",
+                "Schiff gestrandet! Kein Wasserweg.", 5f);
+            return;
+        }
+
+        targetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        float angleDiff = Mathf.DeltaAngle(currentAngle, targetAngle);
+        float rotationStep = rotationSpeed * Time.deltaTime;
+        if (Mathf.Abs(angleDiff) < rotationStep)
+            currentAngle = targetAngle;
+        else
+            currentAngle += Mathf.Sign(angleDiff) * rotationStep;
+
+        transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
+        transform.position += transform.up * moveSpeed * Time.deltaTime;
+    }
+
+    private bool IsOnLand()
+    {
+        Vector2Int grid = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+        return IslandManager.IsLand(grid);
     }
     
     public void MoveTo(Vector3 destination)
