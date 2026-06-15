@@ -619,7 +619,7 @@ public class BuildingInstance : MonoBehaviour
     {
         currentHP -= amount;
 
-        if (PhotonNetwork.InRoom && !isLocal)
+        if (PhotonNetwork.InRoom && !isLocal && data != null)
         {
             object[] damageData = new object[] { data.buildingName, transform.position.x, transform.position.y, amount };
             SendOptions sendOpts = new SendOptions { Reliability = true };
@@ -985,7 +985,7 @@ public class BuildingInstance : MonoBehaviour
 
             if (PhotonNetwork.InRoom)
             {
-                object[] syncData = new object[] { s.netId, (int)currentRecruitingType, spawnPos.x, spawnPos.y };
+                object[] syncData = new object[] { s.netId, (int)currentRecruitingType, spawnPos.x, spawnPos.y, s.ownerActorNumber };
                 SendOptions sendOpts = new SendOptions { Reliability = true };
                 PhotonNetwork.RaiseEvent(12, syncData,
                     new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);

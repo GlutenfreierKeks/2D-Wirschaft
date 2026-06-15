@@ -106,7 +106,15 @@ public class Soldier : MonoBehaviour
     }
 #endif
 
-    public bool IsOwnedByLocalPlayer => team == Team.Player;
+    public bool IsOwnedByLocalPlayer
+    {
+        get
+        {
+            if (PhotonNetwork.InRoom && PhotonNetwork.LocalPlayer != null)
+                return ownerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
+            return team == Team.Player;
+        }
+    }
     public bool IsSelected => isSelected;
     public Vector2 Position2D => transform.position;
 

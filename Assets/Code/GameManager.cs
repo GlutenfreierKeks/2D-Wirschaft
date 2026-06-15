@@ -459,10 +459,11 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         SoldierType type = (SoldierType)(int)data[1];
         float px = (float)data[2];
         float py = (float)data[3];
-        SpawnRemoteSoldier(new Vector3(px, py, 0f), type, netId);
+        int ownerActor = data.Length > 4 ? (int)data[4] : 0;
+        SpawnRemoteSoldier(new Vector3(px, py, 0f), type, netId, ownerActor);
     }
 
-    private void SpawnRemoteSoldier(Vector3 position, SoldierType type, int netId = 0)
+    private void SpawnRemoteSoldier(Vector3 position, SoldierType type, int netId = 0, int ownerActor = 0)
     {
         GameObject solObj = new GameObject($"Remote_{type}");
         solObj.transform.position = position;
@@ -473,6 +474,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         s.netId = netId;
         s.soldierType = type;
         s.team = Team.Player;
+        if (ownerActor > 0)
+            s.ownerActorNumber = ownerActor;
         s.moveSpeed = 1.5f;
         FogRevealer fr = solObj.AddComponent<FogRevealer>();
         fr.radius = 4f;
