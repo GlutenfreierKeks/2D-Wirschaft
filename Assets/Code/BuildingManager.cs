@@ -347,7 +347,7 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         }
     }
 
-    private BuildingData GetBuildingDataByName(string name)
+    public BuildingData GetBuildingDataByName(string name)
     {
         BuildingData[] allData = Resources.FindObjectsOfTypeAll<BuildingData>();
         foreach (var d in allData)

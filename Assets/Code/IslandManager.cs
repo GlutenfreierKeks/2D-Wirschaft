@@ -205,6 +205,10 @@ public class IslandManager : MonoBehaviour
         float range = (GridManager.Instance != null) ? (GridManager.Instance.GetGridSize() / 2f) - mapMargin : 1000f;
 
         int playerCount = PhotonNetwork.InRoom ? PhotonNetwork.CurrentRoom.PlayerCount : 1;
+        if (PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.InitialPlayerCount, out object ipcObj))
+        {
+            playerCount = System.Convert.ToInt32(ipcObj);
+        }
 
         IslandType[] nonPlainsTypes = { IslandType.Desert, IslandType.Jungle, IslandType.Stone };
 

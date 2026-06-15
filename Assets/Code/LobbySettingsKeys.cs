@@ -8,4 +8,5 @@ public static class LobbySettingsKeys
     public const string MapSeed = "MapSeed";
     public const string DebugMode = "DebugMode";
     public const string GameStarted = "GameStarted";
+    public const string InitialPlayerCount = "InitialPlayerCount";
 }

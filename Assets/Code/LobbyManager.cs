@@ -181,7 +181,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         if (PhotonNetwork.IsMasterClient)
         {
-            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { 
+                { LobbySettingsKeys.GameStarted, true },
+                { LobbySettingsKeys.InitialPlayerCount, PhotonNetwork.CurrentRoom.PlayerCount }
+            });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
@@ -199,7 +202,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         bool isTestMode = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("TestMode") && (bool)PhotonNetwork.CurrentRoom.CustomProperties["TestMode"];
         if (!isTestMode && PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom.PlayerCount == PhotonNetwork.CurrentRoom.MaxPlayers)
         {
-            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { 
+                { LobbySettingsKeys.GameStarted, true },
+                { LobbySettingsKeys.InitialPlayerCount, PhotonNetwork.CurrentRoom.PlayerCount }
+            });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
@@ -748,7 +754,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         if (PhotonNetwork.IsMasterClient)
         {
             ShowLoadingOverlay();
-            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { 
+                { LobbySettingsKeys.GameStarted, true },
+                { LobbySettingsKeys.InitialPlayerCount, PhotonNetwork.CurrentRoom.PlayerCount }
+            });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
