@@ -96,8 +96,9 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         }
 
         GameObject go = Instantiate(stegPrefab);
-        var steg = go.GetComponent<Steg>();
-        if (steg == null) { Debug.LogError("stegPrefab hat keine Steg-Komponente"); Destroy(go); return false; }
+        Steg steg = go.GetComponent<Steg>();
+        if (steg == null)
+            steg = go.AddComponent<Steg>();
         steg.Initialize(new Vector3(position.x, position.y, -0.21f));
 
         RegisterOccupancy(position, 1, 1);

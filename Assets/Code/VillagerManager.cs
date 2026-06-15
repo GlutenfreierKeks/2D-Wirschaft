@@ -437,16 +437,16 @@ public class VillagerManager : MonoBehaviour
         float luxuryEffect = 0f;
         if (fruits > 0)
         {
-            luxuryEffect += Mathf.Min(0.08f, fruitsConsMod * 0.018f); // Slightly harder positive boosts
+            luxuryEffect += Mathf.Min(0.18f, fruitsConsMod * 0.035f); // Früchte: starker Zufriedenheits-Boost
         }
         if (meat > 0)
         {
-            luxuryEffect += Mathf.Min(0.08f, meatConsMod * 0.018f); // Slightly harder positive boosts
+            luxuryEffect += Mathf.Min(0.08f, meatConsMod * 0.018f);
         }
 
         currentWheatMoodEffect = wheatEffect;
         currentLuxuryMoodEffect = luxuryEffect;
-        currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.25f, 0.12f);
+        currentFoodMoodEffect = Mathf.Clamp(wheatEffect + luxuryEffect, -0.25f, 0.22f);
 
         // 3. Proportional consumption for staple (wheat): ALWAYS 0.2 units per villager per 60 seconds (1 minute)
         wheatConsumedAccumulator += pop * 0.2f * (Time.deltaTime / 60f);
