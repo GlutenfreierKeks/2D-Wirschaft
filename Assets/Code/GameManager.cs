@@ -31,6 +31,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private GameObject chatLogArea;
     private GameObject chatInputArea;
     private GameObject chatToggleIcon;
+    private NotificationManager notificationManager;
 
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI gameStatusText;
@@ -54,6 +55,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             SpawnPlayer();
             UpdateStatusText();
             BuildGameChatUI();
+            notificationManager = NotificationManager.Instance;
         }
         else
         {
@@ -381,6 +383,10 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         if (photonEvent.Code == LobbyChatEventCode && photonEvent.CustomData is string message)
         {
             AddChatMessage(message);
+            if (chatPanelRoot != null && !chatPanelRoot.gameObject.activeSelf && notificationManager != null)
+            {
+                notificationManager.Notify("chat", $"Neue Nachricht: {message}");
+            }
             return;
         }
 
