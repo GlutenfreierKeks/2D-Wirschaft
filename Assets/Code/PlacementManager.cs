@@ -32,7 +32,12 @@ public class PlacementManager : MonoBehaviour
     private BuildingData currentBuilding;
     private bool isPlacing = false;
     private PlacementPreview currentPreview;
-    
+
+    // Pier drag state
+    private bool isDraggingPier = false;
+    private Vector2Int pierDragStart;
+    private GameObject pierPreviewParent;
+
     private Camera cam;
 
     private void Awake()
@@ -53,7 +58,10 @@ public class PlacementManager : MonoBehaviour
 
         currentBuilding = data;
         isPlacing = true;
-        
+
+        if (data.placementRule == PlacementRule.Pier)
+            return;
+
         if (ghostParent != null) Destroy(ghostParent);
         CreateGhost(data);
     }
@@ -91,6 +99,13 @@ public class PlacementManager : MonoBehaviour
 
         Vector2 mousePos = Mouse.current.position.ReadValue();
         Vector3 worldPos = cam.ScreenToWorldPoint(new Vector3(mousePos.x, mousePos.y, -cam.transform.position.z));
+
+        if (currentBuilding.placementRule == PlacementRule.Pier)
+        {
+            HandlePierPlacement(worldPos);
+            return;
+        }
+
         currentPreview = ResolvePreview(worldPos);
 
         ghostParent.transform.position = new Vector3(currentPreview.center.x, currentPreview.center.y, -0.2f);
@@ -609,8 +624,12 @@ private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occu
         }
         
         List<Vector2Int> allStegPositions = BuildingManager.GetStegPositions();
+        HashSet<Vector2Int> stegSet = new HashSet<Vector2Int>(allStegPositions);
         HashSet<Vector2Int> validStegPositions = new HashSet<Vector2Int>();
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
         
+        // Starte BFS von allen Stegen, die direkt an Land mit Lagerhaus angrenzen
         foreach (Vector2Int stegPos in allStegPositions)
         {
             foreach (var dir in directions)
@@ -622,10 +641,30 @@ private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occu
                     {
                         if (IsSameIsland(landPos, whPos))
                         {
+                            visited.Add(stegPos);
+                            queue.Enqueue(stegPos);
                             validStegPositions.Add(stegPos);
                             break;
                         }
                     }
+                    if (validStegPositions.Contains(stegPos)) break;
+                }
+            }
+        }
+        
+        // BFS: Alle Stege, die über eine Stegkette mit einem gültigen Steg verbunden sind
+        while (queue.Count > 0)
+        {
+            Vector2Int current = queue.Dequeue();
+            foreach (var dir in directions)
+            {
+                Vector2Int neighbor = current + dir;
+                if (visited.Contains(neighbor)) continue;
+                if (stegSet.Contains(neighbor))
+                {
+                    visited.Add(neighbor);
+                    queue.Enqueue(neighbor);
+                    validStegPositions.Add(neighbor);
                 }
             }
         }
@@ -887,9 +926,140 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
         CancelPlacement();
     }
 
+    // ── Pier drag placement ──────────────────────────────────────────────
+
+    private void HandlePierPlacement(Vector3 worldPos)
+    {
+        Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.y));
+
+        if (Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            isDraggingPier = true;
+            pierDragStart = gridPos;
+            CreatePierPreview();
+            UpdatePierPreview(pierDragStart, gridPos);
+        }
+
+        if (isDraggingPier)
+        {
+            if (Mouse.current.leftButton.isPressed)
+                UpdatePierPreview(pierDragStart, gridPos);
+
+            if (Mouse.current.leftButton.wasReleasedThisFrame)
+            {
+                BuildPierLine(pierDragStart, gridPos);
+                isDraggingPier = false;
+                DestroyPierPreview();
+                CancelPlacement();
+            }
+        }
+
+        if (Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            isDraggingPier = false;
+            DestroyPierPreview();
+            CancelPlacement();
+        }
+    }
+
+    private void CreatePierPreview()
+    {
+        pierPreviewParent = new GameObject("PierPreview");
+    }
+
+    private void DestroyPierPreview()
+    {
+        if (pierPreviewParent != null)
+            Destroy(pierPreviewParent);
+        pierPreviewParent = null;
+    }
+
+    private void UpdatePierPreview(Vector2Int start, Vector2Int end)
+    {
+        if (pierPreviewParent == null) return;
+
+        for (int i = pierPreviewParent.transform.childCount - 1; i >= 0; i--)
+            Destroy(pierPreviewParent.transform.GetChild(i).gameObject);
+
+        List<Vector2Int> cells = GetLineCells(start, end);
+        foreach (Vector2Int cell in cells)
+        {
+            bool water = !IslandManager.IsLand(cell);
+            bool occupied = BuildingManager.IsOccupied(new Vector2(cell.x, cell.y));
+
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.transform.SetParent(pierPreviewParent.transform);
+            quad.transform.position = new Vector3(cell.x, cell.y, -0.2f);
+            Destroy(quad.GetComponent<MeshCollider>());
+
+            Renderer rend = quad.GetComponent<Renderer>();
+            rend.material = new Material(Shader.Find("Sprites/Default"));
+            rend.material.color = (water && !occupied) ? canPlaceColor : cannotPlaceColor;
+        }
+    }
+
+    private List<Vector2Int> GetLineCells(Vector2Int start, Vector2Int end)
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+        int x = start.x, y = start.y;
+        int dx = Mathf.Abs(end.x - start.x);
+        int dy = -Mathf.Abs(end.y - start.y);
+        int sx = start.x < end.x ? 1 : -1;
+        int sy = start.y < end.y ? 1 : -1;
+        int err = dx + dy;
+
+        while (true)
+        {
+            cells.Add(new Vector2Int(x, y));
+            if (x == end.x && y == end.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+        }
+        return cells;
+    }
+
+    private void BuildPierLine(Vector2Int start, Vector2Int end)
+    {
+        List<Vector2Int> cells = GetLineCells(start, end);
+        int woodPerPier = Mathf.Max(1, currentBuilding.woodCost);
+        int totalCost = cells.Count * woodPerPier;
+
+        if (!ResourceManager.Instance.HasResource("holz", totalCost))
+        {
+            NotificationManager.Instance?.Notify("pier_no_wood",
+                $"Nicht genug Holz! Benötigt: {totalCost}", 3f);
+            return;
+        }
+
+        // Baue alle gültigen Steg-Zellen nacheinander (PlaceStegAt prüft adjacency gegen bereits gesetzte)
+        int built = 0;
+        foreach (Vector2Int cell in cells)
+        {
+            if (BuildingManager.Instance.PlaceStegAt(new Vector2(cell.x, cell.y), true))
+                built++;
+        }
+
+        if (built > 0)
+        {
+            int spent = built * woodPerPier;
+            ResourceManager.Instance.SpendResource("holz", spent);
+
+            // Netzwerk-Event für andere Spieler: sende Start/Ende, remote baut via skipValidation
+            if (Photon.Pun.PhotonNetwork.InRoom)
+            {
+                object[] content = new object[] { (float)start.x, (float)start.y, (float)end.x, (float)end.y };
+                ExitGames.Client.Photon.SendOptions sendOptions = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+                Photon.Pun.PhotonNetwork.RaiseEvent(18, content, new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOptions);
+            }
+        }
+    }
+
     private void CancelPlacement()
     {
         isPlacing = false;
+        isDraggingPier = false;
+        DestroyPierPreview();
         if (ghostParent != null)
         {
             ghostParent.SetActive(false);

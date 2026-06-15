@@ -181,7 +181,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         if (PhotonNetwork.IsMasterClient)
         {
-            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
@@ -199,7 +199,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         bool isTestMode = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("TestMode") && (bool)PhotonNetwork.CurrentRoom.CustomProperties["TestMode"];
         if (!isTestMode && PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom.PlayerCount == PhotonNetwork.CurrentRoom.MaxPlayers)
         {
-            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }
@@ -748,7 +748,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks, IOnEventCallback
         if (PhotonNetwork.IsMasterClient)
         {
             ShowLoadingOverlay();
-            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { LobbySettingsKeys.GameStarted, true } });
             PhotonNetwork.LoadLevel(SceneNames.GameScene);
         }
     }

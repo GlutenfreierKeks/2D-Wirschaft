@@ -19,6 +19,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private const byte ShipSyncEventCode = 14;
     private const byte SoldierMoveEventCode = 15;
     private const byte BuildingDamageEventCode = 16;
+    private const byte BuildingCaptureEventCode = 17;
+    private const byte PierLineEventCode = 18;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -216,7 +218,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         spawnData.Add(islandPos.y);
         foreach (var v in VillagerManager.Instance.ActiveVillagers)
         {
-            if (v == null) continue;
+            if (v == null || !v.isLocal) continue;
             spawnData.Add((int)v.role);
             spawnData.Add(v.transform.position.x);
             spawnData.Add(v.transform.position.y);
@@ -417,6 +419,18 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             ReceiveBuildingDamage(dmgData);
             return;
         }
+
+        if (photonEvent.Code == BuildingCaptureEventCode && photonEvent.CustomData is object[] capData)
+        {
+            ReceiveBuildingCapture(capData);
+            return;
+        }
+
+        if (photonEvent.Code == PierLineEventCode && photonEvent.CustomData is object[] pierData)
+        {
+            ReceivePierLine(pierData);
+            return;
+        }
     }
 
     private void ReceiveVillagerSpawn(object[] data)
@@ -429,7 +443,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             Villager.Role role = (Villager.Role)(int)data[i];
             float vx = (float)data[i + 1];
             float vy = (float)data[i + 2];
-            VillagerManager.Instance.SpawnVillagerAt(new Vector2(vx, vy), role);
+            VillagerManager.Instance.SpawnVillagerAt(new Vector2(vx, vy), role, false);
         }
     }
 
@@ -534,6 +548,90 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
                 return;
             }
         }
+    }
+
+    private void ReceiveBuildingCapture(object[] data)
+    {
+        string buildingName = (string)data[0];
+        float bx = (float)data[1];
+        float by = (float)data[2];
+        Vector3 bPos = new Vector3(bx, by, -0.21f);
+
+        var allBuildings = FindObjectsByType<BuildingInstance>(FindObjectsSortMode.None);
+        BuildingInstance wb = null;
+        foreach (var b in allBuildings)
+        {
+            if (b == null) continue;
+            if (b.data != null && b.data.buildingName == buildingName &&
+                Vector3.Distance(b.transform.position, bPos) < 0.5f)
+            {
+                wb = b;
+                break;
+            }
+        }
+
+        Vector2Int origin;
+        if (wb != null)
+        {
+            origin = new Vector2Int(Mathf.RoundToInt(wb.transform.position.x), Mathf.RoundToInt(wb.transform.position.y));
+        }
+        else
+        {
+            origin = new Vector2Int(Mathf.RoundToInt(bx), Mathf.RoundToInt(by));
+        }
+
+        var islandCells = BuildingManager.FloodFillIsland(origin);
+        foreach (var b in allBuildings)
+        {
+            if (b == null || b == wb) continue;
+            Vector2Int bGrid = new Vector2Int(Mathf.RoundToInt(b.transform.position.x), Mathf.RoundToInt(b.transform.position.y));
+            if (islandCells.Contains(bGrid))
+            {
+                b.isLocal = !b.isLocal;
+                b.UpdateHealthBar();
+            }
+        }
+    }
+
+    private void ReceivePierLine(object[] data)
+    {
+        if (BuildingManager.Instance == null) return;
+        if (data.Length < 4) return;
+
+        float sx = (float)data[0];
+        float sy = (float)data[1];
+        float ex = (float)data[2];
+        float ey = (float)data[3];
+
+        Vector2Int start = new Vector2Int(Mathf.RoundToInt(sx), Mathf.RoundToInt(sy));
+        Vector2Int end = new Vector2Int(Mathf.RoundToInt(ex), Mathf.RoundToInt(ey));
+
+        List<Vector2Int> cells = GetPierLineCells(start, end);
+        foreach (Vector2Int cell in cells)
+        {
+            BuildingManager.Instance.PlaceStegAt(new Vector2(cell.x, cell.y), false, true);
+        }
+    }
+
+    private List<Vector2Int> GetPierLineCells(Vector2Int start, Vector2Int end)
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+        int x = start.x, y = start.y;
+        int dx = Mathf.Abs(end.x - start.x);
+        int dy = -Mathf.Abs(end.y - start.y);
+        int sx = start.x < end.x ? 1 : -1;
+        int sy = start.y < end.y ? 1 : -1;
+        int err = dx + dy;
+
+        while (true)
+        {
+            cells.Add(new Vector2Int(x, y));
+            if (x == end.x && y == end.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+        }
+        return cells;
     }
 
     private void CreateChatCloseButton(RectTransform parent)
@@ -689,6 +787,27 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         UpdateStatusText();
         Debug.Log($"{newPlayer.NickName} joined the room.");
+
+        if (IslandManager.Instance != null && IslandManager.Instance.IsGenerated && BuildingManager.Instance != null)
+        {
+            int newIndex = -1;
+            Player[] players = PhotonNetwork.PlayerList;
+            for (int i = 0; i < players.Length; i++)
+            {
+                if (players[i].ActorNumber == newPlayer.ActorNumber)
+                {
+                    newIndex = i;
+                    break;
+                }
+            }
+
+            if (newIndex >= 0)
+            {
+                Vector2 pos = IslandManager.Instance.GetIslandPosition(newIndex);
+                BuildingManager.Instance.SpawnMainWarehouse(pos, false);
+                Debug.Log($"[GameManager] Spawned warehouse for late-joiner {newPlayer.NickName} (island {newIndex})");
+            }
+        }
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)

@@ -18,6 +18,7 @@ public class Ship : MonoBehaviour
     public float rotationSpeed = 180f;
     private Vector3 targetPosition;
     private bool isMoving = false;
+    private float movementStartTime;
     private bool isSelected = false;
     private float targetAngle = 0f;
     private float currentAngle = 0f;
@@ -196,7 +197,7 @@ public class Ship : MonoBehaviour
             }
         }
 
-        if (IsOnLand())
+        if (Time.time - movementStartTime > 2f && IsOnLand())
         {
             StopMovement();
             NotificationManager.Instance?.Notify("ship_stranded",
@@ -231,7 +232,7 @@ public class Ship : MonoBehaviour
             return;
         }
 
-        if (IsOnLand())
+        if (Time.time - movementStartTime > 2f && IsOnLand())
         {
             StopMovement();
             NotificationManager.Instance?.Notify("ship_stranded",
@@ -282,6 +283,7 @@ public class Ship : MonoBehaviour
         
         waterPath = BuildingManager.FindWaterPath(transform.position, destination);
         waterPathIndex = 0;
+        movementStartTime = Time.time;
         isMoving = true;
         
         Debug.Log($"[Ship] Moving to {destination}, path length: {waterPath.Count}");

@@ -57,11 +57,54 @@ public class IslandManager : MonoBehaviour
     private List<Vector2> islandPositions = new List<Vector2>();
     private List<IslandType> islandTypes = new List<IslandType>();
     private static HashSet<Vector2> allLandCells = new HashSet<Vector2>();
+    private static HashSet<Vector2> shallowWaterCells = new HashSet<Vector2>();
     private static Sprite defaultNodeSprite;
 
     public static bool IsLand(Vector2 pos)
     {
         return allLandCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
+    }
+
+    public static bool IsShallowWater(Vector2 pos)
+    {
+        return shallowWaterCells.Contains(new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y)));
+    }
+
+    private void CreateShallowWaterVisual()
+    {
+        if (shallowWaterCells.Count == 0) return;
+
+        GameObject swObj = new GameObject("ShallowWater");
+        swObj.transform.SetParent(transform);
+        swObj.transform.position = new Vector3(0, 0, -0.08f);
+
+        MeshFilter mf = swObj.AddComponent<MeshFilter>();
+        MeshRenderer mr = swObj.AddComponent<MeshRenderer>();
+        Material mat = new Material(Shader.Find("Sprites/Default"));
+        mat.color = new Color(0.3f, 0.6f, 1f, 0.35f);
+        mr.material = mat;
+        mr.sortingOrder = -1;
+
+        List<Vector3> verts = new List<Vector3>();
+        List<int> tris = new List<int>();
+        Vector2[] offsets = {
+            new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(-0.5f, 0.5f)
+        };
+
+        foreach (Vector2 cell in shallowWaterCells)
+        {
+            int vi = verts.Count;
+            foreach (var off in offsets)
+                verts.Add(new Vector3(cell.x + off.x, cell.y + off.y, 0));
+            tris.Add(vi); tris.Add(vi + 1); tris.Add(vi + 2);
+            tris.Add(vi); tris.Add(vi + 2); tris.Add(vi + 3);
+        }
+
+        Mesh mesh = new Mesh();
+        mesh.vertices = verts.ToArray();
+        mesh.triangles = tris.ToArray();
+        mf.mesh = mesh;
     }
 
     private void Awake()
@@ -161,9 +204,10 @@ public class IslandManager : MonoBehaviour
 
         float range = (GridManager.Instance != null) ? (GridManager.Instance.GetGridSize() / 2f) - mapMargin : 1000f;
 
-        IslandType[] allTypes = (IslandType[])System.Enum.GetValues(typeof(IslandType));
+        int playerCount = PhotonNetwork.InRoom ? PhotonNetwork.CurrentRoom.PlayerCount : 1;
 
-        int typeIndex = 0;
+        IslandType[] nonPlainsTypes = { IslandType.Desert, IslandType.Jungle, IslandType.Stone };
+
         int attempts = 0;
         while (islandPositions.Count < islandCount && attempts < 5000)
         {
@@ -184,14 +228,31 @@ public class IslandManager : MonoBehaviour
 
             if (!tooClose)
             {
-                IslandType type = typeIndex < allTypes.Length ? allTypes[typeIndex] : (IslandType)Random.Range(0, allTypes.Length);
-                typeIndex++;
+                IslandType type;
+                if (islandPositions.Count < playerCount)
+                    type = IslandType.Plains;
+                else
+                    type = nonPlainsTypes[Random.Range(0, nonPlainsTypes.Length)];
 
                 islandPositions.Add(newPos);
                 islandTypes.Add(type);
                 CreateIslandMesh(newPos, type);
             }
         }
+
+        // Shallow-Water-Ring um jede Insel generieren
+        Vector2Int[] cardDirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        List<Vector2> landList = new List<Vector2>(allLandCells);
+        foreach (Vector2 landCell in landList)
+        {
+            foreach (var dir in cardDirs)
+            {
+                Vector2 neighbor = new Vector2(landCell.x + dir.x, landCell.y + dir.y);
+                if (!allLandCells.Contains(neighbor))
+                    shallowWaterCells.Add(neighbor);
+            }
+        }
+        CreateShallowWaterVisual();
     }
 
     private void CreateIslandMesh(Vector2 startPos, IslandType type)

@@ -158,6 +158,19 @@ public class Soldier : MonoBehaviour
     {
         CleanupTarget();
 
+        Vector2Int currentGrid = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+        if (!BuildingManager.IsWalkable(currentGrid))
+        {
+            Vector2 snapped = SnapToNearestPassable(transform.position);
+            Vector2Int snappedGrid = new Vector2Int(Mathf.RoundToInt(snapped.x), Mathf.RoundToInt(snapped.y));
+            if (snappedGrid != currentGrid && BuildingManager.IsWalkable(snappedGrid))
+            {
+                transform.position = new Vector3(snapped.x, snapped.y, transform.position.z);
+                if (hasMoveOrder) SetPathTo(currentPath.Count > 0 ? currentPath[currentPath.Count - 1] : transform.position);
+            }
+            return;
+        }
+
         if (attackTarget == null)
         {
             attackTarget = FindPreferredEnemy();
@@ -624,6 +637,8 @@ public class Soldier : MonoBehaviour
     private void MoveTowards(Vector2 targetPos)
     {
         Vector2 next = Vector2.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
+        Vector2Int nextGrid = new Vector2Int(Mathf.RoundToInt(next.x), Mathf.RoundToInt(next.y));
+        if (!BuildingManager.IsWalkable(nextGrid)) return;
         transform.position = new Vector3(next.x, next.y, transform.position.z);
     }
 
@@ -748,6 +763,17 @@ public class Soldier : MonoBehaviour
     private void SetPathTo(Vector2 destination)
     {
         Vector2 start = new Vector2(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y));
+        if (!BuildingManager.IsWalkable(start))
+        {
+            Vector2 snappedStart = SnapToNearestPassable(transform.position);
+            Vector2Int snappedGrid = new Vector2Int(Mathf.RoundToInt(snappedStart.x), Mathf.RoundToInt(snappedStart.y));
+            Vector2Int startGrid = new Vector2Int(Mathf.RoundToInt(start.x), Mathf.RoundToInt(start.y));
+            if (snappedGrid != startGrid && BuildingManager.IsWalkable(snappedGrid))
+            {
+                transform.position = new Vector3(snappedStart.x, snappedStart.y, transform.position.z);
+                start = snappedStart;
+            }
+        }
         Vector2 snappedDestination = SnapToNearestPassable(destination);
         List<Vector2> newPath = BuildingManager.FindPath(start, snappedDestination);
 

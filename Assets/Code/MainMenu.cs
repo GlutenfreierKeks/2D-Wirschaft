@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
@@ -32,6 +33,10 @@ public class MainMenu : MonoBehaviourPunCallbacks
     private TMP_Dropdown runtimeMaxPlayersDropdown;
     private TextMeshProUGUI runtimeStatusText;
     private CanvasGroup runtimeMenuCanvasGroup;
+    private List<RoomInfo> cachedRoomList = new List<RoomInfo>();
+    private RectTransform roomListPanel;
+    private Transform roomListContent;
+    private TextMeshProUGUI roomListStatusText;
 
     private void Start()
     {
@@ -88,6 +93,15 @@ public class MainMenu : MonoBehaviourPunCallbacks
             runtimeMenuCanvasGroup.interactable = isInteractable;
             runtimeMenuCanvasGroup.blocksRaycasts = isInteractable;
             runtimeMenuCanvasGroup.alpha = isInteractable ? 1f : 0.72f;
+        }
+
+        if (roomListPanel != null)
+        {
+            CanvasGroup roomListCg = roomListPanel.GetComponent<CanvasGroup>();
+            if (roomListCg == null) roomListCg = roomListPanel.gameObject.AddComponent<CanvasGroup>();
+            roomListCg.interactable = isInteractable;
+            roomListCg.blocksRaycasts = isInteractable;
+            roomListCg.alpha = isInteractable ? 1f : 0.6f;
         }
     }
 
@@ -224,11 +238,46 @@ public class MainMenu : MonoBehaviourPunCallbacks
         PhotonNetwork.CreateRoom(roomName, roomOptions);
     }
 
+    public override void OnRoomListUpdate(List<RoomInfo> roomList)
+    {
+        foreach (RoomInfo room in roomList)
+        {
+            if (room.RemovedFromList)
+            {
+                cachedRoomList.RemoveAll(r => r.Name == room.Name);
+            }
+            else
+            {
+                int index = cachedRoomList.FindIndex(r => r.Name == room.Name);
+                if (index >= 0)
+                    cachedRoomList[index] = room;
+                else
+                    cachedRoomList.Add(room);
+            }
+        }
+        RefreshRoomListUI();
+    }
+
     public override void OnJoinedRoom()
     {
         Debug.Log($"[MainMenu] OnJoinedRoom: Raum={PhotonNetwork.CurrentRoom.Name}, Spieler={PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
-        SetStatus("Lobby gefunden. Wechsle in den Warteraum...");
-        PhotonNetwork.LoadLevel(SceneNames.LobbyScene);
+
+        bool gameStarted = false;
+        if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(LobbySettingsKeys.GameStarted, out object gs))
+        {
+            gameStarted = (bool)gs;
+        }
+
+        if (gameStarted)
+        {
+            SetStatus("Spiel läuft bereits. Trete laufender Runde bei...");
+            PhotonNetwork.LoadLevel(SceneNames.GameScene);
+        }
+        else
+        {
+            SetStatus("Lobby gefunden. Wechsle in den Warteraum...");
+            PhotonNetwork.LoadLevel(SceneNames.LobbyScene);
+        }
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
@@ -275,7 +324,8 @@ public class MainMenu : MonoBehaviourPunCallbacks
         root.anchorMin = new Vector2(0.5f, 0.5f);
         root.anchorMax = new Vector2(0.5f, 0.5f);
         root.pivot = new Vector2(0.5f, 0.5f);
-        root.sizeDelta = new Vector2(620f, 500f);
+        root.anchoredPosition = new Vector2(-230f, 0f);
+        root.sizeDelta = new Vector2(480f, 500f);
 
         Image panel = root.gameObject.AddComponent<Image>();
         panel.color = panelColor;
@@ -307,6 +357,8 @@ public class MainMenu : MonoBehaviourPunCallbacks
         runtimeMenuCanvasGroup.interactable = false;
         runtimeMenuCanvasGroup.blocksRaycasts = false;
         runtimeMenuCanvasGroup.alpha = 0.72f;
+
+        BuildRoomListPanel(canvas.transform);
     }
 
     private void HideOriginalUi()
@@ -679,5 +731,182 @@ public class MainMenu : MonoBehaviourPunCallbacks
         text.fontStyle = FontStyles.Bold;
         text.color = accentColor;
         text.alignment = TextAlignmentOptions.TopLeft;
+    }
+
+    private void BuildRoomListPanel(Transform canvasTransform)
+    {
+        roomListPanel = CreateRect("RoomListPanel", canvasTransform);
+        roomListPanel.anchorMin = new Vector2(0.5f, 0.5f);
+        roomListPanel.anchorMax = new Vector2(0.5f, 0.5f);
+        roomListPanel.pivot = new Vector2(0.5f, 0.5f);
+        roomListPanel.anchoredPosition = new Vector2(260f, 0f);
+        roomListPanel.sizeDelta = new Vector2(460f, 500f);
+
+        Image panel = roomListPanel.gameObject.AddComponent<Image>();
+        panel.color = panelColor;
+        Outline outline = roomListPanel.gameObject.AddComponent<Outline>();
+        outline.effectColor = accentColor;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        VerticalLayoutGroup vlg = roomListPanel.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(16, 16, 16, 16);
+        vlg.spacing = 8f;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childForceExpandHeight = false;
+        vlg.childForceExpandWidth = true;
+
+        CreateRuntimeLabel(roomListPanel, "OFFENE LOBBIES", 20f, 40f, accentColor);
+
+        RectTransform scrollRectRt = CreateRect("RoomListScrollRect", roomListPanel);
+        scrollRectRt.anchorMin = new Vector2(0f, 0f);
+        scrollRectRt.anchorMax = new Vector2(1f, 1f);
+        scrollRectRt.offsetMin = new Vector2(8f, 60f);
+        scrollRectRt.offsetMax = new Vector2(-8f, -8f);
+
+        Image scrollBg = scrollRectRt.gameObject.AddComponent<Image>();
+        scrollBg.color = new Color(0.08f, 0.09f, 0.12f, 0.6f);
+
+        RectTransform viewportRt = CreateRect("Viewport", scrollRectRt);
+        viewportRt.anchorMin = Vector2.zero;
+        viewportRt.anchorMax = Vector2.one;
+        viewportRt.sizeDelta = Vector2.zero;
+
+        Image vpImage = viewportRt.gameObject.AddComponent<Image>();
+        vpImage.color = Color.clear;
+        Mask mask = viewportRt.gameObject.AddComponent<Mask>();
+        mask.showMaskGraphic = false;
+
+        GameObject contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        contentGo.transform.SetParent(viewportRt, false);
+        RectTransform contentRt = contentGo.GetComponent<RectTransform>();
+        contentRt.anchorMin = Vector2.zero;
+        contentRt.anchorMax = Vector2.one;
+        contentRt.sizeDelta = Vector2.zero;
+        contentRt.anchoredPosition = Vector2.zero;
+        roomListContent = contentRt;
+
+        VerticalLayoutGroup contentVlg = contentGo.GetComponent<VerticalLayoutGroup>();
+        contentVlg.padding = new RectOffset(6, 6, 6, 6);
+        contentVlg.spacing = 6f;
+        contentVlg.childAlignment = TextAnchor.UpperCenter;
+        contentVlg.childForceExpandWidth = true;
+        contentVlg.childForceExpandHeight = false;
+
+        ContentSizeFitter csf = contentGo.GetComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        ScrollRect sr = scrollRectRt.gameObject.AddComponent<ScrollRect>();
+        sr.content = contentRt;
+        sr.viewport = viewportRt;
+        sr.horizontal = false;
+        sr.vertical = true;
+        sr.movementType = ScrollRect.MovementType.Clamped;
+        sr.scrollSensitivity = 35f;
+
+        roomListStatusText = CreateRuntimeLabel(roomListPanel, "", 14f, 30f, new Color(0.7f, 0.7f, 0.7f, 1f));
+        roomListStatusText.GetComponent<LayoutElement>().minHeight = 0;
+        roomListStatusText.text = "Suche nach Lobbys...";
+    }
+
+    private void RefreshRoomListUI()
+    {
+        if (roomListContent == null) return;
+
+        for (int i = roomListContent.childCount - 1; i >= 0; i--)
+        {
+            Destroy(roomListContent.GetChild(i).gameObject);
+        }
+
+        if (cachedRoomList.Count == 0)
+        {
+            roomListStatusText.text = "Keine offenen Lobbys gefunden.";
+            return;
+        }
+
+        roomListStatusText.text = $"{cachedRoomList.Count} Lobbys gefunden. Klicke zum Beitreten.";
+
+        foreach (RoomInfo room in cachedRoomList)
+        {
+            if (room == null || !room.IsOpen || room.IsVisible == false) continue;
+            CreateRoomEntry(room);
+        }
+    }
+
+    private void CreateRoomEntry(RoomInfo room)
+    {
+        GameObject entry = new GameObject("RoomEntry_" + room.Name, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+        entry.transform.SetParent(roomListContent, false);
+
+        LayoutElement le = entry.GetComponent<LayoutElement>();
+        le.minHeight = 64f;
+        le.flexibleWidth = 1f;
+
+        RectTransform rt = entry.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 0.5f);
+        rt.anchorMax = new Vector2(1f, 0.5f);
+        rt.sizeDelta = new Vector2(0f, 64f);
+
+        bool gameStarted = false;
+        if (room.CustomProperties.TryGetValue(LobbySettingsKeys.GameStarted, out object gs))
+            gameStarted = (bool)gs;
+
+        string worldSize = "Standard";
+        if (room.CustomProperties.TryGetValue(LobbySettingsKeys.WorldSize, out object ws))
+            worldSize = ws.ToString();
+
+        Image img = entry.GetComponent<Image>();
+        img.color = gameStarted ? new Color(0.25f, 0.20f, 0.12f, 1f) : new Color(0.16f, 0.20f, 0.16f, 1f);
+        img.raycastTarget = true;
+
+        Button btn = entry.GetComponent<Button>();
+        btn.targetGraphic = img;
+        RoomInfo capturedRoom = room;
+        btn.onClick.AddListener(() => JoinRoomFromList(capturedRoom));
+
+        GameObject textContainer = new GameObject("TextContainer", typeof(RectTransform));
+        textContainer.transform.SetParent(entry.transform, false);
+        RectTransform tcRt = textContainer.GetComponent<RectTransform>();
+        tcRt.anchorMin = Vector2.zero;
+        tcRt.anchorMax = Vector2.one;
+        tcRt.offsetMin = new Vector2(12f, 4f);
+        tcRt.offsetMax = new Vector2(-12f, -4f);
+
+        TextMeshProUGUI nameText = textContainer.AddComponent<TextMeshProUGUI>();
+        nameText.text = room.Name;
+        nameText.fontSize = 16f;
+        nameText.fontStyle = FontStyles.Bold;
+        nameText.color = textColor;
+        nameText.alignment = TextAlignmentOptions.TopLeft;
+
+        string statusLabel = gameStarted ? "Im Spiel" : "In Lobby";
+        string infoLine = $"{room.PlayerCount}/{room.MaxPlayers} Spieler  •  {worldSize}  •  {statusLabel}";
+        Color infoColor = gameStarted ? new Color(0.95f, 0.78f, 0.35f, 1f) : new Color(0.65f, 0.85f, 0.65f, 1f);
+
+        TextMeshProUGUI infoText = new GameObject("Info", typeof(RectTransform), typeof(TextMeshProUGUI)).GetComponent<TextMeshProUGUI>();
+        infoText.transform.SetParent(textContainer.transform, false);
+        RectTransform infoRt = infoText.GetComponent<RectTransform>();
+        infoRt.anchorMin = new Vector2(0f, 0f);
+        infoRt.anchorMax = new Vector2(1f, 0f);
+        infoRt.pivot = new Vector2(0f, 0f);
+        infoRt.anchoredPosition = Vector2.zero;
+        infoRt.sizeDelta = new Vector2(0f, 20f);
+        infoText.text = infoLine;
+        infoText.fontSize = 13f;
+        infoText.color = infoColor;
+        infoText.alignment = TextAlignmentOptions.BottomLeft;
+    }
+
+    private void JoinRoomFromList(RoomInfo room)
+    {
+        if (!EnsureReadyForMatchmaking() || !SetupPlayerName()) return;
+        if (room.PlayerCount >= room.MaxPlayers)
+        {
+            SetStatus($"Lobby '{room.Name}' ist bereits voll ({room.PlayerCount}/{room.MaxPlayers}).");
+            return;
+        }
+
+        SetStatus($"Trete Lobby '{room.Name}' bei...");
+        SetUIInteractable(false);
+        PhotonNetwork.JoinRoom(room.Name);
     }
 }

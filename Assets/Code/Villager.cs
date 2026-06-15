@@ -20,6 +20,8 @@ public class Villager : MonoBehaviour
     public Ship assignedShip;  // Reference to ship if assigned as crew
     
     [HideInInspector]
+    public bool isLocal = true;
+    [HideInInspector]
     public bool isOperatingWorker = false;
     [HideInInspector]
     public float stamina = 100f;
@@ -528,6 +530,8 @@ public class Villager : MonoBehaviour
 
     private void OnMouseDown()
     {
+        if (!isLocal) return;
+
         // Simple selection: Click to tell them to find work (only free villagers)
         if (role == Role.Villager && !isOperatingWorker)
         {
