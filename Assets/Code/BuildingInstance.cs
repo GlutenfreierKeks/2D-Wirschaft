@@ -18,6 +18,7 @@ public class BuildingInstance : MonoBehaviour
     private GameObject healthBar;
     private const float HealthBarWidth = 0.8f;
     private const float HealthBarHeight = 0.08f;
+    private const byte BuildingCaptureEventCode = 17;
     private const float HealthBarY = -0.5f;
     
     private bool isConstructed = false;
@@ -590,7 +591,7 @@ public class BuildingInstance : MonoBehaviour
         healthBar.SetActive(false);
     }
 
-    private void UpdateHealthBar()
+    public void UpdateHealthBar()
     {
         if (healthBar == null) return;
 
@@ -617,6 +618,17 @@ public class BuildingInstance : MonoBehaviour
     public void TakeDamage(int amount)
     {
         currentHP -= amount;
+
+        if (PhotonNetwork.InRoom && !isLocal)
+        {
+            object[] damageData = new object[] { data.buildingName, transform.position.x, transform.position.y, amount };
+            SendOptions sendOpts = new SendOptions { Reliability = true };
+            PhotonNetwork.RaiseEvent(16, damageData,
+                new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+        }
+
+        UpdateHealthBar();
+
         if (currentHP <= 0)
         {
             currentHP = 0;
@@ -624,10 +636,52 @@ public class BuildingInstance : MonoBehaviour
         }
     }
 
+    private void TransferIslandBuildings()
+    {
+        Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(transform.position.x), Mathf.RoundToInt(transform.position.y));
+        var islandCells = BuildingManager.FloodFillIsland(gridPos);
+        BuildingInstance[] allBuildings = FindObjectsByType<BuildingInstance>();
+        foreach (var b in allBuildings)
+        {
+            if (b == null || b == this) continue;
+            Vector2Int bGrid = new Vector2Int(Mathf.RoundToInt(b.transform.position.x), Mathf.RoundToInt(b.transform.position.y));
+            if (islandCells.Contains(bGrid))
+            {
+                b.isLocal = !b.isLocal;
+                b.UpdateHealthBar();
+            }
+        }
+    }
+
     private void Die()
     {
-        // Game Over check: letztes Lagerhaus zerstört?
-        if (data != null && (data.isWarehouseType || data.canBuildOnOtherIslands))
+        // Warehouse capture: Gebäude auf der Insel übernehmen
+        if (data != null && data.isWarehouseType)
+        {
+            if (PhotonNetwork.InRoom)
+            {
+                object[] capData = new object[] { data.buildingName, transform.position.x, transform.position.y };
+                SendOptions sendOpts = new SendOptions { Reliability = true };
+                PhotonNetwork.RaiseEvent(BuildingCaptureEventCode, capData,
+                    new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+            }
+
+            TransferIslandBuildings();
+
+            if (isLocal)
+            {
+                NotificationManager.Instance?.Notify("warehouse_lost",
+                    "LAGERHAUS ZERSTÖRT! Du verlierst alle Gebäude auf dieser Insel!", 6f);
+            }
+            else
+            {
+                NotificationManager.Instance?.Notify("warehouse_captured",
+                    "Lagerhaus zerstört! Alle Gebäude auf der Insel gehören dir.", 4f);
+            }
+        }
+
+        // Game Over check: nur für eigene Gebäude
+        if (isLocal && data != null && (data.isWarehouseType || data.canBuildOnOtherIslands))
         {
             bool anyLeft = false;
             foreach (var wh in FindObjectsOfType<Warehouse>())
@@ -903,13 +957,19 @@ public class BuildingInstance : MonoBehaviour
             bc.size = new Vector2(1f, 1f);
 
             Soldier s = solObj.AddComponent<Soldier>();
+            s.netId = Soldier.nextNetIdValue;
+            Soldier.nextNetIdValue++;
             s.soldierType = currentRecruitingType;
             s.team = Team.Player;
-            s.moveSpeed = 1.5f;    // Same speed as villagers!
+            s.moveSpeed = 1.5f;
             if (Photon.Pun.PhotonNetwork.LocalPlayer != null)
             {
                 s.ownerActorNumber = Photon.Pun.PhotonNetwork.LocalPlayer.ActorNumber;
             }
+
+            FogRevealer fr = solObj.AddComponent<FogRevealer>();
+            fr.radius = 4f;
+            fr.isLocalPlayer = true;
 
             // Map BarracksResource to WeaponMaterial (top-level enum)
             switch (currentRecruitingResource)
@@ -922,6 +982,14 @@ public class BuildingInstance : MonoBehaviour
 
             // Play recruitment particles!
             SpawnProductionParticles();
+
+            if (PhotonNetwork.InRoom)
+            {
+                object[] syncData = new object[] { s.netId, (int)currentRecruitingType, spawnPos.x, spawnPos.y };
+                SendOptions sendOpts = new SendOptions { Reliability = true };
+                PhotonNetwork.RaiseEvent(12, syncData,
+                    new RaiseEventOptions { Receivers = ReceiverGroup.Others }, sendOpts);
+            }
 
             Destroy(candidate.gameObject);
         }

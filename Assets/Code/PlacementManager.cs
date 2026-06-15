@@ -32,7 +32,12 @@ public class PlacementManager : MonoBehaviour
     private BuildingData currentBuilding;
     private bool isPlacing = false;
     private PlacementPreview currentPreview;
-    
+
+    // Pier drag state
+    private bool isDraggingPier = false;
+    private Vector2Int pierDragStart;
+    private GameObject pierPreviewParent;
+
     private Camera cam;
 
     private void Awake()
@@ -53,7 +58,10 @@ public class PlacementManager : MonoBehaviour
 
         currentBuilding = data;
         isPlacing = true;
-        
+
+        if (data.placementRule == PlacementRule.Pier)
+            return;
+
         if (ghostParent != null) Destroy(ghostParent);
         CreateGhost(data);
     }
@@ -91,6 +99,13 @@ public class PlacementManager : MonoBehaviour
 
         Vector2 mousePos = Mouse.current.position.ReadValue();
         Vector3 worldPos = cam.ScreenToWorldPoint(new Vector3(mousePos.x, mousePos.y, -cam.transform.position.z));
+
+        if (currentBuilding.placementRule == PlacementRule.Pier)
+        {
+            HandlePierPlacement(worldPos);
+            return;
+        }
+
         currentPreview = ResolvePreview(worldPos);
 
         ghostParent.transform.position = new Vector3(currentPreview.center.x, currentPreview.center.y, -0.2f);
@@ -345,47 +360,39 @@ private bool CheckIslandOwnership(Vector2 center, int occupiedWidth = 0, int occ
 
     /// <summary>
     /// Für Piers: Prüft ob die anliegende Insel ein eigenes Lagerhaus hat.
+    /// Folgt der Steg-Kette per BFS bis Land mit Lagerhaus gefunden wird.
     /// </summary>
     private bool CheckPierIslandOwnership(Vector2 center)
     {
         Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y));
-        
-        // Ein Pier muss an Land oder another Pier angrenzen - prüfe alle 4 Richtungen
         Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
-        
-        foreach (var dir in directions)
+
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        queue.Enqueue(gridPos);
+        visited.Add(gridPos);
+
+        while (queue.Count > 0)
         {
-            Vector2Int adjacent = gridPos + dir;
-            
-            // Ist das angrenzende Feld Land?
-            if (IslandManager.IsLand(adjacent))
+            Vector2Int current = queue.Dequeue();
+            foreach (var dir in directions)
             {
-                // Prüfe ob auf dieser Insel ein eigenes Lagerhaus steht
-                if (IsWarehouseOnIsland(adjacent))
-                    return true;
-            }
-        }
-        
-        // Auch als Pier an eigenem Pier angrenzend prüfen
-        foreach (var dir in directions)
-        {
-            Vector2Int adjacent = gridPos + dir;
-            if (BuildingManager.IsStegAt(adjacent))
-            {
-                // Dieser Pier ist an einem existierenden Pier - prüfe ob der Steg zu einer Insel mit eigenem Lagerhaus gehört
-                // Da Stege nur an Land oder anderen Stegen platziert werden, folgt die Kette zum Land
-                foreach (var dir2 in directions)
+                Vector2Int neighbor = current + dir;
+                if (visited.Contains(neighbor)) continue;
+                visited.Add(neighbor);
+
+                if (IslandManager.IsLand(neighbor))
                 {
-                    Vector2Int landCheck = adjacent + dir2;
-                    if (IslandManager.IsLand(landCheck))
-                    {
-                        if (IsWarehouseOnIsland(landCheck))
-                            return true;
-                    }
+                    if (IsWarehouseOnIsland(neighbor))
+                        return true;
+                }
+                else if (BuildingManager.IsStegAt(neighbor))
+                {
+                    queue.Enqueue(neighbor);
                 }
             }
         }
-        
+
         return false;
     }
 
@@ -617,8 +624,12 @@ private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occu
         }
         
         List<Vector2Int> allStegPositions = BuildingManager.GetStegPositions();
+        HashSet<Vector2Int> stegSet = new HashSet<Vector2Int>(allStegPositions);
         HashSet<Vector2Int> validStegPositions = new HashSet<Vector2Int>();
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
         
+        // Starte BFS von allen Stegen, die direkt an Land mit Lagerhaus angrenzen
         foreach (Vector2Int stegPos in allStegPositions)
         {
             foreach (var dir in directions)
@@ -630,10 +641,30 @@ private bool ValidateShipPlacement(Vector2 center, int rotationDegrees, int occu
                     {
                         if (IsSameIsland(landPos, whPos))
                         {
+                            visited.Add(stegPos);
+                            queue.Enqueue(stegPos);
                             validStegPositions.Add(stegPos);
                             break;
                         }
                     }
+                    if (validStegPositions.Contains(stegPos)) break;
+                }
+            }
+        }
+        
+        // BFS: Alle Stege, die über eine Stegkette mit einem gültigen Steg verbunden sind
+        while (queue.Count > 0)
+        {
+            Vector2Int current = queue.Dequeue();
+            foreach (var dir in directions)
+            {
+                Vector2Int neighbor = current + dir;
+                if (visited.Contains(neighbor)) continue;
+                if (stegSet.Contains(neighbor))
+                {
+                    visited.Add(neighbor);
+                    queue.Enqueue(neighbor);
+                    validStegPositions.Add(neighbor);
                 }
             }
         }
@@ -837,11 +868,11 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
     {
         switch (Mathf.RoundToInt(Mathf.Repeat(rotationDegrees, 360f)))
         {
-            case 0: return Vector2Int.right;
-            case 90: return Vector2Int.up;
-            case 180: return Vector2Int.left;
-            case 270: return Vector2Int.down;
-            default: return Vector2Int.right;
+            case 0: return Vector2Int.down;
+            case 90: return Vector2Int.right;
+            case 180: return Vector2Int.up;
+            case 270: return Vector2Int.left;
+            default: return Vector2Int.down;
         }
     }
 
@@ -895,9 +926,140 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
         CancelPlacement();
     }
 
+    // ── Pier drag placement ──────────────────────────────────────────────
+
+    private void HandlePierPlacement(Vector3 worldPos)
+    {
+        Vector2Int gridPos = new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.y));
+
+        if (Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            isDraggingPier = true;
+            pierDragStart = gridPos;
+            CreatePierPreview();
+            UpdatePierPreview(pierDragStart, gridPos);
+        }
+
+        if (isDraggingPier)
+        {
+            if (Mouse.current.leftButton.isPressed)
+                UpdatePierPreview(pierDragStart, gridPos);
+
+            if (Mouse.current.leftButton.wasReleasedThisFrame)
+            {
+                BuildPierLine(pierDragStart, gridPos);
+                isDraggingPier = false;
+                DestroyPierPreview();
+                CancelPlacement();
+            }
+        }
+
+        if (Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            isDraggingPier = false;
+            DestroyPierPreview();
+            CancelPlacement();
+        }
+    }
+
+    private void CreatePierPreview()
+    {
+        pierPreviewParent = new GameObject("PierPreview");
+    }
+
+    private void DestroyPierPreview()
+    {
+        if (pierPreviewParent != null)
+            Destroy(pierPreviewParent);
+        pierPreviewParent = null;
+    }
+
+    private void UpdatePierPreview(Vector2Int start, Vector2Int end)
+    {
+        if (pierPreviewParent == null) return;
+
+        for (int i = pierPreviewParent.transform.childCount - 1; i >= 0; i--)
+            Destroy(pierPreviewParent.transform.GetChild(i).gameObject);
+
+        List<Vector2Int> cells = GetLineCells(start, end);
+        foreach (Vector2Int cell in cells)
+        {
+            bool water = !IslandManager.IsLand(cell);
+            bool occupied = BuildingManager.IsOccupied(new Vector2(cell.x, cell.y));
+
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.transform.SetParent(pierPreviewParent.transform);
+            quad.transform.position = new Vector3(cell.x, cell.y, -0.2f);
+            Destroy(quad.GetComponent<MeshCollider>());
+
+            Renderer rend = quad.GetComponent<Renderer>();
+            rend.material = new Material(Shader.Find("Sprites/Default"));
+            rend.material.color = (water && !occupied) ? canPlaceColor : cannotPlaceColor;
+        }
+    }
+
+    private List<Vector2Int> GetLineCells(Vector2Int start, Vector2Int end)
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+        int x = start.x, y = start.y;
+        int dx = Mathf.Abs(end.x - start.x);
+        int dy = -Mathf.Abs(end.y - start.y);
+        int sx = start.x < end.x ? 1 : -1;
+        int sy = start.y < end.y ? 1 : -1;
+        int err = dx + dy;
+
+        while (true)
+        {
+            cells.Add(new Vector2Int(x, y));
+            if (x == end.x && y == end.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+        }
+        return cells;
+    }
+
+    private void BuildPierLine(Vector2Int start, Vector2Int end)
+    {
+        List<Vector2Int> cells = GetLineCells(start, end);
+        int woodPerPier = Mathf.Max(1, currentBuilding.woodCost);
+        int totalCost = cells.Count * woodPerPier;
+
+        if (!ResourceManager.Instance.HasResource("holz", totalCost))
+        {
+            NotificationManager.Instance?.Notify("pier_no_wood",
+                $"Nicht genug Holz! Benötigt: {totalCost}", 3f);
+            return;
+        }
+
+        // Baue alle gültigen Steg-Zellen nacheinander (PlaceStegAt prüft adjacency gegen bereits gesetzte)
+        int built = 0;
+        foreach (Vector2Int cell in cells)
+        {
+            if (BuildingManager.Instance.PlaceStegAt(new Vector2(cell.x, cell.y), true))
+                built++;
+        }
+
+        if (built > 0)
+        {
+            int spent = built * woodPerPier;
+            ResourceManager.Instance.SpendResource("holz", spent);
+
+            // Netzwerk-Event für andere Spieler: sende Start/Ende, remote baut via skipValidation
+            if (Photon.Pun.PhotonNetwork.InRoom)
+            {
+                object[] content = new object[] { (float)start.x, (float)start.y, (float)end.x, (float)end.y };
+                ExitGames.Client.Photon.SendOptions sendOptions = new ExitGames.Client.Photon.SendOptions { Reliability = true };
+                Photon.Pun.PhotonNetwork.RaiseEvent(18, content, new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOptions);
+            }
+        }
+    }
+
     private void CancelPlacement()
     {
         isPlacing = false;
+        isDraggingPier = false;
+        DestroyPierPreview();
         if (ghostParent != null)
         {
             ghostParent.SetActive(false);
@@ -988,12 +1150,17 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
 
     private int GetShipRotationFromDirections(Vector2Int along, Vector2Int outward)
     {
-        // Ships are placed so that their bow points away from the pier.
-        // The actual rotation depends only on the outward direction.
-        if (outward == Vector2Int.up) return 180;
-        if (outward == Vector2Int.down) return 0;
-        if (outward == Vector2Int.right) return 90;
-        if (outward == Vector2Int.left) return 270;
+        // Die Textur-Spitze zeigt standardmäßig nach unten (-Y).
+        // Die Spitze soll parallel zum Schiff (along-Richtung) zeigen,
+        // nicht zum Steg hin (outward).
+        // Bei Rotation 0: tip = -transform.up = (0,-1) → unten
+        // Bei Rotation 90: tip = -transform.up = (1,0) → rechts
+        // Bei Rotation 180: tip = -transform.up = (0,1) → oben
+        // Bei Rotation 270: tip = -transform.up = (-1,0) → links
+        if (along == Vector2Int.up) return 180;
+        if (along == Vector2Int.down) return 0;
+        if (along == Vector2Int.right) return 90;
+        if (along == Vector2Int.left) return 270;
         return 0;
     }
 }

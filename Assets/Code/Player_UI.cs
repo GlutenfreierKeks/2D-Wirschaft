@@ -65,7 +65,8 @@ public class Player_UI : MonoBehaviour
     {
         new MenuCategory { id = "ressourcen", displayName = "Ressourcen" },
         new MenuCategory { id = "hauser",     displayName = "Häuser" },
-        new MenuCategory { id = "andere",     displayName = "Andere" }
+        new MenuCategory { id = "andere",     displayName = "Andere" },
+        new MenuCategory { id = "wasser",     displayName = "Wasser" }
     };
 
     [System.Serializable]
@@ -185,6 +186,10 @@ public class Player_UI : MonoBehaviour
     {
         EnsureBuildMenuItem("turm", "Turm", "andere", "BuildingData/Turm", "Textures/turm");
         EnsureBuildMenuItem("lagerhaus", "Lagerhaus", "andere", "BuildingData/Lagerhaus", "warehouse_texture");
+        EnsureBuildMenuItem("smallship", "Kleines Schiff", "wasser", "BuildingData/SmallShip", "Textures/kleinschiff");
+        EnsureBuildMenuItem("mediumship", "Mittleres Schiff", "wasser", "BuildingData/MediumShip", "Textures/kleinschiff");
+        EnsureBuildMenuItem("largeship", "Grosses Schiff", "wasser", "BuildingData/LargeShip", "Textures/kleinschiff");
+        EnsureBuildMenuItem("viehhof", "Fleischhof", "ressourcen", "BuildingData/Viehof", "Textures/viehhof");
     }
 
     private void EnsureBuildMenuItem(string id, string displayName, string categoryId, string buildingDataPath, string iconPath)
@@ -1242,6 +1247,7 @@ public class Player_UI : MonoBehaviour
             if (def.id == "arbeiter") iconPath = "Textures/schwertkämpfer";
             else if (def.id == "dorfbewohner") iconPath = "Textures/dorfbewohner";
             else if (def.id == "fleisch") iconPath = "Meat_Overlay";
+            else if (def.id == "stimmung") iconPath = "Textures/Gutemood";
 
             if (iconPath != null)
             {

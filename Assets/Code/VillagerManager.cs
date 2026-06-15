@@ -59,13 +59,14 @@ public class VillagerManager : MonoBehaviour
         SpawnVillagerAt(islandPos + randomOffset, role);
     }
 
-    public void SpawnVillagerAt(Vector2 position, Villager.Role role)
+    public void SpawnVillagerAt(Vector2 position, Villager.Role role, bool isLocal = true)
     {
         EnsurePrefab();
         GameObject vObj = Instantiate(villagerPrefab, new Vector3(position.x, position.y, -0.2f), Quaternion.identity);
         vObj.SetActive(true);
         Villager v = vObj.AddComponent<Villager>();
         v.role = role;
+        v.isLocal = isLocal;
         
         // Visual distinction
         SpriteRenderer sr = vObj.GetComponent<SpriteRenderer>();
@@ -77,6 +78,10 @@ public class VillagerManager : MonoBehaviour
             Sprite custom = Resources.Load<Sprite>(role.ToString());
             if (custom != null) sr.sprite = custom;
         }
+
+        FogRevealer fr = vObj.AddComponent<FogRevealer>();
+        fr.radius = 4f;
+        fr.isLocalPlayer = isLocal;
 
         activeVillagers.Add(v);
     }
@@ -124,7 +129,7 @@ public class VillagerManager : MonoBehaviour
 
         foreach (var v in activeVillagers)
         {
-            if (v == null) continue;
+            if (v == null || !v.isLocal) continue;
             
             if (v.role == Villager.Role.Worker)
             {
@@ -149,12 +154,12 @@ public class VillagerManager : MonoBehaviour
         Player_UI.Instance.SetResource("arbeiter", workers);
         Player_UI.Instance.SetResource("bevolkerung", totalVillagers + workers);
 
-        // Calculate global mood based on all active villagers
+        // Calculate global mood based on local villagers only
         float totalMood = 0f;
         int moodCount = 0;
         foreach (var v in activeVillagers)
         {
-            if (v != null)
+            if (v != null && v.isLocal)
             {
                 totalMood += v.mood;
                 moodCount++;
@@ -169,7 +174,7 @@ public class VillagerManager : MonoBehaviour
     {
         foreach (var v in activeVillagers)
         {
-            if (v != null && v.role == Villager.Role.Villager && !v.isOperatingWorker && !v.IsBusy())
+            if (v != null && v.isLocal && v.role == Villager.Role.Villager && !v.isOperatingWorker && !v.IsBusy())
             {
                 return v;
             }
@@ -211,7 +216,7 @@ public class VillagerManager : MonoBehaviour
         int busy = 0;
         foreach (var v in activeVillagers)
         {
-            if (v.role == Villager.Role.Worker)
+            if (v != null && v.isLocal && v.role == Villager.Role.Worker)
             {
                 total++;
                 if (!v.IsBusy()) return v;
@@ -404,7 +409,9 @@ public class VillagerManager : MonoBehaviour
         int fruits = Player_UI.Instance.GetResource("fruechte") + desertFruits;
         int meat = Player_UI.Instance.GetResource("fleisch");
         int weizen = Player_UI.Instance.GetResource("weizen");
-        int pop = Mathf.Max(1, activeVillagers.Count);
+        int localVillagerCount = 0;
+        foreach (var v in activeVillagers) { if (v != null && v.isLocal) localVillagerCount++; }
+        int pop = Mathf.Max(1, localVillagerCount);
         
         // 1. Wheat reserve levels (Primary food: crisis if low)
         float wheatRatio = (float)weizen / pop;

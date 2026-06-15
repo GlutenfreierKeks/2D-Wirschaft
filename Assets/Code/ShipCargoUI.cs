@@ -231,9 +231,6 @@ public class ShipCargoUI : MonoBehaviour
         var btnBuilders = MakeButton("BuildersBtn", btnRow.transform, "Bauarbeiter", btnNeutral, 140f, 40f, 13f);
         btnBuilders.onClick.AddListener(OnLoadBuildersClicked);
 
-        var btnMaterials = MakeButton("MaterialsBtn", btnRow.transform, "Material", btnNeutral, 140f, 40f, 13f);
-        btnMaterials.onClick.AddListener(OnLoadMaterialsClicked);
-
         MakeDivider(inner.transform);
 
         // Sail + Unload buttons

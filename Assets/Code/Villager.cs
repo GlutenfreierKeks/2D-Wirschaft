@@ -20,6 +20,8 @@ public class Villager : MonoBehaviour
     public Ship assignedShip;  // Reference to ship if assigned as crew
     
     [HideInInspector]
+    public bool isLocal = true;
+    [HideInInspector]
     public bool isOperatingWorker = false;
     [HideInInspector]
     public float stamina = 100f;
@@ -382,6 +384,8 @@ public class Villager : MonoBehaviour
         {
             currentPath.Clear();
             isMoving = false;
+            NotificationManager.Instance?.Notify("no_path_villager",
+                "Kein Weg! Der Dorfbewohner kann nur auf Land gehen.", 4f);
         }
     }
 
@@ -526,6 +530,8 @@ public class Villager : MonoBehaviour
 
     private void OnMouseDown()
     {
+        if (!isLocal) return;
+
         // Simple selection: Click to tell them to find work (only free villagers)
         if (role == Role.Villager && !isOperatingWorker)
         {

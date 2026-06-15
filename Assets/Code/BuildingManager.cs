@@ -27,7 +27,7 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
     public static bool IsWalkable(Vector2 pos)
     {
         Vector2Int grid = new Vector2Int(Mathf.RoundToInt(pos.x), Mathf.RoundToInt(pos.y));
-        return IslandManager.IsLand(grid) || IsStegAt(grid);
+        return IslandManager.IsLand(grid) || IslandManager.IsShallowWater(grid) || IsStegAt(grid);
     }
 
     public static bool CanPlacePierAt(Vector2Int grid)
@@ -78,14 +78,22 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
     public static void UnregisterSteg(Steg s) => stegs.Remove(s);
 
     // Platzieren eines Stegs an einer World-Position (X,Y). Gibt true zurück, wenn platziert.
-    public bool PlaceStegAt(Vector2 position, bool isLocal = true)
+    public bool PlaceStegAt(Vector2 position, bool isLocal = true, bool skipValidation = false)
     {
         if (stegPrefab == null) { Debug.LogWarning("BuildingManager: stegPrefab fehlt"); return false; }
 
         Vector2Int grid = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
-        if (!IsWaterAt(grid)) return false;
-        if (IsOccupied(position)) return false;
-        if (!HasLandAdjacency(grid) && !HasPierAdjacency(grid)) return false;
+        if (!skipValidation)
+        {
+            if (!IsWaterAt(grid)) return false;
+            if (IsOccupied(position)) return false;
+            if (!HasLandAdjacency(grid) && !HasPierAdjacency(grid)) return false;
+        }
+        else
+        {
+            if (IslandManager.IsLand(grid)) return false;
+            if (IsOccupied(position)) return false;
+        }
 
         GameObject go = Instantiate(stegPrefab);
         var steg = go.GetComponent<Steg>();
@@ -216,7 +224,8 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
                 Vector2Int next = current + dir;
                 if (!IsWalkable(next)) continue;
 
-                float newCost = costSoFar[current] + 1f;
+                float stepCost = IslandManager.IsShallowWater(next) ? 3f : 1f;
+                float newCost = costSoFar[current] + stepCost;
                 if (costSoFar.TryGetValue(next, out float existingCost) && newCost >= existingCost)
                 {
                     continue;
@@ -486,6 +495,10 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
             ship.isLocal = isLocal;
             ship.spawnOrigin = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
             if (data.shipData != null) ship.shipData = data.shipData;
+            if (data.buildingName.Contains("Small")) ship.shipLevel = 1;
+            else if (data.buildingName.Contains("Medium")) ship.shipLevel = 2;
+            else if (data.buildingName.Contains("Large")) ship.shipLevel = 3;
+            ship.SyncFromData();
         }
 
         if (data.isDefenseTower)
