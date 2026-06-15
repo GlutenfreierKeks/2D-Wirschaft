@@ -385,7 +385,7 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             AddChatMessage(message);
             if (chatPanelRoot != null && !chatPanelRoot.gameObject.activeSelf && notificationManager != null)
             {
-                notificationManager.Notify("chat", $"Neue Nachricht: {message}");
+                notificationManager.Notify("chat", "Neue Chatnachricht");
             }
             return;
         }
