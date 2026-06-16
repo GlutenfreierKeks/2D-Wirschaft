@@ -560,22 +560,62 @@ public class Ship : MonoBehaviour
         {
             if (slot.IsEmpty)
             {
-                Villager freeVillager = FindFreeVillager();
-                if (freeVillager == null)
+                Villager freeWorker = FindFreeWorker();
+
+                if (freeWorker == null)
                 {
-                    NotificationManager.Instance?.Notify("no_free_villager",
-                        "Kein freier Dorfbewohner verfügbar!", 4f);
+                    Villager freeVillager = FindFreeVillager();
+                    if (freeVillager != null)
+                    {
+                        freeVillager.role = Villager.Role.Worker;
+                        SpriteRenderer sr = freeVillager.GetComponent<SpriteRenderer>();
+                        if (sr != null)
+                        {
+                            sr.color = Color.orange;
+                            Sprite custom = Resources.Load<Sprite>("Worker");
+                            if (custom != null) sr.sprite = custom;
+                        }
+                        freeWorker = freeVillager;
+                    }
+                }
+
+                if (freeWorker == null)
+                {
+                    NotificationManager.Instance?.Notify("no_free_worker",
+                        "Kein freier Bauarbeiter verfügbar!", 4f);
                     return false;
                 }
-                freeVillager.gameObject.SetActive(false);
+
+                freeWorker.gameObject.SetActive(false);
                 slot.content = ShipSlot.SlotContent.Builder;
                 slot.amount = 1;
-                slot.villager = freeVillager;
+                slot.villager = freeWorker;
                 OnCargoChanged?.Invoke();
                 return true;
             }
         }
         return false;
+    }
+
+    private Villager FindFreeWorker()
+    {
+        if (VillagerManager.Instance == null) return null;
+        Villager best = null;
+        float bestDist = float.MaxValue;
+        foreach (var v in VillagerManager.Instance.ActiveVillagers)
+        {
+            if (v == null || !v.gameObject.activeSelf) continue;
+            if (v.role != Villager.Role.Worker) continue;
+            if (v.assignedShip != null) continue;
+            if (v.AssignedBuilding != null) continue;
+            float d = Vector3.Distance(transform.position, v.transform.position);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = v;
+            }
+        }
+        return best;
     }
 
     private Villager FindFreeVillager()

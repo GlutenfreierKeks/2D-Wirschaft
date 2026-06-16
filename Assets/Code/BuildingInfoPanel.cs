@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
+using System.Collections.Generic;
 
 /// <summary>
 /// Rechtes Seitenfeld das erscheint wenn ein Gebäude angeklickt wird.
@@ -172,7 +173,21 @@ public class BuildingInfoPanel : MonoBehaviour
         if (currentBuilding == null) return;
         BuildingData d = currentBuilding.data;
 
-        txtName.text = currentBuilding.GetDisplayName().ToUpper();
+        int multiCount = 0;
+        if (SelectionManager.Instance != null)
+        {
+            var sel = SelectionManager.Instance.GetSelectedBuildings();
+            bool containsCurrent = false;
+            foreach (var b in sel)
+            {
+                if (b == currentBuilding) { containsCurrent = true; break; }
+            }
+            if (sel.Count > 1 && containsCurrent)
+                multiCount = sel.Count;
+        }
+        txtName.text = multiCount > 1
+            ? $"{multiCount}× {currentBuilding.GetDisplayName().ToUpper()}"
+            : currentBuilding.GetDisplayName().ToUpper();
 
         // Status
         string statusStr;
@@ -602,52 +617,80 @@ public class BuildingInfoPanel : MonoBehaviour
     private void OnPauseClicked()
     {
         if (currentBuilding == null) return;
-        currentBuilding.ToggleProduction();
+        var buildings = GetBuildingsForBatch();
+        foreach (var b in buildings)
+        {
+            if (b != null) b.ToggleProduction();
+        }
         RefreshStats();
     }
 
     private void OnDemolishClicked()
     {
         if (currentBuilding == null) return;
-        currentBuilding.Demolish();
+        var buildings = GetBuildingsForBatch();
         Hide();
+        for (int i = buildings.Count - 1; i >= 0; i--)
+        {
+            if (buildings[i] != null) buildings[i].Demolish();
+        }
     }
 
     private void OnToggleScheduleClicked()
     {
         if (currentBuilding == null) return;
         
-        // Cycle: DayOnly -> Leisure -> Continuous
-        int current = (int)currentBuilding.currentSchedule;
-        current = (current + 1) % 3;
-        currentBuilding.currentSchedule = (BuildingInstance.ScheduleMode)current;
-        
+        var buildings = GetBuildingsForBatch();
+        foreach (var b in buildings)
+        {
+            if (b == null) continue;
+            int current = (int)b.currentSchedule;
+            current = (current + 1) % 3;
+            b.currentSchedule = (BuildingInstance.ScheduleMode)current;
+        }
         RefreshStats();
+    }
+
+    private List<BuildingInstance> GetBuildingsForBatch()
+    {
+        if (SelectionManager.Instance == null)
+            return new List<BuildingInstance> { currentBuilding };
+        var sel = SelectionManager.Instance.GetSelectedBuildings();
+        bool containsCurrent = false;
+        foreach (var b in sel)
+        {
+            if (b == currentBuilding) { containsCurrent = true; break; }
+        }
+        if (sel.Count > 1 && containsCurrent)
+            return new List<BuildingInstance>(sel);
+        return new List<BuildingInstance> { currentBuilding };
     }
 
     private void OnToggleHutTypeClicked()
     {
         if (currentBuilding == null) return;
-        
-        bool success = currentBuilding.ToggleHutType();
-        if (success)
+        var buildings = GetBuildingsForBatch();
+        bool anySuccess = false;
+        foreach (var b in buildings)
+        {
+            if (b != null && b.ToggleHutType())
+                anySuccess = true;
+        }
+        if (anySuccess)
         {
             RefreshStats();
         }
         else
         {
-            // Spawn a beautiful floating warning text above the building!
             GameObject textGO = new GameObject("HutTypeErrorText");
             textGO.transform.position = currentBuilding.transform.position + Vector3.up * 1.2f;
             var textMesh = textGO.AddComponent<TextMesh>();
             textMesh.text = "⚠️ Weizen fehlt!";
             textMesh.fontSize = 22;
             textMesh.characterSize = 0.07f;
-            textMesh.color = new Color(1f, 0.4f, 0.4f); // beautiful warning red/orange
+            textMesh.color = new Color(1f, 0.4f, 0.4f);
             textMesh.alignment = TextAlignment.Center;
             textMesh.anchor = TextAnchor.MiddleCenter;
-            
-            // Add a simple procedurally animated moving script
             textGO.AddComponent<BuildingErrorTextMover>();
             Destroy(textGO, 1.8f);
         }

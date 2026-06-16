@@ -16,6 +16,18 @@ public class SelectionManager : MonoBehaviour
     [SerializeField] private Color dragBorderColor = new Color(0.30f, 0.85f, 1f, 0.95f);
 
     private readonly List<Soldier> selectedSoldiers = new List<Soldier>();
+    private readonly List<BuildingInstance> selectedBuildings = new List<BuildingInstance>();
+    private readonly List<GameObject> buildingHighlights = new List<GameObject>();
+
+    private const float DoubleClickTime = 0.35f;
+    private BuildingInstance lastClickedBuilding;
+    private float lastClickTime;
+
+    public IReadOnlyList<BuildingInstance> GetSelectedBuildings()
+    {
+        selectedBuildings.RemoveAll(b => b == null);
+        return selectedBuildings;
+    }
 
     private GameObject highlightObj;
     private LineRenderer observeLineRenderer;
@@ -259,6 +271,15 @@ public class SelectionManager : MonoBehaviour
     {
         Collider2D[] hits = Physics2D.OverlapPointAll(worldPos2D);
 
+        System.Array.Sort(hits, (a, b) =>
+        {
+            if (a == null && b == null) return 0;
+            if (a == null) return 1;
+            if (b == null) return -1;
+            return (a.transform.position - (Vector3)worldPos2D).sqrMagnitude
+                .CompareTo((b.transform.position - (Vector3)worldPos2D).sqrMagnitude);
+        });
+
         Soldier clickedSoldier = null;
         BuildingInstance clickedBuilding = null;
 
@@ -282,6 +303,7 @@ public class SelectionManager : MonoBehaviour
         {
             AudioManager.Instance?.PlaySelectSound();
             SelectSingleSoldier(clickedSoldier);
+            ClearBuildingSelection();
             if (infoPanel != null && infoPanel.IsVisible)
             {
                 infoPanel.Hide();
@@ -302,11 +324,30 @@ public class SelectionManager : MonoBehaviour
 
             AudioManager.Instance?.PlaySelectSound();
             ClearSoldierSelection();
-            infoPanel?.Show(clickedBuilding);
+
+            float now = Time.realtimeSinceStartup;
+            bool isDoubleClick = clickedBuilding.data != null &&
+                lastClickedBuilding != null &&
+                lastClickedBuilding.data != null &&
+                clickedBuilding.data.buildingName == lastClickedBuilding.data.buildingName &&
+                (now - lastClickTime) < DoubleClickTime;
+
+            lastClickedBuilding = clickedBuilding;
+            lastClickTime = now;
+
+            if (isDoubleClick)
+            {
+                SelectAllOfType(clickedBuilding);
+            }
+            else
+            {
+                SelectSingleBuilding(clickedBuilding);
+            }
             return;
         }
 
         ClearSoldierSelection();
+        ClearBuildingSelection();
         if (infoPanel != null && infoPanel.IsVisible)
         {
             infoPanel.Hide();
@@ -368,6 +409,82 @@ public class SelectionManager : MonoBehaviour
             observeLineRenderer.enabled = false;
         }
         RefreshCommandUi();
+    }
+
+    private void SelectSingleBuilding(BuildingInstance building)
+    {
+        ClearBuildingSelection();
+        selectedBuildings.Add(building);
+        UpdateBuildingHighlights();
+        infoPanel?.Show(building);
+    }
+
+    private void SelectAllOfType(BuildingInstance building)
+    {
+        ClearBuildingSelection();
+        BuildingInstance.AllBuildings.RemoveAll(b => b == null);
+
+        string typeName = building.data.buildingName;
+        string displayName = building.GetDisplayName();
+
+        foreach (var b in BuildingInstance.AllBuildings)
+        {
+            if (b != null && b.isLocal && b.data != null && b.data.buildingName == typeName)
+            {
+                selectedBuildings.Add(b);
+            }
+        }
+
+        UpdateBuildingHighlights();
+
+        if (selectedBuildings.Count > 1)
+        {
+            NotificationManager.Instance?.Notify("multi_select",
+                $"{selectedBuildings.Count}× {displayName} ausgewählt", 3f);
+        }
+
+        if (selectedBuildings.Count > 0)
+        {
+            infoPanel?.Show(selectedBuildings[0]);
+        }
+    }
+
+    public void ClearBuildingSelection()
+    {
+        selectedBuildings.Clear();
+        ClearBuildingHighlights();
+    }
+
+    private void UpdateBuildingHighlights()
+    {
+        ClearBuildingHighlights();
+        if (selectedBuildings.Count <= 1) return;
+        foreach (var b in selectedBuildings)
+        {
+            if (b == null) continue;
+            GameObject highlight = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            highlight.name = "BuildingSelectionHighlight";
+            Destroy(highlight.GetComponent<MeshCollider>());
+
+            highlight.transform.SetParent(b.transform, false);
+            highlight.transform.localPosition = new Vector3(0f, 0f, 0.15f);
+            highlight.transform.localScale = Vector3.one;
+
+            Renderer rend = highlight.GetComponent<Renderer>();
+            rend.material = new Material(Shader.Find("Sprites/Default"));
+            rend.material.color = new Color(1f, 0.84f, 0f, 0.35f);
+            rend.sortingOrder = 1;
+            buildingHighlights.Add(highlight);
+        }
+    }
+
+    private void ClearBuildingHighlights()
+    {
+        foreach (var h in buildingHighlights)
+        {
+            if (h != null) Destroy(h);
+        }
+        buildingHighlights.Clear();
     }
 
     private void IssueFormationCommand(Vector2 targetPoint, bool attackMove)

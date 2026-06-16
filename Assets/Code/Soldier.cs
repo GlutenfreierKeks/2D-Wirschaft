@@ -259,6 +259,7 @@ public class Soldier : MonoBehaviour
 
     public void IssueMoveOrder(Vector2 destination)
     {
+        if (!IsOwnedByLocalPlayer) return;
         hasPatrolOrder = false;
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = false;
@@ -269,6 +270,7 @@ public class Soldier : MonoBehaviour
 
     public void IssueAttackMoveOrder(Vector2 destination)
     {
+        if (!IsOwnedByLocalPlayer) return;
         hasPatrolOrder = false;
         if (patrolRenderer != null) patrolRenderer.enabled = false;
         attackMoveEnabled = true;
@@ -279,6 +281,7 @@ public class Soldier : MonoBehaviour
 
     public void IssueObserveOrder(Vector2 pointA, Vector2 pointB)
     {
+        if (!IsOwnedByLocalPlayer) return;
         attackMoveEnabled = true;
         hasPatrolOrder = true;
         patrolPointA = SnapToNearestPassable(pointA);

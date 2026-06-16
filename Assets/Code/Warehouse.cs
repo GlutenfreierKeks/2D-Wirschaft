@@ -45,14 +45,6 @@ public class Warehouse : MonoBehaviour
         // Determine which island this warehouse is on
         DetermineIslandAssociation();
         
-        // Set up collider if not exists
-        var collider = GetComponent<Collider2D>();
-        if (collider == null)
-        {
-            var bc = gameObject.AddComponent<BoxCollider2D>();
-            bc.size = new Vector2(3f, 3f);
-        }
-        
         // Add to warehouse list for island ownership tracking
         WarehouseManager.Instance?.RegisterWarehouse(this);
     }

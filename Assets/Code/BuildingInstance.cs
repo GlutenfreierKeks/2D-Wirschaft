@@ -7,6 +7,8 @@ using Photon.Realtime;
 
 public class BuildingInstance : MonoBehaviour
 {
+    public static List<BuildingInstance> AllBuildings = new List<BuildingInstance>();
+
     public BuildingData data;
     public bool isLocal;
     [HideInInspector] public int footprintWidthOverride;
@@ -235,6 +237,8 @@ public class BuildingInstance : MonoBehaviour
 
     private void Start()
     {
+        AllBuildings.Add(this);
+
         renderers = GetComponentsInChildren<Renderer>();
         revealer = GetComponent<FogRevealer>();
         if (revealer != null) revealer.enabled = false;
@@ -299,7 +303,9 @@ public class BuildingInstance : MonoBehaviour
 
         var col = gameObject.AddComponent<BoxCollider2D>();
         Vector3 s = transform.localScale;
-        col.size = new Vector2(Mathf.Max(1f, s.x), Mathf.Max(1f, s.y));
+        float sx = Mathf.Max(1f, s.x);
+        float sy = Mathf.Max(1f, s.y);
+        col.size = new Vector2(sx / Mathf.Max(0.001f, s.x), sy / Mathf.Max(0.001f, s.y));
     }
 
     public bool NeedsMoreWorkers() => data != null && workersAssigned < data.requiredWorkers;
@@ -1001,6 +1007,8 @@ public class BuildingInstance : MonoBehaviour
 
     private void OnDestroy()
     {
+        AllBuildings.Remove(this);
+
         List<Villager> sleepers = new List<Villager>(sleepingVillagers);
         foreach (var sleeper in sleepers)
         {
