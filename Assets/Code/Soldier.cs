@@ -71,6 +71,8 @@ public class Soldier : MonoBehaviour
     private TextMesh healthText;
     private LineRenderer circleRenderer;
     private LineRenderer patrolRenderer;
+    private GameObject healthBar;
+    private Renderer healthBarRenderer;
 
     private readonly List<Vector2> currentPath = new List<Vector2>();
     private int currentPathIndex;
@@ -279,6 +281,30 @@ public class Soldier : MonoBehaviour
         SetPathTo(destination);
     }
 
+    public void IssueAttackOrder(Soldier target)
+    {
+        if (!IsOwnedByLocalPlayer || target == null) return;
+        hasPatrolOrder = false;
+        hasMoveOrder = false;
+        if (patrolRenderer != null) patrolRenderer.enabled = false;
+        attackMoveEnabled = true;
+        attackTarget = target;
+        attackBuildingTarget = null;
+        SetPathTo(target.transform.position);
+    }
+
+    public void IssueAttackBuildingOrder(BuildingInstance target)
+    {
+        if (!IsOwnedByLocalPlayer || target == null) return;
+        hasPatrolOrder = false;
+        hasMoveOrder = false;
+        if (patrolRenderer != null) patrolRenderer.enabled = false;
+        attackMoveEnabled = true;
+        attackBuildingTarget = target;
+        attackTarget = null;
+        SetPathTo(target.transform.position);
+    }
+
     public void IssueObserveOrder(Vector2 pointA, Vector2 pointB)
     {
         if (!IsOwnedByLocalPlayer) return;
@@ -413,6 +439,43 @@ public class Soldier : MonoBehaviour
         shield *= multiplier;
     }
 
+    private void CreateHealthBar()
+    {
+        healthBar = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        healthBar.name = "HealthBar";
+        healthBar.transform.SetParent(transform);
+        healthBar.transform.localPosition = new Vector3(0f, 0.85f, 0f);
+        healthBar.transform.localScale = new Vector3(0.6f, 0.05f, 1f);
+        Destroy(healthBar.GetComponent<MeshCollider>());
+        healthBarRenderer = healthBar.GetComponent<Renderer>();
+        healthBarRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        healthBarRenderer.sortingOrder = 11;
+        healthBar.SetActive(false);
+    }
+
+    private void UpdateHealthBar()
+    {
+        if (healthBar == null || healthBarRenderer == null) return;
+
+        if (currentHealth >= maxHealth)
+        {
+            healthBar.SetActive(false);
+            return;
+        }
+
+        healthBar.SetActive(true);
+        float ratio = currentHealth / maxHealth;
+        healthBar.transform.localScale = new Vector3(0.6f * ratio, 0.05f, 1f);
+        healthBar.transform.localPosition = new Vector3(-0.3f * (1f - ratio), 0.85f, 0f);
+
+        if (ratio > 0.5f)
+            healthBarRenderer.material.color = Color.green;
+        else if (ratio > 0.25f)
+            healthBarRenderer.material.color = Color.yellow;
+        else
+            healthBarRenderer.material.color = Color.red;
+    }
+
     private void SetupVisuals()
     {
         GameObject nameObj = new GameObject("NameTag");
@@ -435,6 +498,8 @@ public class Soldier : MonoBehaviour
         healthText.anchor = TextAnchor.MiddleCenter;
         healthText.alignment = TextAlignment.Center;
         healthText.GetComponent<MeshRenderer>().sortingOrder = 10;
+
+        CreateHealthBar();
 
         circleRenderer = GetComponent<LineRenderer>();
         if (circleRenderer == null)
@@ -496,6 +561,8 @@ public class Soldier : MonoBehaviour
 
     private void UpdateHealthText()
     {
+        UpdateHealthBar();
+
         if (healthText == null)
         {
             return;
@@ -536,7 +603,7 @@ public class Soldier : MonoBehaviour
 
     private Soldier FindPreferredEnemy()
     {
-        float searchRange = attackMoveEnabled || hasPatrolOrder ? attackRange + AggroPadding : attackRange;
+        float searchRange = attackRange + AggroPadding;
         float closestDistance = float.MaxValue;
         Soldier closest = null;
 
@@ -589,7 +656,7 @@ public class Soldier : MonoBehaviour
         return closest;
     }
 
-    private bool IsHostileTo(Soldier other)
+    public bool IsHostileTo(Soldier other)
     {
         if (other == null)
         {
@@ -611,12 +678,7 @@ public class Soldier : MonoBehaviour
             return false;
         }
 
-        if (hasPatrolOrder || attackMoveEnabled)
-        {
-            return distance <= attackRange + AggroPadding;
-        }
-
-        return false;
+        return distance <= attackRange + AggroPadding;
     }
 
     private void FollowOrders()

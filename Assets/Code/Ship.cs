@@ -701,6 +701,8 @@ public class Ship : MonoBehaviour
 
     public void UnloadAllToIsland()
     {
+        Vector2 landPos = FindNearestLandCell(transform.position);
+
         foreach (var slot in slots)
         {
             if (slot.content == ShipSlot.SlotContent.Material)
@@ -711,28 +713,30 @@ public class Ship : MonoBehaviour
             }
             else if (slot.content == ShipSlot.SlotContent.Builder)
             {
+                Vector2 spawnPos = landPos + new Vector2(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f));
                 if (slot.villager != null)
                 {
-                    slot.villager.transform.position = transform.position + new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0f);
+                    slot.villager.transform.position = spawnPos;
                     slot.villager.gameObject.SetActive(true);
                     slot.villager.ReleaseFromShip();
                 }
                 else if (VillagerManager.Instance != null)
                 {
-                    VillagerManager.Instance.SpawnVillagerAt(transform.position, Villager.Role.Worker);
+                    VillagerManager.Instance.SpawnVillagerAt(spawnPos, Villager.Role.Worker);
                 }
             }
             else if (slot.content == ShipSlot.SlotContent.Soldier)
             {
+                Vector2 spawnPos = landPos + new Vector2(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f));
                 if (slot.loadedSoldierRef != null)
                 {
-                    slot.loadedSoldierRef.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                    slot.loadedSoldierRef.transform.position = spawnPos;
                     slot.loadedSoldierRef.gameObject.SetActive(true);
                 }
                 else
                 {
                     GameObject solObj = new GameObject($"Unloaded_Soldier_{slot.soldierType}");
-                    solObj.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                    solObj.transform.position = spawnPos;
                     var sr = solObj.AddComponent<SpriteRenderer>();
                     sr.sortingOrder = 21;
                     solObj.AddComponent<BoxCollider2D>().size = new Vector2(1f, 1f);
@@ -750,6 +754,29 @@ public class Ship : MonoBehaviour
         OnCargoChanged?.Invoke();
     }
 
+    private Vector2 FindNearestLandCell(Vector2 from)
+    {
+        Vector2Int center = new Vector2Int(Mathf.RoundToInt(from.x), Mathf.RoundToInt(from.y));
+        if (IslandManager.IsLand(center))
+            return new Vector2(center.x, center.y);
+
+        int searchRadius = 15;
+        for (int r = 1; r <= searchRadius; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r) continue;
+                    Vector2Int test = new Vector2Int(center.x + dx, center.y + dy);
+                    if (IslandManager.IsLand(test))
+                        return new Vector2(test.x, test.y);
+                }
+            }
+        }
+        return from;
+    }
+
     public void RemoveSlotItem(int slotIndex)
     {
         if (slotIndex >= 0 && slotIndex < slots.Count)
@@ -757,7 +784,8 @@ public class Ship : MonoBehaviour
             var slot = slots[slotIndex];
             if (slot.loadedSoldierRef != null)
             {
-                slot.loadedSoldierRef.transform.position = transform.position + new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0f);
+                Vector2 landPos = FindNearestLandCell(transform.position);
+                slot.loadedSoldierRef.transform.position = landPos;
                 slot.loadedSoldierRef.gameObject.SetActive(true);
             }
             slot.Clear();
