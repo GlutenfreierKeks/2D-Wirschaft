@@ -1036,7 +1036,7 @@ private List<ShipPlacementCandidate> GetShipCandidates(Vector3 worldPos)
         int built = 0;
         foreach (Vector2Int cell in cells)
         {
-            if (BuildingManager.Instance.PlaceStegAt(new Vector2(cell.x, cell.y), true))
+            if (BuildingManager.Instance.PlaceStegAt(new Vector2(cell.x, cell.y), true, false, currentBuilding))
                 built++;
         }
 

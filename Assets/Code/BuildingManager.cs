@@ -78,7 +78,7 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
     public static void UnregisterSteg(Steg s) => stegs.Remove(s);
 
     // Platzieren eines Stegs an einer World-Position (X,Y). Gibt true zurück, wenn platziert.
-    public bool PlaceStegAt(Vector2 position, bool isLocal = true, bool skipValidation = false)
+    public bool PlaceStegAt(Vector2 position, bool isLocal = true, bool skipValidation = false, BuildingData data = null)
     {
         if (stegPrefab == null) { Debug.LogWarning("BuildingManager: stegPrefab fehlt"); return false; }
 
@@ -96,10 +96,20 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         }
 
         GameObject go = Instantiate(stegPrefab);
+        go.transform.localScale = new Vector3(1.3f, 1.3f, 1f);
+
         Steg steg = go.GetComponent<Steg>();
         if (steg == null)
             steg = go.AddComponent<Steg>();
         steg.Initialize(new Vector3(position.x, position.y, -0.21f));
+
+        if (data != null)
+        {
+            BuildingInstance instance = go.GetComponent<BuildingInstance>();
+            if (instance == null) instance = go.AddComponent<BuildingInstance>();
+            instance.data = data;
+            instance.isLocal = isLocal;
+        }
 
         RegisterOccupancy(position, 1, 1);
         return true;

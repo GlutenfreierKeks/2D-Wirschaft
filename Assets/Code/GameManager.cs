@@ -449,7 +449,9 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         {
             if (PhotonNetwork.IsMasterClient)
             {
-                SendWorldStateToPlayer(photonEvent.Sender);
+                Player senderPlayer = PhotonNetwork.CurrentRoom.GetPlayer(photonEvent.Sender);
+                if (senderPlayer != null)
+                    SendWorldStateToPlayer(senderPlayer);
             }
             return;
         }
