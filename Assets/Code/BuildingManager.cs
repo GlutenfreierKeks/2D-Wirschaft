@@ -512,6 +512,7 @@ public class BuildingManager : MonoBehaviour, IOnEventCallback
         if (revealer == null) revealer = building.AddComponent<FogRevealer>();
         revealer.isLocalPlayer = isLocal;
         if (data.fogRevealRadius > 0f) revealer.radius = data.fogRevealRadius;
+        if (data.placementRule == PlacementRule.Ship) revealer.radius = Mathf.Max(revealer.radius, 12f);
 
         // Apply red tint to enemy buildings
         if (!isLocal)
