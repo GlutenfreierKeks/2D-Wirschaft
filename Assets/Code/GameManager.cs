@@ -21,6 +21,8 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
     private const byte BuildingDamageEventCode = 16;
     private const byte BuildingCaptureEventCode = 17;
     private const byte PierLineEventCode = 18;
+    private const byte WorldStateRequestEventCode = 20;
+    private const byte WorldStateResponseEventCode = 21;
     private readonly int maxChatMessages = 6;
     private readonly List<string> chatMessages = new List<string>();
 
@@ -178,6 +180,11 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
             if (isTestMode && players.Length < 2)
             {
                 SpawnDummyPlayer();
+            }
+
+            if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
+            {
+                RequestWorldState();
             }
         }
     }
@@ -435,6 +442,21 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         if (photonEvent.Code == PierLineEventCode && photonEvent.CustomData is object[] pierData)
         {
             ReceivePierLine(pierData);
+            return;
+        }
+
+        if (photonEvent.Code == WorldStateRequestEventCode)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                SendWorldStateToPlayer(photonEvent.Sender);
+            }
+            return;
+        }
+
+        if (photonEvent.Code == WorldStateResponseEventCode && photonEvent.CustomData is ExitGames.Client.Photon.Hashtable stateData)
+        {
+            ReceiveWorldState(stateData);
             return;
         }
     }
@@ -905,5 +927,150 @@ public class GameManager : MonoBehaviourPunCallbacks, IOnEventCallback
         ExitGames.Client.Photon.SendOptions sendOpts = new ExitGames.Client.Photon.SendOptions { Reliability = true };
         PhotonNetwork.RaiseEvent(SoldierSpawnEventCode, data.ToArray(),
             new Photon.Realtime.RaiseEventOptions { Receivers = Photon.Realtime.ReceiverGroup.Others }, sendOpts);
+    }
+
+    private void RequestWorldState()
+    {
+        Debug.Log("[GameManager] Requesting world state from MasterClient...");
+        PhotonNetwork.RaiseEvent(WorldStateRequestEventCode, null, 
+            new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, 
+            SendOptions.SendReliable);
+    }
+
+    private void SendWorldStateToPlayer(Player targetPlayer)
+    {
+        ExitGames.Client.Photon.Hashtable state = new ExitGames.Client.Photon.Hashtable();
+
+        // 1. Buildings (excluding MyWarehouse, EnemyWarehouse)
+        List<object> buildingsList = new List<object>();
+        BuildingInstance[] allBuildings = FindObjectsOfType<BuildingInstance>();
+        foreach (var b in allBuildings)
+        {
+            if (b == null) continue;
+            // Skip main warehouses (they are spawned by the late-joiner's SpawnPlayer loop)
+            if (b.isPreBuiltLodging || b.name == "MyWarehouse" || b.name == "EnemyWarehouse") continue;
+
+            buildingsList.Add(b.data != null ? b.data.buildingName : b.name);
+            buildingsList.Add(b.transform.position.x);
+            buildingsList.Add(b.transform.position.y);
+            buildingsList.Add(Mathf.RoundToInt(b.transform.rotation.eulerAngles.z));
+            buildingsList.Add(b.footprintWidthOverride);
+            buildingsList.Add(b.footprintHeightOverride);
+        }
+        state.Add((byte)0, buildingsList.ToArray());
+
+        // 2. Stegs (that do not have a BuildingInstance on the same gameobject)
+        List<object> stegsList = new List<object>();
+        Steg[] allStegs = FindObjectsOfType<Steg>();
+        foreach (var s in allStegs)
+        {
+            if (s == null) continue;
+            if (s.GetComponent<BuildingInstance>() != null) continue; // Skip if part of a building
+
+            stegsList.Add(s.transform.position.x);
+            stegsList.Add(s.transform.position.y);
+        }
+        state.Add((byte)1, stegsList.ToArray());
+
+        // 3. Villagers
+        List<object> villagersList = new List<object>();
+        Villager[] allVillagers = FindObjectsOfType<Villager>();
+        foreach (var v in allVillagers)
+        {
+            if (v == null) continue;
+            villagersList.Add((int)v.role);
+            villagersList.Add(v.transform.position.x);
+            villagersList.Add(v.transform.position.y);
+        }
+        state.Add((byte)2, villagersList.ToArray());
+
+        // 4. Soldiers
+        List<object> soldiersList = new List<object>();
+        foreach (var s in Soldier.ActiveSoldiers)
+        {
+            if (s == null) continue;
+            soldiersList.Add(s.netId);
+            soldiersList.Add((int)s.soldierType);
+            soldiersList.Add(s.transform.position.x);
+            soldiersList.Add(s.transform.position.y);
+        }
+        state.Add((byte)3, soldiersList.ToArray());
+
+        // Send to targetPlayer only
+        RaiseEventOptions opts = new RaiseEventOptions { TargetActors = new int[] { targetPlayer.ActorNumber } };
+        PhotonNetwork.RaiseEvent(WorldStateResponseEventCode, state, opts, SendOptions.SendReliable);
+        Debug.Log($"[GameManager] Sent world state to late-joiner: {targetPlayer.NickName}");
+    }
+
+    private void ReceiveWorldState(ExitGames.Client.Photon.Hashtable stateData)
+    {
+        Debug.Log("[GameManager] Received world state. Spawning entities...");
+
+        // 1. Spawning buildings
+        if (stateData.TryGetValue((byte)0, out object buildingsObj) && buildingsObj is object[] buildings)
+        {
+            for (int i = 0; i + 5 < buildings.Length; i += 6)
+            {
+                string name = (string)buildings[i];
+                float x = (float)buildings[i + 1];
+                float y = (float)buildings[i + 2];
+                int rot = (int)buildings[i + 3];
+                int w = (int)buildings[i + 4];
+                int h = (int)buildings[i + 5];
+
+                if (BuildingManager.Instance != null)
+                {
+                    BuildingData bData = BuildingManager.Instance.GetBuildingDataByName(name);
+                    if (bData != null)
+                    {
+                        BuildingManager.Instance.SpawnBuilding(bData, new Vector2(x, y), false, rot, w, h);
+                    }
+                }
+            }
+        }
+
+        // 2. Spawning stegs
+        if (stateData.TryGetValue((byte)1, out object stegsObj) && stegsObj is object[] stegs)
+        {
+            for (int i = 0; i + 1 < stegs.Length; i += 2)
+            {
+                float x = (float)stegs[i];
+                float y = (float)stegs[i + 1];
+                if (BuildingManager.Instance != null)
+                {
+                    BuildingManager.Instance.PlaceStegAt(new Vector2(x, y), false, true);
+                }
+            }
+        }
+
+        // 3. Spawning villagers
+        if (stateData.TryGetValue((byte)2, out object villagersObj) && villagersObj is object[] villagers)
+        {
+            for (int i = 0; i + 2 < villagers.Length; i += 3)
+            {
+                Villager.Role role = (Villager.Role)(int)villagers[i];
+                float x = (float)villagers[i + 1];
+                float y = (float)villagers[i + 2];
+                if (VillagerManager.Instance != null)
+                {
+                    VillagerManager.Instance.SpawnVillagerAt(new Vector2(x, y), role, false);
+                }
+            }
+        }
+
+        // 4. Spawning soldiers
+        if (stateData.TryGetValue((byte)3, out object soldiersObj) && soldiersObj is object[] soldiers)
+        {
+            for (int i = 0; i + 3 < soldiers.Length; i += 4)
+            {
+                int netId = (int)soldiers[i];
+                SoldierType type = (SoldierType)(int)soldiers[i + 1];
+                float x = (float)soldiers[i + 2];
+                float y = (float)soldiers[i + 3];
+                SpawnRemoteSoldier(new Vector3(x, y, 0f), type, netId);
+            }
+        }
+
+        Debug.Log("[GameManager] World state spawned successfully.");
     }
 }
